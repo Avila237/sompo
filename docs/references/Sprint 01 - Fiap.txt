@@ -1,0 +1,147 @@
+1)   CHALLENGE SOMPO
+
+Olá, turma.
+
+Vamos iniciar um novo desafio em parceria com a Sompo Seguros, uma empresa global que atua com soluções de seguros e gestão de riscos, com forte presença no Brasil e foco em inovação, dados e Inteligência Artificial.
+
+O objetivo deste Challenge é desenvolver uma proposta de solução baseada em dados e IA capaz de identificar, prever e reduzir riscos operacionais e ambientais relacionados ao uso de equipamentos agrícolas.
+
+A proposta do desafio é aplicar os conhecimentos adquiridos ao longo do curso em um problema real do mercado, considerando cenários como operação em campo, transporte de equipamentos, proximidade de água, condições do solo e outros fatores que impactam diretamente o risco de danos e perdas.
+
+Nesta primeira Sprint, vocês irão estruturar a base do projeto, focando na compreensão do problema, definição da solução, levantamento de dados e construção da arquitetura inicial e definição de quais users stories o grupo vai propor soluções.
+
+ 
+
+2)   CONTEXTO
+
+A Sompo atua no desenvolvimento de soluções que combinam seguros, análise de risco e inovação tecnológica, com foco em antecipar problemas antes que eles aconteçam, reduzindo prejuízos e aumentando a eficiência operacional.
+
+No contexto deste desafio, o problema central está relacionado à baixa previsibilidade de riscos operacionais em equipamentos agrícolas, onde atualmente muitas decisões ainda são tomadas de forma reativa, após a ocorrência de eventos.
+
+Por exemplo, imagine um operador realizando a colheita em uma área próxima a um rio após um período de chuva. Sem uma análise prévia, ele pode não perceber que o solo está instável e que há maior risco de atolamento ou deslizamento do equipamento, o que pode gerar danos mecânicos, altos custos ou até perda total do equipamento.
+
+Com uma solução baseada em dados, seria possível cruzar informações de clima, tipo de solo, histórico da região e padrão de operação, gerando um alerta antecipado e recomendando ajustes, como mudança de rota ou adiamento da operação. Nesse cenário, a análise preditiva faz a diferença ao transformar uma decisão reativa em uma ação preventiva.
+
+Entre os principais desafios identificados estão:
+
+Alta exposição a riscos operacionais (colisões, transporte, ambiente adverso);
+Falta de sistemas inteligentes para previsão de falhas e incidentes;
+Baixa capacidade de atuação preventiva baseada em dados;
+Dificuldade em correlacionar fatores ambientais e operacionais com ocorrências reais.
+A proposta é desenvolver uma solução capaz de:
+
+Integrar diferentes fontes de dados (simulados ou reais);
+Identificar padrões de risco;
+Gerar alertas preventivos;
+Apoiar tomada de decisão de operadores, gestores e seguradora.
+Vale ressaltar que a sua solução será pública em todas as etapas, isto é, a empresa poderá incorporar parte ou integralmente a sua ideia em sua prateleira de produtos. Por outro lado, o grupo está em seu direito em não seguir com o compartilhamento da melhor versão.
+
+Academicamente, a FIAP recomenda que, se o grupo pretende ir para além dessa simulação de atendimento de clientes reais por meio do programa Challenge Sprint, a ideia seja mantida em sigilo e não seja aplicada nas entregas desse enunciado.
+
+Por outro lado, é importante considerar que os melhores projetos serão premiados, já que existe o pódio de primeiro, segundo e terceiro colocados no Festival NEXT. Esses projetos poderão ganhar visibilidade em seus portfólios pessoais perante esta e outras empresas enquanto alunos desenvolvedores em formação na FIAP.
+
+ 
+
+3)   OBJETIVOS
+
+Nesta Sprint 1, os alunos deverão apresentar a estrutura inicial da solução, com foco na análise da users stories e os problemas apresentados, organização dos dados e definição da arquitetura técnica. Reforçando que nesta etapa, nada precisa estar funcionando. É apenas uma etapa de promessas que cada grupo pretende cumprir. No canal Geral do Teams, temos a apresentação da empresa no kick-off e um mapa mental que ajuda a orientar o grupo.
+
+Os principais objetivos da Sprint 1 são:
+
+Compreender o problema de negócio e os diferentes perfis de usuários envolvidos: identificar a persona que utilizará a solução (operador, gestor, seguradora), e as possíveis funcionalidades necessárias;
+Identificar fatores de risco ambientais e operacionais relevantes: definir variáveis como clima, tipo de solo, proximidade de água, tipo de operação (campo ou transporte), histórico de uso e condições do equipamento;
+Estruturar como os dados serão coletados, tratados e utilizados (mesmo que simulados): definir fontes de dados, formato do dataset, organização das variáveis e como esses dados serão preparados para análise;
+Propor inicialmente um modelo de solução com base em análise de dados e predição: propor como a IA será utilizada (classificação, regressão ou score de risco), quais entradas o modelo recebe e quais saídas ele gera. Nesta etapa inicial, você pode usar os serviços de IAs para levantar essa discussão, e fazer a sua pesquisa. No futuro, isso pode ser ajustado novamente sem deméritos na nota ou na competição;
+Propor uma arquitetura técnica coerente com o problema: desenhar o fluxo completo da solução (coleta de dados → processamento → modelo → saída para o usuário), incluindo possíveis integrações;
+Planejar o desenvolvimento das próximas etapas do projeto: dividir tarefas do grupo, definir entregas futuras e evolução da solução até um protótipo funcional. Sugerimos adotar o Trello como aplicativo de gestão de projeto do grupo. A versão gratuita desse aplicativo atende super bem.
+ 
+
+4)   REQUISITOS TÉCNICOS E FUNCIONAIS
+
+A proposta técnica deve demonstrar coerência na construção da solução, considerando:
+
+Análise de Dados
+
+Identificação e organização de variáveis relevantes (clima, solo, operação, transporte etc.);
+Estruturação de dataset (real ou simulado);
+Exploração inicial dos dados (correlações e padrões).
+Modelagem Inicial (IA / Data Science)
+
+Proposta de uso de modelos preditivos para identificação de risco;
+Definição de possíveis outputs (score de risco, classificação, alertas);
+Justificativa da abordagem escolhida.
+Arquitetura da Solução
+
+Fluxo de dados (entrada → processamento → saída);
+Definição dos dispositivos de coleta de dados;
+Integração entre componentes (dados, modelo, interface);
+Possibilidade de uso de APIs e serviços.
+Interface e Aplicação
+
+Definição de como o usuário visualizará os dados (dashboard, alertas etc.);
+Organização das informações por equipamento, operação ou região.
+Segurança
+
+Definição e garantia que a solução proposta respeite princípios de segurança, controle de acesso e integridade de dados.
+Simulação de Dados
+
+É permitido e recomendado o uso de dados simulados para representar cenários reais;
+Os dados devem ser coerentes com o problema proposto.
+Documentação
+
+Clareza na explicação da solução;
+Organização lógica do projeto;
+Justificativa técnica das decisões.
+ 
+
+5) ENTREGÁVEIS
+
+5.1) Proposta Técnica Documentada via GitHub Privado
+
+Nesta Sprint 1, deverá ser entregue a primeira etapa do projeto, que corresponde à estrutura inicial do projeto. O grupo deve criar um repositório privado no GitHub contendo:
+
+Descrição do problema e entendimento do desafio: contextualizar o cenário (equipamentos agrícolas, riscos envolvidos), explicar por que o problema é relevante e quais impactos ele gera (custos, falhas, acidentes);
+Definição da solução proposta: descrever claramente a ideia do sistema (o que ele faz, para quem é e qual valor entrega), incluindo o tipo de saída esperada (exemplo: alertas, score de risco, recomendações);
+Identificação dos usuários (personas) e suas necessidades: definir pelo menos 2 ou 3 perfis (exemplo: operador, gestor, seguradora), descrevendo o que cada um precisa e como a solução ajuda na tomada de decisão;
+Estruturação dos dados (variáveis e exemplos simulados): listar as principais variáveis (clima, solo, operação, localização, histórico), montar uma tabela exemplo (dataset) e explicar o significado de cada variável;
+Esboço da arquitetura da solução: apresentar um diagrama mostrando o fluxo completo (entrada de dados → processamento → modelo → saída), com identificação dos principais componentes;
+Proposta inicial do modelo preditivo: explicar qual abordagem será utilizada (exemplo: classificação de risco, score, previsão), quais dados entram no modelo e qual resultado ele deve gerar;
+Planejamento das próximas etapas do projeto: definir as próximas entregas, divisão de tarefas do grupo e como a solução será evoluída até um protótipo;
+README organizado com todas as informações: garantir que o repositório esteja bem estruturado, com explicações claras, seções organizadas e fácil entendimento para qualquer pessoa que acessar.
+Apresentação em vídeo (até 5 minutos): incluir no README do repositório um link para um vídeo onde o grupo apresenta o problema entendido, a solução proposta, como os dados serão utilizados e a arquitetura inicial do sistema.
+
+
+    
+
+O GitHub deve ser privado e compartilhado apenas com os tutores:
+
+1)    Tutora da turma "A" Nicolly de Souza: nicollycrs
+
+2)    Tutora da turma "B" Sabrina Otoni: SabrinaOtoni
+
+3)    Dica para adicionar Collaborators:
+
+4)    No topo do menu superior do repositório no GitHub, clique em "Settings";
+
+5)    No menu lateral esquerdo, clique em "Collaborators" ou em "Manage Access" (depende se é público ou privado);
+
+6)    Clique no botão "Invite a collaborator";
+
+7)    Digite o nome de usuário ou e-mail da pessoa que você quer adicionar;
+
+8)    Quando aparecer o perfil certo, clique em "Add";
+
+9)    A pessoa vai receber um convite – ela precisa aceitar para ter acesso. Além disso, o invite tem vida útil de sete dias. O tutor vai estar atento para aceitar o seu convite dentro dos sete dias. Atenção: não enviar convite para outras pessoas que não seja apenas o(a) seu(sua) respectivo(a) tutor(a) e os integrantes do seu grupo.
+
+ 
+
+5.2) Regras Gerais
+
+Recomendamos a formação de grupos, entre 4 a 5 integrantes, pois o trabalho em equipe é fundamental para o desenvolvimento deste Challenge, refletindo a dinâmica real do mercado e permitindo a troca de conhecimentos entre diferentes perfis.
+Não será permitido a formação de grupos com integrantes da outra;
+O repositório no GitHub deve ser privado e não poderá sofrer alterações após a data limite de entrega. Caso o grupo decida manter seu repositório público, existe o risco de um outro grupo acessar suas ideias sem permissão. Se essa for a intenção do grupo, não precisa convidar o seu tutor como colaborador, e sim, apenas enviar o link;
+Todos os integrantes devem contribuir para o desenvolvimento da proposta e ter responsabilidades definidas;
+A entrega será avaliada com base em clareza, viabilidade técnica, coerência das escolhas e organização do repositório;
+Reforçando: não é necessário desenvolver código funcional nesta etapa, apenas apresentar uma proposta bem estruturada;
+É permitido o uso de dados simulados e exemplos fictícios para ilustrar a proposta;
+A proposta deve estar documentada em um README no GitHub com todas as informações listadas.

@@ -1,0 +1,337 @@
+# Hardware IoT — Sompo AgriRisk
+
+Documentação completa dos componentes físicos utilizados no dispositivo IoT que complementa o app mobile para coleta de dados em equipamentos agrícolas modernos.
+
+---
+
+## Visão geral
+
+O dispositivo IoT é um complemento opcional ao app mobile. Ele se conecta via **Bluetooth BLE** ao celular do operador e envia dados de sensores que o celular não consegue capturar nativamente — como aceleração precisa, rotação e temperatura do motor.
+
+```
+[Sensores] → [ESP32] → BLE → [App mobile] → 4G → [Backend]
+```
+
+O app funciona sem o IoT (usando GPS e acelerômetro do próprio celular). O IoT enriquece o score de risco com dados mais precisos.
+
+---
+
+## Componentes
+
+### ESP32 DOIT DevKit — R$ 54,90
+
+O microcontrolador principal. É o "cérebro" do dispositivo — executa o firmware, lê os sensores e transmite os dados via Bluetooth para o app.
+
+**Especificações relevantes para o projeto:**
+
+| Característica | Valor |
+|---|---|
+| Processador | Dual-core 240 MHz |
+| Bluetooth | BLE 4.2 nativo |
+| Wi-Fi | 802.11 b/g/n nativo |
+| Pinos digitais | 30 |
+| Alimentação | 5V via USB ou pino VIN |
+| Protocolos | UART, I2C, SPI, PWM |
+| IDE | Arduino IDE / MicroPython |
+| Custo | ~R$ 54,90 |
+
+**Por que o ESP32 e não outras opções:**
+- BLE nativo — sem módulo extra para comunicar com o celular
+- Amplamente documentado — milhares de exemplos e bibliotecas prontas
+- Preço acessível para prototipagem
+- Suporta C++ (Arduino IDE) e MicroPython
+
+**Pinagem relevante para o projeto:**
+
+```
+GPIO 21 → SDA  (dados I2C → MPU-6050)
+GPIO 22 → SCL  (clock I2C → MPU-6050)
+GPIO 4  → DATA (OneWire  → sensor temperatura DS18B20)
+3.3V    → alimentação dos sensores
+GND     → terra comum
+VIN/USB → alimentação do ESP32 (5V)
+```
+
+---
+
+### MPU-6050 GY-521 — Acelerômetro + Giroscópio — R$ 19,00
+
+Sensor de 6 eixos que combina acelerômetro e giroscópio no mesmo chip. Detecta impactos bruscos, tombamento, inclinação e vibrações anormais do equipamento agrícola com alta precisão.
+
+> Substituiu o MMA8452 — 6 eixos (accel + gyro) vs 3 eixos (accel apenas), resolução de 16 bits vs 12 bits, e ainda sai mais barato.
+
+**Especificações:**
+
+| Característica | Valor |
+|---|---|
+| Eixos | 6 (acelerômetro 3 + giroscópio 3) |
+| Protocolo | I2C |
+| Endereço I2C | 0x68 (padrão) ou 0x69 |
+| Resolução | 16 bits (ADC) |
+| Faixa acelerômetro | ±2g, ±4g, ±8g, ±16g (configurável) |
+| Faixa giroscópio | ±250, ±500, ±1000, ±2000 °/s |
+| Tensão | 3.3V |
+| Custo | ~R$ 19,00 |
+
+**O que cada sensor detecta no contexto do projeto:**
+
+- **Acelerômetro** — pico acima de 2g indica colisão com obstáculo; inclinação estática detecta risco de tombamento em declives
+- **Giroscópio** — velocidade angular detecta tombamento em curso, curvas bruscas e manobras de risco
+- **Combinado (fusão de sensores)** — aceleração + rotação juntos geram uma leitura muito mais confiável do estado do equipamento do que acelerômetro sozinho
+- **Vibração anormal** — padrão de oscilação fora do normal pode indicar falha mecânica
+- **Modo de operação** — colheita ativa gera padrão diferente de transporte em estrada
+
+**Comparativo com o modelo anterior (MMA8452):**
+
+| | MMA8452 (anterior) | MPU-6050 (atual) |
+|---|---|---|
+| Acelerômetro | 3 eixos, 12 bits | 3 eixos, 16 bits |
+| Giroscópio | Não tem | 3 eixos, 16 bits |
+| Protocolo | I2C | I2C |
+| Tensão | 3.3V | 3.3V |
+| Preço | R$ 20,81 | R$ 19,00 |
+
+**Conexão com o ESP32:**
+
+```
+MPU-6050 VCC → ESP32 3.3V
+MPU-6050 GND → ESP32 GND
+MPU-6050 SDA → ESP32 GPIO 21
+MPU-6050 SCL → ESP32 GPIO 22
+```
+
+**Dados enviados ao app (JSON via BLE):**
+
+```json
+{
+  "ax": 0.12,  "ay": -0.05, "az": 0.98,
+  "gx": 1.20,  "gy":  0.30, "gz": -0.10,
+  "mag": 0.99,
+  "incl": 7.0,
+  "impact": false
+}
+```
+
+---
+
+### Sensor de Temperatura DS18B20 à Prova D'água — R$ 22,90
+
+Mede a temperatura do motor ou do ambiente. A versão à prova d'água é essencial para uso em campo, onde há exposição a umidade, poeira e chuva.
+
+**Especificações:**
+
+| Característica | Valor |
+|---|---|
+| Protocolo | OneWire (1 único fio de dados) |
+| Faixa | -55°C a +125°C |
+| Precisão | ±0,5°C entre -10°C e +85°C |
+| Resolução | 9 a 12 bits (configurável) |
+| Tensão | 3.0V a 5.5V |
+| Cabo | ~1 metro (versão à prova d'água) |
+| Custo | ~R$ 22,90 |
+
+**O que o sensor detecta no contexto do projeto:**
+
+- **Superaquecimento do motor** — temperatura acima do normal pode indicar sobrecarga ou falha
+- **Condições ambientais** — temperatura ambiente extrema aumenta risco operacional
+- **Correlação com modo de uso** — motor quente + vibração alta = operação intensa
+
+**Conexão com o ESP32:**
+
+```
+DS18B20 VCC (fio vermelho)  → ESP32 3.3V
+DS18B20 GND (fio preto)     → ESP32 GND
+DS18B20 DATA (fio amarelo)  → ESP32 GPIO 4
+                              + resistor 4.7kΩ entre DATA e VCC (pull-up obrigatório)
+```
+
+> **Atenção:** O resistor de pull-up de 4,7kΩ entre o pino DATA e VCC é obrigatório para o sensor funcionar. Sem ele, o sensor não responde.
+
+---
+
+### Protoboard 830 Furos — R$ 19,00
+
+Placa de prototipagem onde todos os componentes são encaixados sem precisar soldar nada. Permite montar, testar e reorganizar o circuito rapidamente.
+
+**Especificações:**
+
+| Característica | Valor |
+|---|---|
+| Pontos de conexão | 830 furos |
+| Dimensões | 163 × 55 × 10 mm |
+| Material | ABS |
+| Faixa de temperatura | -20°C a 80°C |
+| Tensão máxima | 500V AC |
+| Fio aceito | 29–20 AWG (0,3–0,8 mm) |
+| Custo | ~R$ 19,00 |
+
+**Como a protoboard funciona:**
+
+```
+Linhas horizontais (alimentação):
+  + → conectadas entre si ao longo da linha
+  - → conectadas entre si ao longo da linha
+
+Colunas verticais (componentes):
+  a-b-c-d-e → conectadas entre si na mesma fileira
+  f-g-h-i-j → conectadas entre si na mesma fileira
+  (separadas pelo canal central)
+```
+
+> **Atenção com o ESP32:** O DOIT DevKit tem 30 pinos e ocupa quase toda a largura da protoboard. Encaixe-o no centro, deixando pelo menos uma coluna de cada lado para os jumpers.
+
+---
+
+### Kit Cabo Jumper Wire 120 Peças — R$ 26,51
+
+Cabos para conectar os componentes na protoboard. O kit com 120 peças inclui os 3 tipos necessários para qualquer conexão do projeto.
+
+**O que vem no kit:**
+
+| Tipo | Quantidade | Uso |
+|---|---|---|
+| Macho × Macho (M-M) | 40 peças | Ponto da protoboard → ponto da protoboard |
+| Macho × Fêmea (M-F) | 40 peças | Protoboard → pino de módulo (MPU-6050, DS18B20) |
+| Fêmea × Fêmea (F-F) | 40 peças | Módulo → módulo diretamente |
+| Comprimento | 20 cm | — |
+| Bitola | 24 AWG | — |
+| Custo | ~R$ 26,51 | — |
+
+**Quais tipos usar para cada conexão do projeto:**
+
+```
+ESP32 → protoboard          : M-M (pino do ESP32 no furo da protoboard)
+Protoboard → MPU-6050       : M-F (furo da protoboard → header fêmea do módulo)
+Protoboard → DS18B20        : M-F (furo da protoboard → fio do sensor)
+Alimentação (VCC/GND)       : M-M (trilha da protoboard → pino do ESP32)
+```
+
+---
+
+### Kit Regulador de Tensão LM2596 (3 unidades) — R$ 26,90
+
+Converte a tensão do veículo agrícola (12V ou 24V) para os 5V que o ESP32 precisa para funcionar. Essencial quando o dispositivo for instalado permanentemente no equipamento.
+
+**Especificações:**
+
+| Característica | Valor |
+|---|---|
+| Tipo | Step-down (buck converter) |
+| Tensão de entrada | 4V a 35V |
+| Tensão de saída | 1.25V a 30V (ajustável via potenciômetro) |
+| Corrente máxima | 3A |
+| Eficiência | ~92% |
+| Frequência de chaveamento | 150 kHz |
+| Custo | ~R$ 26,90 (kit com 3) |
+
+**Por que é necessário:**
+
+Equipamentos agrícolas modernos possuem saída elétrica de **12V** (tratores menores) ou **24V** (colheitadeiras). O ESP32 opera em **5V via USB** ou **3.3V internamente**. Alimentar o ESP32 diretamente com 12V o destruiria. O LM2596 faz essa conversão de forma segura e eficiente.
+
+**Como ajustar a saída para 5V:**
+
+1. Conecte um multímetro nos terminais de saída
+2. Gire o potenciômetro azul com uma chave de fenda
+3. Ajuste até o multímetro marcar 5.0V
+4. Trave com um pingo de cola quente para não desregular com vibração
+
+**Conexão no veículo:**
+
+```
+Fusível 5A
+    ↓
+Tomada 12V do veículo → LM2596 entrada (+/-)
+                              ↓
+                         LM2596 saída 5V → ESP32 VIN (+)
+                         LM2596 saída GND → ESP32 GND (-)
+```
+
+> **Para desenvolvimento e testes em bancada:** um powerbank comum via cabo USB substitui completamente o LM2596. O regulador só é necessário na instalação física no veículo.
+
+---
+
+## Diagrama de conexões completo
+
+```
+                    ┌─────────────────────────────┐
+                    │         ESP32 DevKit         │
+                    │                              │
+  MPU-6050 SDA ─────┤ GPIO 21                      │
+  MPU-6050 SCL ─────┤ GPIO 22                      │
+  DS18B20 DATA ─────┤ GPIO 4                       │
+                    │                              │
+  3.3V ─────────────┤ 3.3V  (alimenta sensores)   │
+  GND ──────────────┤ GND                          │
+                    │                              │
+  LM2596 5V ────────┤ VIN   (veículo)              │
+  USB PowerBank ────┤ USB   (bancada/testes)       │
+                    └─────────────────────────────┘
+```
+
+---
+
+## Custo total do hardware
+
+| Componente | Valor |
+|---|---|
+| ESP32 DOIT DevKit | R$ 54,90 |
+| MPU-6050 GY-521 (accel + gyro) | R$ 19,00 |
+| Sensor DS18B20 | R$ 22,90 |
+| Protoboard 830 furos | R$ 19,00 |
+| Kit Jumper Wire 120 pcs | R$ 26,51 |
+| Regulador LM2596 (kit 3) | R$ 26,90 |
+| **Total** | **R$ 169,21** |
+
+> Itens adicionais recomendados: resistor 4,7kΩ para o DS18B20 (~R$ 1,00), powerbank para testes (já disponível), case plástico ou impressão 3D para a demo (~R$ 15–30).
+
+---
+
+## Bibliotecas necessárias (Arduino IDE)
+
+Instalar via **Sketch → Incluir Biblioteca → Gerenciar Bibliotecas**:
+
+| Biblioteca | Função |
+|---|---|
+| `ArduinoJson` | Serializar dados em JSON para envio via BLE |
+| `Adafruit MPU6050` | Leitura do acelerômetro e giroscópio MPU-6050 |
+| `Adafruit Unified Sensor` | Dependência da biblioteca Adafruit MPU6050 |
+| `DallasTemperature` | Leitura do sensor DS18B20 |
+| `OneWire` | Protocolo OneWire (dependência do DallasTemperature) |
+| `BLEDevice` | Comunicação Bluetooth BLE (já inclusa no pacote ESP32) |
+
+**Para instalar o suporte ao ESP32 no Arduino IDE:**
+
+1. Abrir **Arquivo → Preferências**
+2. Adicionar a URL: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
+3. **Ferramentas → Placa → Gerenciador de Placas** → instalar `esp32 by Espressif`
+4. Selecionar a placa: **ESP32 Dev Module**
+
+---
+
+## Dados enviados ao app via BLE
+
+A cada 1 segundo, o ESP32 envia um JSON com todos os dados coletados:
+
+```json
+{
+  "ts": 12450,
+  "ax": 0.12,   "ay": -0.05,  "az": 0.98,
+  "gx": 1.20,   "gy":  0.30,  "gz": -0.10,
+  "mag": 0.99,
+  "incl": 7.0,
+  "impact": false,
+  "temp_c": 42.3
+}
+```
+
+| Campo | Descrição |
+|---|---|
+| `ts` | Timestamp em ms desde o boot do ESP32 |
+| `ax / ay / az` | Aceleração nos 3 eixos em g |
+| `gx / gy / gz` | Velocidade angular nos 3 eixos em °/s |
+| `mag` | Magnitude do vetor de aceleração (√ax²+ay²+az²) |
+| `incl` | Inclinação lateral em graus |
+| `impact` | `true` se magnitude > 2g (impacto detectado) |
+| `temp_c` | Temperatura em graus Celsius |
+
+O app recebe esse JSON, adiciona GPS do celular + dados de clima e envia tudo ao backend para cálculo do score de risco.
