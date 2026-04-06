@@ -1,0 +1,45 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Dados e modelos (arquivos grandes)
+data/*.csv
+data/*.parquet
+models/*.pkl
+models/*.joblib
+!data/.gitkeep
+!models/.gitkeep
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MLflow
+mlruns/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node (mobile)
+node_modules/
+*.lock
+
+# Arduino/ESP32
+firmware/.pio/
+firmware/build/

@@ -1,0 +1,21 @@
+﻿# API
+fastapi==0.115.*
+uvicorn==0.34.*
+pydantic==2.*
+python-jose[cryptography]==3.3.*
+python-multipart==0.0.*
+
+# ML
+xgboost==2.*
+shap==0.46.*
+mlflow==2.*
+scikit-learn==1.*
+
+# Dados
+pandas==2.*
+numpy==2.*
+pyarrow==18.*
+requests==2.*
+
+# Utilitários
+python-dotenv==1.*

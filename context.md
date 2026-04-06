@@ -30,26 +30,33 @@ Cinco camadas:
 | Rastreabilidade | MLflow |
 | Dados externos | Open-Meteo (clima), IBGE shapefiles (geo) |
 | Dashboard | Streamlit |
-| Deploy | Railway ou Render |
+| Deploy | Railway ou` Render |
 
 ## Estrutura de pastas
 
 ```
 /
-├── CLAUDE.md              ← este arquivo
+├── CLAUDE.md
 ├── README.md
+├── context.md              ← guia do projeto para o Claude Code
+├── .gitignore
+├── .env.example
 ├── docs/
-│   └── references/
-│       ├── challenge_sompo.txt
-│       ├── apresentacao_sompo.pdf
-│       ├── hardware_iot.txt
-│       └── akita_ia.pdf
-├── firmware/               ← código ESP32 (C++/Arduino)
-├── backend/                ← FastAPI + modelo ML
+│   ├── data_schema.md      ← schema do dataset, fórmula de score, regras
+│   └── references/         ← materiais externos (PDFs, enunciado, etc.)
+├── backend/
+│   ├── api/                ← FastAPI (routers, schemas, endpoints)
+│   ├── ml/                 ← treinamento, SHAP, MLflow
+│   ├── core/               ← config, database, auth, utils
+│   └── requirements.txt
 ├── mobile/                 ← app React Native ou Flutter
 ├── dashboard/              ← Streamlit
-├── data/                   ← datasets simulados
-└── tests/
+├── firmware/               ← ESP32 C++/Arduino
+├── data/                   ← datasets gerados (.parquet, .csv)
+├── models/                 ← modelos serializados (.pkl, .joblib)
+├── notebooks/              ← EDA, experimentação
+├── scripts/                ← utilitários (generate_dataset.py, etc.)
+└── tests/                  ← testes unitários e integração
 ```
 
 ## Convenções
