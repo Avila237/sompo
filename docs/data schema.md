@@ -128,8 +128,8 @@ O script de geração **deve** respeitar estas regras. Dados que violem qualquer
 ### Regra 8 — Histórico de sinistros correlaciona com idade
 - Equipamentos mais velhos tendem a ter mais sinistros:
   - `idade < 3` → historico 0–1 (90%), 2 (10%)
-  - `idade 3–10` → historico 0–3
-  - `idade > 10` → historico 0–6, com possibilidade de até 10
+  - `idade 3–10` → distribuição estratificada: 50% baixo (0–1), 30% médio (1–3), 20% alto (3–6)  (calibrado)
+  - `idade > 10` → distribuição estratificada: 35% baixo (0–2), 30% médio (2–5), 35% alto (5–10)  (calibrado)
 
 ### Regra 9 — Distribuição de tipos de operação
 - Não uniforme. Sugestão: colheita 30%, transporte 25%, plantio 20%, pulverizacao 15%, parado 10%
@@ -137,6 +137,15 @@ O script de geração **deve** respeitar estas regras. Dados que violem qualquer
 ### Regra 10 — Distribuição de tipos de equipamento
 - Sugestão: trator 45%, colheitadeira 35%, implemento 20%
 - Implementos não têm motor próprio → `temperatura_motor` null mesmo com IoT? **Decisão: sim.** Implemento com `tem_iot = true` lê vibração mas não temperatura de motor.
+
+### Regra 11 — horas_operacao correlaciona com tipo_operacao  (calibrado)
+- Distribuições de horas por tipo de operação para maior realismo:
+  - `colheita` → gamma(2, 5) → média ~10h (safras longas)
+  - `transporte` → gamma(1.5, 6) → média ~9h
+  - `plantio` → gamma(1.5, 3) → média ~4.5h
+  - `pulverizacao` → exponencial(3) → média ~3h
+  - `parado` → exponencial(1.5) → média ~1.5h
+- Todas clampadas em [0, 24]
 
 ---
 
@@ -161,19 +170,19 @@ normais, deixando espaço para as interações elevarem o score em combinações
 
 ```python
 score_base = (
-    precipitacao_mm * 0.15          # 0–120 → máx ~18 pts
-    + umidade_solo * 0.10           # 5–95  → máx ~9.5 pts
+    precipitacao_mm * 0.10          # 0–120 → máx ~12 pts   (calibrado)
+    + umidade_solo * 0.08           # 5–95  → máx ~7.6 pts  (calibrado)
     + velocidade_vento * 0.05       # 0–80  → máx ~4 pts
-    + agua_score * 15               # 0–1   → máx 15 pts (ver abaixo)
-    + declividade * 0.20            # 0–45  → máx ~9 pts
-    + velocidade_kmh * 0.15         # 0–40  → máx ~6 pts
-    + horas_operacao * 0.8          # 0–24  → máx ~19 pts
-    + noturno * 6                   # 0/1   → 0 ou 6 pts
+    + agua_score * 12               # 0–1   → máx 12 pts (ver abaixo)  (calibrado)
+    + declividade * 0.15            # 0–45  → máx ~6.75 pts (calibrado)
+    + velocidade_kmh * 0.12         # 0–40  → máx ~4.8 pts  (calibrado)
+    + horas_operacao * 1.20         # 0–24  → máx ~28.8 pts (calibrado)
+    + noturno * 5                   # 0/1   → 0 ou 5 pts    (calibrado)
     + idade_equipamento * 0.4       # 0–25  → máx ~10 pts
-    + historico_sinistros * 2.0     # 0–10  → máx ~20 pts
+    + historico_sinistros * 6.0     # 0–10  → máx ~60 pts   (calibrado)
 )
-# Máximo teórico do score_base: ~117 (caso extremo, improvável)
-# Caso típico alto: ~55-70
+# Máximo teórico do score_base: ~147 (caso extremo, improvável)
+# Caso típico alto: ~60-80
 
 # agua_score: transformação não-linear da distância
 agua_score = max(0, (500 - distancia_agua_m)) / 500  # 0 se >500m, 1 se 10m
@@ -214,6 +223,11 @@ if tipo_operacao == "transporte" and velocidade_kmh > 25 and declividade > 10:
 if horas_operacao > 8 and noturno:
     interacoes += 10
 
+# 8. Equipamento com histórico alto + operação prolongada = risco composto  (calibrado)
+risco_acumulado = max(0, historico_sinistros - 3) * horas_operacao * 0.60
+# Captura risco composto: equipamentos acidentados operando por muitas horas.
+# Exemplo: sinistros=8, horas=12 → bônus de +30 pontos
+
 # Máximo teórico das interações: 77 (todas ativas simultaneamente, muito raro)
 # Caso típico: 0–25
 ```
@@ -224,7 +238,7 @@ if horas_operacao > 8 and noturno:
 import numpy as np
 
 ruido = np.random.normal(0, 3)  # ruído gaussiano para evitar aprendizado perfeito
-score_raw = score_base + interacoes + ruido
+score_raw = score_base + interacoes + risco_acumulado + ruido
 risco_score = np.clip(score_raw, 0, 100).round(1)
 
 # Faixa derivada
@@ -239,9 +253,9 @@ else:
 ### 4.5 Distribuição alvo
 
 Após geração, verificar se a distribuição aproxima:
-- **Baixo (0–33):** ~40% dos registros
-- **Médio (34–66):** ~35% dos registros
-- **Alto (67–100):** ~25% dos registros
+- **Baixo (0–33):** ~40% dos registros (obtido com seed=42: 39.9%)
+- **Médio (34–66):** ~35% dos registros (obtido com seed=42: 35.1%)
+- **Alto (67–100):** ~25% dos registros (obtido com seed=42: 24.9%)
 
 Se a distribuição estiver muito diferente, ajustar os pesos da seção 4.2.
 Essa proporção reflete a realidade de seguros: a maioria das operações é segura,
@@ -273,7 +287,7 @@ docs/
 - O dataset gerado deve ser idêntico em qualquer execução
 
 ### 5.4 Validações pós-geração (o script deve imprimir)
-1. Shape: (5000, 22)
+1. Shape: (5000, 24)
 2. Distribuição de `faixa_risco` (% por faixa)
 3. Contagem de nulls em `vibracao_g` e `temperatura_motor`
 4. Ranges de todas as colunas numéricas (min/max)
