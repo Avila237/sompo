@@ -235,3 +235,135 @@ Quatro componentes foram incorporados ao escopo na transição para a Fase 2:
 - Apresentação institucional Sompo: `docs/references/apresentacao_sompo.pdf`
 - Documentação de hardware: `docs/references/hardware_iot.txt`
 - Artigo Akita (metodologia IA): `docs/references/akita_ia.pdf`
+
+
+## Fluxo de trabalho com Git
+
+### Regra principal
+
+Ninguém commita direto na `main`. Toda alteração entra via Pull Request.
+
+### Passo a passo
+
+#### 1. Atualizar a main local antes de começar qualquer tarefa
+
+```bash
+git checkout main
+git pull
+```
+
+#### 2. Criar a branch a partir da main atualizada
+
+```bash
+git checkout -b feature/expandir-dataset
+```
+
+#### 3. Trabalhar normalmente — commitar quantas vezes precisar
+
+```bash
+git add .
+git commit -m "data(dataset): adicionar features de operador"
+git add .
+git commit -m "data(dataset): adicionar features de manutenção"
+```
+
+#### 4. Subir a branch pro GitHub
+
+```bash
+git push -u origin feature/expandir-dataset
+```
+
+#### 5. Abrir o PR no GitHub
+
+- Entrar no repositório no navegador
+- O GitHub mostra um banner "Compare & pull request" — clicar nele
+- Escrever título e descrição do que foi feito
+- Atribuir o colega como reviewer
+- Clicar em "Create pull request"
+
+#### 6. Revisão e merge
+
+- O colega revisa, comenta se precisar
+- Quando aprovado, clicar em "Merge pull request" → "Confirm merge"
+- Deletar a branch remota (o GitHub oferece o botão)
+
+#### 7. Voltar pra main local e atualizar
+
+```bash
+git checkout main
+git pull
+git branch -d feature/expandir-dataset
+```
+
+O `git branch -d` deleta a branch local que já foi mergeada. Aí começa o ciclo de novo pra próxima tarefa.
+
+### Convenção de nomes de branch
+
+```
+feature/nome-da-tarefa    → funcionalidade nova
+fix/nome-do-bug           → correção
+docs/nome-do-doc          → documentação
+data/nome-do-dataset      → datasets e dados
+hw/nome-do-componente     → firmware/hardware
+```
+
+### Convenção de commits (Conventional Commits)
+
+Formato: `tipo(escopo): descrição curta`
+
+Tipos: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `data`, `hw`
+
+## Como Rodar o Projeto
+
+### 1. Clonar o repositório
+
+```bash
+git clone <url-do-repositório>
+cd Sompo
+```
+
+### 2. Criar e ativar o ambiente virtual
+
+**Windows:**
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+**Mac/Linux:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Instalar dependências
+
+```bash
+pip install pandas numpy pyarrow pytest matplotlib seaborn jupyter
+```
+
+### 4. Gerar o dataset simulado
+
+```bash
+python scripts/generate_dataset.py
+```
+
+O script cria `data/dataset_safefield.parquet` e `data/dataset_safefield.csv` (~5.000 registros).
+
+### 5. Rodar os testes
+
+```bash
+pytest tests/ -v
+```
+
+Saída esperada: 89 testes passando.
+
+### 6. Abrir o notebook de EDA
+
+```bash
+jupyter notebook
+```
+
+Abra `notebooks/01_eda.ipynb` no navegador.
+
+---
