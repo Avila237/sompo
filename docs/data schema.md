@@ -7,7 +7,10 @@
 
 ## 1. Visão Geral
 
+> **Dataset v2** — expandido com features de operador e manutenção (~40 colunas).
+
 - **Tamanho alvo:** ~5.000 registros
+- **Colunas:** ~40 (identificação, ambientais, geográficas, operacionais, equipamento, operador, manutenção, metadados RAG, target)
 - **Formato de saída:** `.parquet` (primário) + `.csv` (referência visual)
 - **Localização:** `data/dataset_safefield.parquet` e `data/dataset_safefield.csv`
 - **Cada registro representa:** uma avaliação de risco de um equipamento em um momento e contexto operacional específico
@@ -69,6 +72,38 @@
 |---|---|---|---|---|
 | `risco_score` | float | 0.0 a 100.0 | não | Score contínuo de risco (gerado pela fórmula da seção 4) |
 | `faixa_risco` | str (cat) | baixo, medio, alto | não | Derivada: baixo (0–33), medio (34–66), alto (67–100) |
+
+### 2.7 Dados do Operador (origem: app + histórico calculado)
+
+| Coluna | Tipo Python | Domínio | Nullable | Descrição |
+|---|---|---|---|---|
+| `operador_id` | str | `OP-0001` a `OP-0080` | não | ~80 operadores, múltiplos equipamentos cada |
+| `pct_velocidade_acima_recomendada` | float | 0.0 a 100.0 % | não | % do tempo acima da velocidade recomendada para a operação |
+| `freq_eventos_bruscos` | float | 0.0 a 20.0 /hora | não | Eventos de aceleração/frenagem brusca por hora |
+| `pct_operacoes_noturnas` | float | 0.0 a 100.0 % | não | Proporção histórica de operações realizadas no período noturno |
+| `score_operador_historico` | float | 0.0 a 100.0 | não | Média móvel do score de risco do operador nos últimos 30 dias |
+
+### 2.8 Dados de Manutenção (origem: app + base de conhecimento)
+
+| Coluna | Tipo Python | Domínio | Nullable | Descrição |
+|---|---|---|---|---|
+| `ultima_manutencao_dias` | int | 0 a 365 | não | Dias desde a última manutenção declarada pelo operador |
+| `ultima_manutencao_horas_op` | float | 0.0 a 2000.0 | não | Horas de operação acumuladas desde a última manutenção |
+| `intervalo_manut_recomendado_dias` | int | 90 a 365 | não | Intervalo recomendado pelo fabricante em dias |
+| `intervalo_manut_recomendado_horas` | int | 200 a 1500 | não | Intervalo recomendado pelo fabricante em horas de operação |
+| `manutencao_atrasada` | bool | true / false | não | Calculado: `true` se ultrapassou qualquer um dos dois limites |
+| `atraso_manutencao_pct` | float | 0.0 a 3.0 | não | 1.0 = no limite, 1.5 = 50% atrasado, 0.5 = metade do caminho (ver Regra 14) |
+
+### 2.9 Metadados do Equipamento para RAG (não são features do modelo)
+
+> Estas colunas são informativas — usadas para busca na base de conhecimento após o treinamento do XGBoost. Não devem entrar como features de entrada do modelo.
+
+| Coluna | Tipo Python | Domínio | Nullable | Descrição |
+|---|---|---|---|---|
+| `modelo_equipamento` | str (cat) | lista de modelos simulados (ver Regra 15) | não | Modelo específico do equipamento (ex: "John Deere S790") |
+| `categoria_manual` | str (cat) | colheitadeira_operacao, colheitadeira_manutencao, trator_operacao, trator_manutencao, implemento_operacao, implemento_manutencao | não | Categoria do manual técnico para busca RAG |
+
+<!-- TODO: definir lista completa de modelos simulados por tipo de equipamento -->
 
 ---
 
@@ -147,6 +182,45 @@ O script de geração **deve** respeitar estas regras. Dados que violem qualquer
   - `parado` → exponencial(1.5) → média ~1.5h
 - Todas clampadas em [0, 24]
 
+### Regra 12 — Manutenção correlaciona com idade e tipo de equipamento
+- Equipamentos mais velhos tendem a ter manutenção mais atrasada:
+  - `idade < 3` → `ultima_manutencao_dias` tende a ser baixo (0–60), `atraso_manutencao_pct` ≤ 1.0 na maioria
+  - `idade 3–10` → distribuição equilibrada, ~30% com `manutencao_atrasada = true`
+  - `idade > 10` → ~50% com `manutencao_atrasada = true`, `atraso_manutencao_pct` pode chegar a 2.0
+- Intervalos recomendados variam por tipo:
+  - `colheitadeira` → `intervalo_manut_recomendado_dias` 90–180, horas 200–500 (manutenção mais frequente)
+  - `trator` → dias 120–365, horas 300–1000
+  - `implemento` → dias 180–365, horas 500–1500
+
+### Regra 13 — Perfil do operador é consistente por operador_id
+- O mesmo `operador_id` deve ter valores semelhantes de `pct_operacoes_noturnas` e `score_operador_historico` entre avaliações próximas (não muda radicalmente de uma avaliação para outra)
+- Variação permitida entre avaliações do mesmo operador: ±10% em `pct_operacoes_noturnas` e `score_operador_historico`
+- `freq_eventos_bruscos` e `pct_velocidade_acima_recomendada` podem variar mais entre avaliações (refletem comportamento na sessão atual)
+- Implementação sugerida: gerar perfil base por `operador_id` e adicionar ruído gaussiano pequeno em cada avaliação
+
+### Regra 14 — atraso_manutencao_pct é derivado
+- Calculado como o máximo entre o atraso em dias e o atraso em horas:
+  ```
+  atraso_manutencao_pct = max(
+      ultima_manutencao_dias / intervalo_manut_recomendado_dias,
+      ultima_manutencao_horas_op / intervalo_manut_recomendado_horas
+  )
+  ```
+- `manutencao_atrasada = atraso_manutencao_pct > 1.0`
+- Nunca gerar `manutencao_atrasada` e `atraso_manutencao_pct` de forma independente — sempre derivar
+
+### Regra 15 — modelo_equipamento correlaciona com tipo_equipamento
+- Modelos de colheitadeira só aparecem em registros com `tipo_equipamento = "colheitadeira"`, e assim por diante
+- Exemplos sugeridos por tipo:
+  - `colheitadeira` → "John Deere S790", "Case IH A8810", "New Holland CR10.90"
+  - `trator` → "John Deere 7J195", "Massey Ferguson 7S.180", "New Holland T7.290"
+  - `implemento` → "Jumil JM-1440", "Baldan BFNT-15", "Marchesan CAP-7"
+
+### Regra 16 — Operadores por equipamento
+- Cada equipamento pode ter 1–3 operadores diferentes ao longo do ano
+- Cada operador pode operar 1–5 equipamentos diferentes
+- Implementação: gerar mapeamento `equipamento_id → lista de operador_id` durante a geração dos equipamentos
+
 ---
 
 ## 4. Fórmula de Geração do Score (Modelo Professor)
@@ -180,9 +254,15 @@ score_base = (
     + noturno * 5                   # 0/1   → 0 ou 5 pts    (calibrado)
     + idade_equipamento * 0.4       # 0–25  → máx ~10 pts
     + historico_sinistros * 6.0     # 0–10  → máx ~60 pts   (calibrado)
+    # --- features de operador ---
+    + pct_velocidade_acima_recomendada * 0.12  # 0–100 → máx ~12 pts
+    + freq_eventos_bruscos * 0.8               # 0–20  → máx ~16 pts
+    + score_operador_historico * 0.05          # 0–100 → máx ~5 pts
+    # --- features de manutenção ---
+    + atraso_manutencao_pct * 8.0              # 0–3   → máx ~24 pts
 )
-# Máximo teórico do score_base: ~147 (caso extremo, improvável)
-# Caso típico alto: ~60-80
+# Máximo teórico do score_base: ~214 (caso extremo, improvável)
+# Caso típico alto: ~70-90
 
 # agua_score: transformação não-linear da distância
 agua_score = max(0, (500 - distancia_agua_m)) / 500  # 0 se >500m, 1 se 10m
@@ -228,8 +308,20 @@ risco_acumulado = max(0, historico_sinistros - 3) * horas_operacao * 0.60
 # Captura risco composto: equipamentos acidentados operando por muitas horas.
 # Exemplo: sinistros=8, horas=12 → bônus de +30 pontos
 
-# Máximo teórico das interações: 77 (todas ativas simultaneamente, muito raro)
-# Caso típico: 0–25
+# 9. Operador agressivo + condições ruins = risco composto
+if pct_velocidade_acima_recomendada > 30 and precipitacao_mm > 20:
+    interacoes += 10
+
+# 10. Manutenção atrasada + operação intensa = falha mecânica provável
+if atraso_manutencao_pct > 1.2 and horas_operacao > 8:
+    interacoes += 12
+
+# 11. Operador noturno habitual + operação noturna atual = fadiga crônica
+if pct_operacoes_noturnas > 50 and noturno:
+    interacoes += 8
+
+# Máximo teórico das interações: 107 (todas ativas simultaneamente, muito raro)
+# Caso típico: 0–30
 ```
 
 ### 4.4 Score final
@@ -287,12 +379,15 @@ docs/
 - O dataset gerado deve ser idêntico em qualquer execução
 
 ### 5.4 Validações pós-geração (o script deve imprimir)
-1. Shape: (5000, 24)
+1. Shape: (5000, ~40)
 2. Distribuição de `faixa_risco` (% por faixa)
 3. Contagem de nulls em `vibracao_g` e `temperatura_motor`
 4. Ranges de todas as colunas numéricas (min/max)
 5. Consistência: nenhum registro com `tem_iot=false` e `temperatura_motor` preenchido
 6. Consistência: nenhum `parado` com `velocidade_kmh > 0`
+7. Consistência: `manutencao_atrasada` sempre derivado corretamente de `atraso_manutencao_pct`
+8. Consistência: `modelo_equipamento` compatível com `tipo_equipamento` (Regra 15)
+9. Perfil de operador: variação de `score_operador_historico` dentro de ±10% por `operador_id` (Regra 13)
 
 ---
 

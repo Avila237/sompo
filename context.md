@@ -54,6 +54,7 @@ Cinco camadas:
 ├── data/
 │   ├── dataset_safefield.parquet  ← dataset primário (5.000 registros)
 │   ├── dataset_safefield.csv      ← cópia visual/debug
+│   ├── knowledge_base/            ← Markdowns simulados para RAG (futuro)
 │   └── eda_01_target.png … eda_08_geo.png  ← gráficos gerados no EDA
 ├── models/                 ← modelos serializados (.pkl, .joblib)
 ├── notebooks/
@@ -106,18 +107,19 @@ Escopo opcional. Exemplo: `feat(api): adicionar endpoint de risk score`, `hw(esp
 ## Modelo preditivo
 
 - XGBoost regressão → score 0–100 → faixas: baixo (0–33), médio (34–66), alto (67–100)
-- Features: ambientais (clima, precipitação), geográficas (solo, distância água, declividade), operacionais (velocidade, vibração, temp motor, horas), equipamento (tipo, idade, histórico sinistros)
-- SHAP decompõe cada predição nos top fatores contribuintes
-- Dataset simulado com ~5.000 registros para MVP
+- Modelo único com ~40 features: ambientais (clima, precipitação), geográficas (solo, distância água, declividade), operacionais (velocidade, vibração, temp motor, horas), equipamento (tipo, idade, histórico sinistros), **operador** (velocidade acima recomendada, eventos bruscos, operações noturnas, score histórico), **manutenção** (dias/horas desde manutenção, atraso relativo)
+- SHAP decompõe cada predição nos top fatores contribuintes — e por grupo de features, permitindo exibir contribuição por categoria no app (ex: "dos 74 pontos, 45 vêm do ambiente, 18 do operador e 11 da manutenção")
+- Dataset simulado com ~5.000 registros, ~40 colunas para MVP
 - MLflow registra cada treinamento (params, métricas, artefatos)
-- Fórmula de score usa pesos calibrados (score_base + 8 interações + risco_acumulado + ruído) — detalhes em `docs/data schema.md` seção 4
+- Fórmula de score usa pesos calibrados (score_base + 11 interações + risco_acumulado + ruído) — detalhes em `docs/data schema.md` seção 4
 - O XGBoost aprende a fórmula a partir do dataset; em produção quem calcula o score é o modelo, não a fórmula
+- Quatro componentes expandidos incorporados ao escopo — ver seção "Componentes expandidos"
 
 ## Dataset
 
 - **Localização:** `data/dataset_safefield.parquet` (primário) e `data/dataset_safefield.csv`
 - **Registros:** 5.000 avaliações de risco de ~200 equipamentos ao longo de 2025
-- **Colunas:** 24 (identificação, ambientais, geográficas, operacionais, equipamento, target)
+- **Colunas:** ~40 (identificação, ambientais, geográficas, operacionais, equipamento, operador, manutenção, metadados RAG, target)
 - **Target:** `risco_score` (0–100) + `faixa_risco` (baixo/medio/alto)
 - **Distribuição:** ~40% baixo, ~35% médio, ~25% alto
 - **Spec completa:** `docs/data schema.md` (schema, regras de consistência, fórmula de score)
@@ -158,29 +160,74 @@ Fluxo de trabalho atual: planejamento e decisões arquiteturais n → specs e pr
 
 ## Fases do projeto
 
-1. **Semanas 1–2:** Fundação e dados (Sprint 1 — esta entrega)
-2. **Semanas 3–5:** Modelo e backend
-3. **Semanas 6–8:** App móvel e integração
-4. **Semanas 9–10:** Polimento e apresentação
-5. **Semanas 11–12:** Buffer
+**Fase 1 — Fundação e Dados (Semanas 1–2) ✅ CONCLUÍDA**
+- Sprint 1 documentação e estrutura do repositório
+- Dataset v1 (24 colunas) + EDA + testes (89 passando)
+
+**Fase 2 — Dataset Expandido e Modelo (Semanas 3–7)**
+- Expandir dataset com features de operador e manutenção (~40 colunas)
+- Atualizar testes e EDA
+- Treinar e validar XGBoost com dataset completo
+- SHAP para explicabilidade (decomposição por grupo de features)
+- MLflow para rastreabilidade
+- Construir base de conhecimento simulada (Markdowns para RAG)
+
+**Fase 3 — Backend e API (Semanas 8–11)**
+- API FastAPI (endpoints de score, alertas, histórico, /explain RAG)
+- Integração Open-Meteo + IBGE shapefiles
+- Implementação do RAG (LlamaIndex/LangChain + LLM)
+- Testes unitários e de integração do backend
+
+**Fase 4 — App Móvel e Dashboard (Semanas 12–16)**
+- App mobile (telas de login, dashboard de risco, alertas, histórico, perfil operador)
+- Integração app ↔ backend (API REST)
+- Integração app ↔ IoT via BLE
+- Dashboard Streamlit (visão Sompo + simulador de cenários + UBI)
+
+**Fase 5 — UBI e Polimento (Semanas 17–20)**
+- Implementação do UBI (índice histórico + simulação de precificação)
+- Simulador de cenários no Streamlit
+- Refinamento de UX
+- Testes de cenários realistas
+
+**Fase 6 — Apresentação e Entrega (Semanas 21–23)**
+- Documentação final
+- Gravação do vídeo de apresentação
+- Preparação da demo funcional
+- Buffer para ajustes
+
+**Entrega final: 15/09/2026**
 
 ## Estado atual
 
-**Fase atual:** Fase 2 — Modelo e Backend (Semanas 3–5)
+**Fase atual:** Fase 2 — Dataset Expandido e Modelo (Semanas 3–7)
 
-**Concluído na Fase 2:**
+**Concluído (Fase 1):**
 - Schema do dataset definido e documentado (`docs/data schema.md`)
 - Script de geração do dataset simulado (`scripts/generate_dataset.py`)
-- Dataset gerado: 5.000 registros, 24 colunas, distribuição 40/35/25 (baixo/medio/alto)
+- Dataset v1 gerado: 5.000 registros, 24 colunas, distribuição 40/35/25 (baixo/medio/alto)
 - Notebook de análise exploratória (`notebooks/01_eda.ipynb`)
 - Suíte de testes: 89 testes passando (50 validação do dataset + 39 validação do script)
+- Escopo expandido definido: 4 componentes novos especificados e documentados
 
-**Próximos passos da Fase 2:**
-- Treinar e validar modelo XGBoost
-- Implementar explicabilidade com SHAP
+**Próximo passo imediato (Fase 2):**
+- **Expandir dataset:** adicionar features de operador e manutenção (~40 colunas total)
+- Atualizar script de geração, testes e EDA para o dataset v2
+- Treinar e validar modelo XGBoost com dataset completo
+- Implementar explicabilidade com SHAP (decomposição por grupo)
 - Configurar MLflow para rastreabilidade
-- Desenvolver API FastAPI (endpoints de score, alertas, histórico)
-- Integração com Open-Meteo e IBGE shapefiles
+- Construir base de conhecimento simulada (Markdowns para RAG)
+
+## Componentes expandidos
+
+Quatro componentes foram incorporados ao escopo na transição para a Fase 2:
+
+1. **Perfil de risco do operador** — features comportamentais (velocidade acima do recomendado, eventos bruscos, operações noturnas, score histórico) entram no mesmo modelo XGBoost; SHAP decompõe contribuição por grupo de features.
+2. **RAG com base de conhecimento simulada** — top fatores SHAP acionam busca em manuais técnicos simulados (Markdown em ) e geram recomendações em linguagem natural via LLM. Implementado **após** o treinamento do XGBoost.
+3. **Manutenção preventiva vs. fabricante** — cruza manutenção declarada pelo operador com intervalos recomendados pelo fabricante;  entra como feature de risco no modelo.
+4. **Usage-Based Insurance e simulador** — índice de risco histórico por equipamento/operador para precificação dinâmica simulada + interface Streamlit com sliders. Implementado **após** modelo e API.
+
+> Priorização: features de operador e manutenção entram no dataset agora (Fase 2). RAG, UBI e simulador são implementados nas fases 3–5.
 
 ## Referências
 
