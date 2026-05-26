@@ -163,6 +163,21 @@ def main():
         size_kb = os.path.getsize(fpath) / 1024
         print(f"  - {fname} ({size_kb:.1f} KB)")
 
+    try:
+        _proj_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if _proj_root not in sys.path:
+            sys.path.insert(0, _proj_root)
+        from backend.ml.mlflow_tracking import log_training_run
+        log_training_run(
+            model=model,
+            metrics=metrics,
+            feature_cols=feature_cols,
+            y_test_faixa=y_test_faixa,
+            y_pred_faixa=y_pred_faixa,
+        )
+    except Exception as e:
+        print(f"\n[MLflow] Tracking indisponivel: {e}")
+
 
 if __name__ == "__main__":
     main()

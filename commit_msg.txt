@@ -1,7 +1,0 @@
-feat(ml): implementar explicabilidade SHAP
-
-- Módulo shap_explainer.py com 6 funções públicas
-- Decomposição por grupo: ambiental, geográfico, operacional, equipamento, operador, manutenção
-- Top feature global: historico_sinistros (18.58)
-- 6 gráficos PNG gerados em data/
-- 38 testes passando, 197/197 total
