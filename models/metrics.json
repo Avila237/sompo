@@ -1,0 +1,9 @@
+{
+  "mae": 4.7205,
+  "rmse": 6.0792,
+  "r2": 0.9466,
+  "accuracy_faixas": 0.883,
+  "n_train": 4000,
+  "n_test": 1000,
+  "n_features": 30
+}

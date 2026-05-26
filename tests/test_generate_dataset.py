@@ -1,16 +1,28 @@
-# SafeField - Testes do script de geracao. Execucao: pytest tests/test_generate_dataset.py -v
+﻿# SafeField - Testes do script de geracao. Execucao: pytest tests/test_generate_dataset.py -v
 import sys, os, pytest, numpy as np, pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from scripts.generate_dataset import (
     generate_equipamentos, generate_ambientais, generate_geograficos,
     generate_operacionais, apply_consistency_rules, calculate_risk_score,
-    N_EQUIPAMENTOS, N_REGISTROS
+    generate_operadores, assign_operadores_to_equipamentos,
+    generate_operador_features, generate_manutencao_features,
+    N_EQUIPAMENTOS, N_REGISTROS, N_OPERADORES,
 )
+
+_OP_DEFAULTS = {
+    'pct_velocidade_acima_recomendada': 0.0,
+    'freq_eventos_bruscos': 0.0,
+    'pct_operacoes_noturnas': 10.0,
+    'score_operador_historico': 10.0,
+    'atraso_manutencao_pct': 0.1,
+}
 
 
 def _gerar_dataset(seed):
     np.random.seed(seed)
     equipamentos = generate_equipamentos(N_EQUIPAMENTOS)
+    operadores = generate_operadores(N_OPERADORES)
+    equip_op_map = assign_operadores_to_equipamentos(equipamentos, operadores)
     equip_idx = np.random.choice(N_EQUIPAMENTOS, size=N_REGISTROS, replace=True)
     equip_records = equipamentos.iloc[equip_idx].reset_index(drop=True)
     ambientais = generate_ambientais(N_REGISTROS)
@@ -21,20 +33,29 @@ def _gerar_dataset(seed):
         operacionais[['timestamp']],
         ambientais,
         geograficos,
-        operacionais[['tipo_operacao','velocidade_kmh','horas_operacao','horario_operacao']],
-        equip_records[['tipo_equipamento','idade_equipamento','historico_sinistros','tem_iot']],
+        operacionais[['tipo_operacao', 'velocidade_kmh', 'horas_operacao', 'horario_operacao']],
+        equip_records[[
+            'tipo_equipamento', 'idade_equipamento', 'historico_sinistros', 'tem_iot',
+            'modelo_equipamento', 'intervalo_manut_recomendado_dias', 'intervalo_manut_recomendado_horas',
+        ]],
     ], axis=1)
     df = apply_consistency_rules(df)
+    op_features = generate_operador_features(df, operadores, equip_op_map)
+    df = pd.concat([df, op_features], axis=1)
+    manut_features = generate_manutencao_features(df)
+    df = pd.concat([df, manut_features], axis=1)
     df = calculate_risk_score(df)
     return df
 
 
 def _make_df(record):
     cols = [
-        'precipitacao_mm','umidade_solo','velocidade_vento','distancia_agua_m',
-        'declividade','velocidade_kmh','horas_operacao','horario_operacao',
-        'idade_equipamento','historico_sinistros','vibracao_g',
-        'tipo_solo','tipo_operacao','tipo_equipamento','tem_iot'
+        'precipitacao_mm', 'umidade_solo', 'velocidade_vento', 'distancia_agua_m',
+        'declividade', 'velocidade_kmh', 'horas_operacao', 'horario_operacao',
+        'idade_equipamento', 'historico_sinistros', 'vibracao_g',
+        'tipo_solo', 'tipo_operacao', 'tipo_equipamento', 'tem_iot',
+        'pct_velocidade_acima_recomendada', 'freq_eventos_bruscos',
+        'pct_operacoes_noturnas', 'score_operador_historico', 'atraso_manutencao_pct',
     ]
     rows = record if isinstance(record, list) else [record]
     return pd.DataFrame(rows, columns=cols)
@@ -51,6 +72,12 @@ def equipamentos():
     return generate_equipamentos(N_EQUIPAMENTOS)
 
 
+@pytest.fixture(scope='session')
+def operadores():
+    np.random.seed(42)
+    return generate_operadores(N_OPERADORES)
+
+
 @pytest.fixture
 def reg_baixo():
     return {
@@ -59,7 +86,10 @@ def reg_baixo():
         'vibracao_g': 0.2, 'horas_operacao': 1.0, 'horario_operacao': 10,
         'idade_equipamento': 1, 'historico_sinistros': 0,
         'tipo_solo': 'arenoso', 'tipo_operacao': 'parado',
-        'tipo_equipamento': 'trator', 'tem_iot': False
+        'tipo_equipamento': 'trator', 'tem_iot': False,
+        'pct_velocidade_acima_recomendada': 0.0, 'freq_eventos_bruscos': 0.0,
+        'pct_operacoes_noturnas': 5.0, 'score_operador_historico': 5.0,
+        'atraso_manutencao_pct': 0.1,
     }
 
 
@@ -71,7 +101,10 @@ def reg_alto():
         'vibracao_g': 3.5, 'horas_operacao': 14.0, 'horario_operacao': 22,
         'idade_equipamento': 20, 'historico_sinistros': 5,
         'tipo_solo': 'argiloso', 'tipo_operacao': 'transporte',
-        'tipo_equipamento': 'colheitadeira', 'tem_iot': True
+        'tipo_equipamento': 'colheitadeira', 'tem_iot': True,
+        'pct_velocidade_acima_recomendada': 80.0, 'freq_eventos_bruscos': 15.0,
+        'pct_operacoes_noturnas': 70.0, 'score_operador_historico': 80.0,
+        'atraso_manutencao_pct': 2.0,
     }
 
 
@@ -135,6 +168,65 @@ class TestGenerateEquipamentos:
         assert equipamentos['idade_equipamento'].min() >= 0
         assert equipamentos['idade_equipamento'].max() <= 25
 
+    def test_intervalo_manut_por_tipo(self, equipamentos):
+        'Intervalos de manutencao variam conforme tipo de equipamento (Regra 12)'
+        col = equipamentos.loc[equipamentos['tipo_equipamento'] == 'colheitadeira', 'intervalo_manut_recomendado_dias']
+        imp = equipamentos.loc[equipamentos['tipo_equipamento'] == 'implemento', 'intervalo_manut_recomendado_dias']
+        assert col.min() >= 90 and col.max() <= 180
+        assert imp.min() >= 180 and imp.max() <= 365
+
+
+class TestGenerateOperadores:
+
+    def test_quantidade_operadores(self):
+        '80 operadores gerados com o parametro padrao'
+        np.random.seed(42)
+        ops = generate_operadores(80)
+        assert len(ops) == 80
+
+    def test_ids_unicos(self, operadores):
+        'Todos os operador_id sao unicos'
+        assert operadores['operador_id'].nunique() == N_OPERADORES
+
+    def test_formato_id(self, operadores):
+        'IDs seguem o formato OP-XXXX'
+        assert operadores['operador_id'].str.match(r'^OP-\d{4}$').all()
+
+    def test_perfil_base_pct_noturnas_range(self, operadores):
+        'pct_operacoes_noturnas_base entre 0 e 100'
+        assert operadores['pct_operacoes_noturnas_base'].min() >= 0.0
+        assert operadores['pct_operacoes_noturnas_base'].max() <= 100.0
+
+    def test_perfil_base_score_historico_range(self, operadores):
+        'score_operador_historico_base entre 0 e 100'
+        assert operadores['score_operador_historico_base'].min() >= 0.0
+        assert operadores['score_operador_historico_base'].max() <= 100.0
+
+
+class TestAssignOperadores:
+
+    @pytest.fixture(scope='class')
+    def mapa(self):
+        np.random.seed(42)
+        eq = generate_equipamentos(N_EQUIPAMENTOS)
+        ops = generate_operadores(N_OPERADORES)
+        return assign_operadores_to_equipamentos(eq, ops)
+
+    def test_todos_equipamentos_mapeados(self, mapa):
+        'Todos os 200 equipamentos estao no mapeamento'
+        assert len(mapa) == N_EQUIPAMENTOS
+
+    def test_ops_por_equipamento_range(self, mapa):
+        'Cada equipamento tem entre 1 e 3 operadores mapeados'
+        counts = [len(v) for v in mapa.values()]
+        assert min(counts) >= 1
+        assert max(counts) <= 3
+
+    def test_equips_por_operador_com_tolerancia(self, mapa):
+        'Cada operador opera no maximo ~5 equipamentos (tolerancia +1 para fallback)'
+        from collections import Counter
+        op_count = Counter(op for ops in mapa.values() for op in ops)
+        assert max(op_count.values()) <= 6
 
 class TestGenerateAmbientais:
 
@@ -229,6 +321,112 @@ class TestGenerateOperacionais:
         assert media_transporte > media_parado
 
 
+class TestGenerateOperadorFeatures:
+
+    @pytest.fixture(scope='class')
+    def op_feat(self):
+        np.random.seed(42)
+        eq = generate_equipamentos(N_EQUIPAMENTOS)
+        ops = generate_operadores(N_OPERADORES)
+        mapa = assign_operadores_to_equipamentos(eq, ops)
+        equip_idx = np.random.choice(N_EQUIPAMENTOS, size=N_REGISTROS, replace=True)
+        equip_records = eq.iloc[equip_idx].reset_index(drop=True)
+        amb = generate_ambientais(N_REGISTROS)
+        geo = generate_geograficos(N_REGISTROS)
+        op = generate_operacionais(N_REGISTROS, eq, equip_idx)
+        base = pd.concat([
+            equip_records[['equipamento_id']],
+            op[['timestamp']],
+            amb, geo,
+            op[['tipo_operacao', 'velocidade_kmh', 'horas_operacao', 'horario_operacao']],
+            equip_records[['tipo_equipamento', 'idade_equipamento', 'historico_sinistros', 'tem_iot',
+                            'modelo_equipamento', 'intervalo_manut_recomendado_dias',
+                            'intervalo_manut_recomendado_horas']],
+        ], axis=1)
+        base = apply_consistency_rules(base)
+        return generate_operador_features(base, ops, mapa)
+
+    def test_colunas_geradas(self, op_feat):
+        'Gera as 5 colunas esperadas de operador'
+        expected = {'operador_id', 'pct_velocidade_acima_recomendada', 'freq_eventos_bruscos',
+                    'pct_operacoes_noturnas', 'score_operador_historico'}
+        assert expected <= set(op_feat.columns)
+
+    def test_quantidade_registros(self, op_feat):
+        'Gera exatamente N_REGISTROS linhas'
+        assert len(op_feat) == N_REGISTROS
+
+    def test_pct_velocidade_range(self, op_feat):
+        'pct_velocidade_acima_recomendada entre 0 e 100'
+        assert op_feat['pct_velocidade_acima_recomendada'].min() >= 0.0
+        assert op_feat['pct_velocidade_acima_recomendada'].max() <= 100.0
+
+    def test_freq_eventos_range(self, op_feat):
+        'freq_eventos_bruscos entre 0 e 20'
+        assert op_feat['freq_eventos_bruscos'].min() >= 0.0
+        assert op_feat['freq_eventos_bruscos'].max() <= 20.0
+
+    def test_pct_noturnas_range(self, op_feat):
+        'pct_operacoes_noturnas entre 0 e 100'
+        assert op_feat['pct_operacoes_noturnas'].min() >= 0.0
+        assert op_feat['pct_operacoes_noturnas'].max() <= 100.0
+
+    def test_score_historico_range(self, op_feat):
+        'score_operador_historico entre 0 e 100'
+        assert op_feat['score_operador_historico'].min() >= 0.0
+        assert op_feat['score_operador_historico'].max() <= 100.0
+
+
+class TestGenerateManutencaoFeatures:
+
+    @pytest.fixture(scope='class')
+    def manut(self):
+        np.random.seed(42)
+        eq = generate_equipamentos(N_EQUIPAMENTOS)
+        equip_idx = np.random.choice(N_EQUIPAMENTOS, size=N_REGISTROS, replace=True)
+        equip_records = eq.iloc[equip_idx].reset_index(drop=True)
+        df = equip_records[['idade_equipamento', 'tipo_equipamento',
+                             'intervalo_manut_recomendado_dias',
+                             'intervalo_manut_recomendado_horas']].copy()
+        return generate_manutencao_features(df)
+
+    def test_colunas_geradas(self, manut):
+        'Gera as 4 colunas esperadas de manutencao'
+        expected = {'ultima_manutencao_dias', 'ultima_manutencao_horas_op',
+                    'manutencao_atrasada', 'atraso_manutencao_pct'}
+        assert expected <= set(manut.columns)
+
+    def test_quantidade_registros(self, manut):
+        'Gera exatamente N_REGISTROS linhas'
+        assert len(manut) == N_REGISTROS
+
+    def test_manutencao_atrasada_derivada_do_pct(self, manut):
+        'manutencao_atrasada = (atraso_manutencao_pct > 1.0) sem excecoes (Regra 14)'
+        esperado = manut['atraso_manutencao_pct'] > 1.0
+        assert (manut['manutencao_atrasada'] == esperado).all()
+
+    def test_ultima_manutencao_dias_range(self, manut):
+        'ultima_manutencao_dias entre 0 e 365'
+        assert manut['ultima_manutencao_dias'].min() >= 0
+        assert manut['ultima_manutencao_dias'].max() <= 365
+
+    def test_atraso_pct_range(self, manut):
+        'atraso_manutencao_pct entre 0 e 3'
+        assert manut['atraso_manutencao_pct'].min() >= 0.0
+        assert manut['atraso_manutencao_pct'].max() <= 3.0
+
+    def test_velhos_tem_mais_manutencao_atrasada(self, manut):
+        'Equipamentos >10 anos tem taxa de manutencao_atrasada maior que <3 anos (Regra 12)'
+        np.random.seed(42)
+        eq = generate_equipamentos(N_EQUIPAMENTOS)
+        equip_idx = np.random.choice(N_EQUIPAMENTOS, size=N_REGISTROS, replace=True)
+        equip_records = eq.iloc[equip_idx].reset_index(drop=True)
+        idades = equip_records['idade_equipamento']
+        taxa_velhos = manut.loc[idades > 10, 'manutencao_atrasada'].mean()
+        taxa_novos = manut.loc[idades < 3, 'manutencao_atrasada'].mean()
+        assert taxa_velhos > taxa_novos
+
+
 class TestApplyConsistencyRules:
 
     @pytest.fixture(scope='class')
@@ -245,8 +443,8 @@ class TestApplyConsistencyRules:
             op[['timestamp']],
             amb,
             geo,
-            op[['tipo_operacao','velocidade_kmh','horas_operacao','horario_operacao']],
-            equip_records[['tipo_equipamento','idade_equipamento','historico_sinistros','tem_iot']],
+            op[['tipo_operacao', 'velocidade_kmh', 'horas_operacao', 'horario_operacao']],
+            equip_records[['tipo_equipamento', 'idade_equipamento', 'historico_sinistros', 'tem_iot']],
         ], axis=1)
         return apply_consistency_rules(base)
 
@@ -293,6 +491,8 @@ class TestCalculateRiskScore:
     def df_scored(self):
         np.random.seed(42)
         eq = generate_equipamentos(N_EQUIPAMENTOS)
+        ops = generate_operadores(N_OPERADORES)
+        mapa = assign_operadores_to_equipamentos(eq, ops)
         equip_idx = np.random.choice(N_EQUIPAMENTOS, size=N_REGISTROS, replace=True)
         equip_records = eq.iloc[equip_idx].reset_index(drop=True)
         amb = generate_ambientais(N_REGISTROS)
@@ -301,12 +501,17 @@ class TestCalculateRiskScore:
         base = pd.concat([
             equip_records[['equipamento_id']],
             op[['timestamp']],
-            amb,
-            geo,
-            op[['tipo_operacao','velocidade_kmh','horas_operacao','horario_operacao']],
-            equip_records[['tipo_equipamento','idade_equipamento','historico_sinistros','tem_iot']],
+            amb, geo,
+            op[['tipo_operacao', 'velocidade_kmh', 'horas_operacao', 'horario_operacao']],
+            equip_records[['tipo_equipamento', 'idade_equipamento', 'historico_sinistros', 'tem_iot',
+                            'modelo_equipamento', 'intervalo_manut_recomendado_dias',
+                            'intervalo_manut_recomendado_horas']],
         ], axis=1)
         base = apply_consistency_rules(base)
+        op_feat = generate_operador_features(base, ops, mapa)
+        base = pd.concat([base, op_feat], axis=1)
+        manut_feat = generate_manutencao_features(base)
+        base = pd.concat([base, manut_feat], axis=1)
         return calculate_risk_score(base)
 
     def test_score_entre_0_e_100(self, df_scored):
@@ -347,7 +552,8 @@ class TestCalculateRiskScore:
             'distancia_agua_m': 1000.0, 'declividade': 5.0, 'velocidade_kmh': 5.0,
             'vibracao_g': 0.5, 'horas_operacao': 3.0, 'horario_operacao': 10,
             'idade_equipamento': 5, 'historico_sinistros': 1,
-            'tipo_operacao': 'colheita', 'tipo_equipamento': 'trator', 'tem_iot': False
+            'tipo_operacao': 'colheita', 'tipo_equipamento': 'trator', 'tem_iot': False,
+            **_OP_DEFAULTS,
         }
         arg = dict(base); arg['tipo_solo'] = 'argiloso'
         are = dict(base); are['tipo_solo'] = 'arenoso'
@@ -363,7 +569,8 @@ class TestCalculateRiskScore:
             'vibracao_g': 0.8, 'horas_operacao': 5.0,
             'idade_equipamento': 5, 'historico_sinistros': 1,
             'tipo_solo': 'misto', 'tipo_operacao': 'transporte',
-            'tipo_equipamento': 'trator', 'tem_iot': False
+            'tipo_equipamento': 'trator', 'tem_iot': False,
+            **_OP_DEFAULTS,
         }
         noturno = dict(base); noturno['horario_operacao'] = 22
         diurno = dict(base); diurno['horario_operacao'] = 10
@@ -379,7 +586,8 @@ class TestCalculateRiskScore:
             'horas_operacao': 3.0, 'horario_operacao': 10,
             'idade_equipamento': 5, 'historico_sinistros': 1,
             'tipo_solo': 'misto', 'tipo_operacao': 'colheita',
-            'tipo_equipamento': 'trator', 'tem_iot': False
+            'tipo_equipamento': 'trator', 'tem_iot': False,
+            **_OP_DEFAULTS,
         }
         perto = dict(base); perto['distancia_agua_m'] = 100.0
         longe = dict(base); longe['distancia_agua_m'] = 2000.0
@@ -394,7 +602,8 @@ class TestCalculateRiskScore:
             'distancia_agua_m': 1000.0, 'declividade': 5.0, 'velocidade_kmh': 5.0,
             'vibracao_g': 2.5, 'horas_operacao': 5.0, 'horario_operacao': 10,
             'tipo_solo': 'misto', 'tipo_operacao': 'colheita',
-            'tipo_equipamento': 'trator', 'tem_iot': True, 'historico_sinistros': 0
+            'tipo_equipamento': 'trator', 'tem_iot': True, 'historico_sinistros': 0,
+            **_OP_DEFAULTS,
         }
         velho = dict(base); velho['idade_equipamento'] = 15
         novo = dict(base); novo['idade_equipamento'] = 3
@@ -410,7 +619,8 @@ class TestCalculateRiskScore:
             'vibracao_g': 1.0, 'horas_operacao': 5.0, 'horario_operacao': 10,
             'idade_equipamento': 5, 'historico_sinistros': 1,
             'tipo_solo': 'misto', 'tipo_operacao': 'transporte',
-            'tipo_equipamento': 'trator', 'tem_iot': False
+            'tipo_equipamento': 'trator', 'tem_iot': False,
+            **_OP_DEFAULTS,
         }
         inclinado = dict(base); inclinado['declividade'] = 20.0
         plano = dict(base); plano['declividade'] = 2.0
@@ -426,8 +636,63 @@ class TestCalculateRiskScore:
             'vibracao_g': 1.0, 'horas_operacao': 5.0, 'horario_operacao': 10,
             'idade_equipamento': 5, 'historico_sinistros': 1,
             'tipo_solo': 'misto', 'tipo_operacao': 'colheita',
-            'tipo_equipamento': 'trator', 'tem_iot': True
+            'tipo_equipamento': 'trator', 'tem_iot': True,
+            **_OP_DEFAULTS,
         }
         np.random.seed(1); s1 = calculate_risk_score(_make_df(reg))['risco_score'].iloc[0]
         np.random.seed(2); s2 = calculate_risk_score(_make_df(reg))['risco_score'].iloc[0]
         assert s1 != s2
+
+    def test_interacao_operador_agressivo_chuva(self):
+        'Operador agressivo (pct_vel>30) + chuva >20mm gera score maior que sem agressividade'
+        base = {
+            'precipitacao_mm': 30.0, 'umidade_solo': 40.0, 'velocidade_vento': 15.0,
+            'distancia_agua_m': 1000.0, 'declividade': 5.0, 'velocidade_kmh': 10.0,
+            'vibracao_g': 0.8, 'horas_operacao': 5.0, 'horario_operacao': 10,
+            'idade_equipamento': 5, 'historico_sinistros': 1,
+            'tipo_solo': 'misto', 'tipo_operacao': 'colheita',
+            'tipo_equipamento': 'trator', 'tem_iot': False,
+            'freq_eventos_bruscos': 2.0, 'pct_operacoes_noturnas': 10.0,
+            'score_operador_historico': 20.0, 'atraso_manutencao_pct': 0.5,
+        }
+        agressivo = dict(base); agressivo['pct_velocidade_acima_recomendada'] = 50.0
+        normal = dict(base); normal['pct_velocidade_acima_recomendada'] = 5.0
+        np.random.seed(7); s_agr = calculate_risk_score(_make_df(agressivo))['risco_score'].iloc[0]
+        np.random.seed(7); s_nor = calculate_risk_score(_make_df(normal))['risco_score'].iloc[0]
+        assert s_agr > s_nor
+
+    def test_interacao_manutencao_atrasada_operacao_intensa(self):
+        'Manutencao muito atrasada (>1.2) + operacao longa (>8h) gera score maior que em dia'
+        base = {
+            'precipitacao_mm': 5.0, 'umidade_solo': 20.0, 'velocidade_vento': 10.0,
+            'distancia_agua_m': 1000.0, 'declividade': 3.0, 'velocidade_kmh': 5.0,
+            'vibracao_g': 0.8, 'horas_operacao': 12.0, 'horario_operacao': 10,
+            'idade_equipamento': 8, 'historico_sinistros': 1,
+            'tipo_solo': 'misto', 'tipo_operacao': 'colheita',
+            'tipo_equipamento': 'trator', 'tem_iot': False,
+            'pct_velocidade_acima_recomendada': 5.0, 'freq_eventos_bruscos': 1.0,
+            'pct_operacoes_noturnas': 10.0, 'score_operador_historico': 20.0,
+        }
+        atrasada = dict(base); atrasada['atraso_manutencao_pct'] = 1.5
+        em_dia = dict(base); em_dia['atraso_manutencao_pct'] = 0.5
+        np.random.seed(7); s_atr = calculate_risk_score(_make_df(atrasada))['risco_score'].iloc[0]
+        np.random.seed(7); s_ok = calculate_risk_score(_make_df(em_dia))['risco_score'].iloc[0]
+        assert s_atr > s_ok
+
+    def test_interacao_operador_noturno_habitual(self):
+        'Operador noturno habitual (pct>50) + operacao noturna atual gera score maior'
+        base = {
+            'precipitacao_mm': 5.0, 'umidade_solo': 20.0, 'velocidade_vento': 10.0,
+            'distancia_agua_m': 1000.0, 'declividade': 3.0, 'velocidade_kmh': 5.0,
+            'vibracao_g': 0.8, 'horas_operacao': 5.0, 'horario_operacao': 22,
+            'idade_equipamento': 5, 'historico_sinistros': 1,
+            'tipo_solo': 'misto', 'tipo_operacao': 'colheita',
+            'tipo_equipamento': 'trator', 'tem_iot': False,
+            'pct_velocidade_acima_recomendada': 5.0, 'freq_eventos_bruscos': 1.0,
+            'score_operador_historico': 20.0, 'atraso_manutencao_pct': 0.5,
+        }
+        noturno_hab = dict(base); noturno_hab['pct_operacoes_noturnas'] = 70.0
+        diurno_hab = dict(base); diurno_hab['pct_operacoes_noturnas'] = 10.0
+        np.random.seed(7); s_not = calculate_risk_score(_make_df(noturno_hab))['risco_score'].iloc[0]
+        np.random.seed(7); s_dia = calculate_risk_score(_make_df(diurno_hab))['risco_score'].iloc[0]
+        assert s_not > s_dia
