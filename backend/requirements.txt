@@ -17,5 +17,8 @@ numpy==2.*
 pyarrow==18.*
 requests==2.*
 
+# Database
+supabase==2.*
+
 # Utilitarios
 python-dotenv==1.*
