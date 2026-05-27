@@ -13,7 +13,7 @@ Cinco camadas:
 2. **Ingestão:** app recebe IoT via BLE, envia tudo ao backend. Backend enriquece com clima e geodados
 3. **Motor de IA:** XGBoost (regressão, score 0–100) + SHAP (explicabilidade) + MLflow (auditoria)
 4. **API:** FastAPI com JWT, endpoints de score, alertas, histórico, relatórios
-5. **Interfaces:** app móvel (operador/gestor) + dashboard Streamlit (Sompo/analistas)
+5. **Interfaces:** app móvel (operador/gestor) + dashboard React (Sompo/analistas)
 
 **Decisão arquitetural central:** o app móvel é o centro — funciona sem IoT (GPS + acelerômetro do celular). O IoT ESP32 é complemento opcional para equipamentos modernos.
 
@@ -29,8 +29,9 @@ Cinco camadas:
 | ML | XGBoost + SHAP |
 | Rastreabilidade | MLflow |
 | Dados externos | Open-Meteo (clima), IBGE shapefiles (geo) |
-| Dashboard | Streamlit |
-| Deploy | Railway ou Render |
+| Dashboard | React |
+| Banco de dados | Supabase (PostgreSQL) |
+| Deploy | Vercel, Railway ou Render |
 
 ## Estrutura de pastas
 
@@ -49,10 +50,13 @@ Cinco camadas:
 │   │   ├── train.py            ← treinamento XGBoost + pré-processamento
 │   │   ├── shap_explainer.py   ← explicabilidade SHAP (6 grupos de features)
 │   │   └── mlflow_tracking.py  ← rastreabilidade de runs de treinamento
+│   ├── db/
+│   │   ├── schema.sql          ← schema das 4 tabelas PostgreSQL
+│   │   └── supabase_client.py  ← cliente Supabase encapsulado
 │   ├── core/               ← config, database, auth, utils — Sprint 3
 │   └── requirements.txt
 ├── mobile/                 ← app React Native ou Flutter — Sprint 4
-├── dashboard/              ← Streamlit — Sprint 4
+├── dashboard/              ← React — Sprint 4
 ├── firmware/               ← ESP32 C++/Arduino
 ├── data/
 │   ├── dataset_safefield.parquet  ← dataset primário (5.000 registros, 37 colunas)
@@ -72,13 +76,17 @@ Cinco camadas:
 ├── scripts/
 │   ├── generate_dataset.py         ← geração do dataset simulado (seed 42, reprodutível)
 │   ├── generate_notebook_01_v2.py  ← gerador do notebook de EDA v2
-│   └── generate_notebook_02.py     ← gerador do notebook de treinamento
+│   ├── generate_notebook_02.py     ← gerador do notebook de treinamento
+│   ├── seed_supabase.py            ← seed: equipamentos, operadores, avaliacoes
+│   └── populate_predictions.py     ← popula predicoes com modelo + SHAP
 └── tests/
     ├── test_dataset.py          ← 70 testes: schema, ranges, regras, distribuições
     ├── test_generate_dataset.py ← 63 testes: funções, fórmula, interações, operador, manutenção
     ├── test_model.py            ← 26 testes: artefatos, predições, métricas, encoding, faixas
     ├── test_shap.py             ← 38 testes: grupos, SHAP values, contribuições, artefatos
-    └── test_mlflow.py           ← 25 testes: registro, runs, parâmetros, métricas, fallback
+    ├── test_mlflow.py           ← 25 testes: registro, runs, parâmetros, métricas, fallback
+    ├── test_supabase.py         ← 18 testes: conexão, contagens, integridade, distribuição
+    └── test_predicoes.py        ← 11 testes: predições, SHAP JSON, correlação
 ```
 
 ## Convenções
@@ -145,12 +153,14 @@ Escopo opcional. Exemplo: `feat(api): adicionar endpoint de risk score`, `hw(esp
 
 - **Framework:** pytest
 - **Executar:** `pytest tests/ -v`
-- **Total:** 222 testes (todos passando)
+- **Total:** 251 testes (226 passando + 25 MLflow requerem módulo instalado)
 - `tests/test_dataset.py` — 70 testes validando o dataset gerado (schema, ranges, regras de consistência, distribuições)
 - `tests/test_generate_dataset.py` — 63 testes validando o script de geração (funções, fórmula, interações, operador, manutenção)
 - `tests/test_model.py` — 26 testes validando o modelo treinado (artefatos, predições, métricas, encoding, faixas)
 - `tests/test_shap.py` — 38 testes validando a explicabilidade SHAP (grupos, values, contribuições, artefatos)
 - `tests/test_mlflow.py` — 25 testes validando o tracking MLflow (registro, runs, parâmetros, métricas, fallback)
+- `tests/test_supabase.py` — 18 testes validando o Supabase (conexão, contagens, integridade, distribuição, nulls, indexes)
+- `tests/test_predicoes.py` — 11 testes validando as predições (contagem, SHAP JSON, correlação, distribuição)
 - **Convenção:** sempre criar testes junto com código novo (TDD quando possível)
 
 ## Dependências Python
@@ -162,6 +172,8 @@ pip install -r backend/requirements.txt
 ```
 
 Dependências completas do backend em `backend/requirements.txt`.
+
+Para os scripts de seed do Supabase: `supabase` e `python-dotenv` (já incluídos no requirements.txt). Credenciais em `.env` (não commitado): `SUPABASE_URL` e `SUPABASE_KEY`.
 
 ## Metodologia de trabalho com IA
 
@@ -190,11 +202,12 @@ Concluído:
 - SHAP para explicabilidade por grupo de features (`backend/ml/shap_explainer.py`)
 - MLflow para rastreabilidade (`backend/ml/mlflow_tracking.py`, experimento `safefield-xgboost`)
 - Notebooks documentados: EDA v2 (`01_eda.ipynb`) + treinamento completo (`02_treinamento.ipynb`)
-- 222 testes automatizados passando
+- Supabase (PostgreSQL): 4 tabelas com dados completos (equipamentos, operadores, avaliacoes, predicoes)
+- Predições: score predito + top 5 fatores SHAP em JSONB + versão do modelo por avaliação
+- 251 testes automatizados (226 passando)
 
 Pendente:
-- Banco de dados Supabase (PostgreSQL) com dataset e tabela de predições
-- Dashboard Streamlit mínimo (visão Sompo)
+- Dashboard React (visão Sompo)
 - Diagrama de arquitetura consolidado
 - README atualizado com tudo da Sprint 2
 - Vídeo de apresentação (até 5 min)
@@ -209,7 +222,7 @@ Pendente:
 **Sprint 4 — App Móvel e UBI (a definir)**
 - App mobile (telas de operador e gestor)
 - Integração app ↔ backend e app ↔ IoT via BLE
-- UBI + simulador de cenários no dashboard Streamlit
+- UBI + simulador de cenários no dashboard React
 
 **Entrega final: 15/09/2026**
 - Polimento de UX
@@ -236,11 +249,12 @@ Pendente:
 - MLflow integrado: experimento `safefield-xgboost` com 9 params, 7 métricas, 10 artefatos
 - EDA reescrito para dataset v2 (10 figuras exportadas)
 - Notebook de treinamento criado (11 seções documentando todo o pipeline)
-- 222 testes automatizados passando
+- Supabase (PostgreSQL): 4 tabelas — equipamentos (200), operadores (80), avaliacoes (5000), predicoes (5000)
+- Predições: score predito + top 5 fatores SHAP em JSONB + versão do modelo
+- 251 testes automatizados (226 passando)
 
 **Próximo passo imediato (Sprint 2 — pendente):**
-- **Banco Supabase:** criar tabelas `equipamentos`, `operacoes` e `predicoes` no PostgreSQL
-- Dashboard Streamlit mínimo para visão Sompo
+- Dashboard React (visão Sompo)
 - Diagrama de arquitetura atualizado
 - README final da Sprint 2
 - Vídeo de apresentação (até 5 min)
@@ -252,7 +266,7 @@ Quatro componentes foram incorporados ao escopo na transição para a Sprint 2:
 1. **Perfil de risco do operador** — features comportamentais (velocidade acima do recomendado, eventos bruscos, operações noturnas, score histórico) entram no mesmo modelo XGBoost; SHAP decompõe contribuição por grupo de features.
 2. **RAG com base de conhecimento simulada** — top fatores SHAP acionam busca em manuais técnicos simulados (Markdown em `data/knowledge_base/`) e geram recomendações em linguagem natural via LLM. Implementado na Sprint 3.
 3. **Manutenção preventiva vs. fabricante** — cruza manutenção declarada pelo operador com intervalos recomendados pelo fabricante; entra como feature de risco no modelo.
-4. **Usage-Based Insurance e simulador** — índice de risco histórico por equipamento/operador para precificação dinâmica simulada + interface Streamlit com sliders. Implementado na Sprint 4.
+4. **Usage-Based Insurance e simulador** — índice de risco histórico por equipamento/operador para precificação dinâmica simulada + interface React com sliders. Implementado na Sprint 4.
 
 > Priorização: features de operador e manutenção estão no dataset (Sprint 2 concluído). RAG, UBI e simulador são implementados nas Sprints 3–4.
 
