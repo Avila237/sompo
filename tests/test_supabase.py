@@ -79,9 +79,9 @@ class TestContagens:
         result = client.table("avaliacoes").select("*", count="exact").limit(0).execute()
         assert result.count == 5000
 
-    def test_predicoes_vazia(self, client):
+    def test_predicoes_5000(self, client):
         result = client.table("predicoes").select("*", count="exact").limit(0).execute()
-        assert result.count == 0
+        assert result.count == 5000
 
 
 # ---------------------------------------------------------------------------
