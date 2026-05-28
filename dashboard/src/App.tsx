@@ -1,8 +1,8 @@
-﻿import { useState } from 'react'
+﻿import { useState, useEffect } from 'react'
 import TopBar from './components/TopBar'
 import SideNav from './components/SideNav'
 import { WIco } from './components/Icons'
-import { EQUIPMENT } from './data/mock'
+import { loadRawData } from './data/api'
 import type { Equipment } from './types'
 
 import SompoOverview from './pages/sompo/Overview'
@@ -14,15 +14,6 @@ import SompoReports from './pages/sompo/Reports'
 import BrokerView from './pages/broker/Broker'
 import TechnicianView from './pages/technician/Technician'
 
-const sompoNav = [
-  { k: 'overview',  label: 'Visao geral',          icon: <WIco.map /> },
-  { k: 'ranking',   label: 'Ranking de risco',     icon: <WIco.grid />,   count: EQUIPMENT.length },
-  { k: 'detail',    label: 'Detalhe equipamento',  icon: <WIco.info /> },
-  { k: 'simulator', label: 'Simulador',            icon: <WIco.beaker /> },
-  { k: 'ubi',       label: 'UBI · Premios',        icon: <WIco.chart /> },
-  { k: 'reports',   label: 'Relatorios',           icon: <WIco.doc />,    count: '28' },
-]
-
 const FIRST_SCREEN: Record<string, string> = {
   sompo: 'overview',
   broker: 'broker',
@@ -33,6 +24,22 @@ export default function App() {
   const [persona, setPersona] = useState<'sompo' | 'broker' | 'tech'>('sompo')
   const [screen, setScreen] = useState('overview')
   const [pickEquip, setPickEquip] = useState<Equipment | null>(null)
+  const [equipCount, setEquipCount] = useState<number | undefined>(undefined)
+
+  useEffect(() => {
+    loadRawData()
+      .then((d) => setEquipCount(d.equipamentos.length))
+      .catch(() => setEquipCount(undefined))
+  }, [])
+
+  const sompoNav = [
+    { k: 'overview',  label: 'Visao geral',          icon: <WIco.map /> },
+    { k: 'ranking',   label: 'Equipamentos',         icon: <WIco.grid />,   count: equipCount },
+    { k: 'detail',    label: 'Detalhe equipamento',  icon: <WIco.info /> },
+    { k: 'simulator', label: 'Simulador',            icon: <WIco.beaker /> },
+    { k: 'ubi',       label: 'UBI · Premios',        icon: <WIco.chart /> },
+    { k: 'reports',   label: 'Relatorios',           icon: <WIco.doc />,    count: '28' },
+  ]
 
   function handlePersona(p: string) {
     const key = p as 'sompo' | 'broker' | 'tech'
