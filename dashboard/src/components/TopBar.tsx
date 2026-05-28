@@ -1,7 +1,6 @@
-﻿import { useState, useRef, useEffect } from 'react'
+﻿import { useState, useRef, useEffect, type JSX } from 'react'
 import { WTONE } from '../data/mock'
 import { WIco } from './Icons'
-import { SompoMark } from './shared'
 import type { ToneKey } from '../types'
 
 /* ── notification data ── */
