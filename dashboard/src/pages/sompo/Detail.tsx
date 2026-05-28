@@ -12,6 +12,7 @@ import {
 import type { Equipment } from '../../types'
 import { Card, Chip, ScoreBadge, Trend, Sparkline, Button } from '../../components/shared'
 import { WIco } from '../../components/Icons'
+import { ComingSoon } from '../../components/ComingSoon'
 
 /* ── Diverging SHAP bar (positivo = aumenta risco) ────────── */
 
@@ -181,15 +182,15 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button kind="ghost" onClick={handleReport}>
+          <ComingSoon inline><Button kind="ghost" onClick={handleReport}>
             {WIco.doc()}  {reportState === 'generating' ? 'Gerando...' : reportState === 'done' ? 'Pronto ✓' : 'Relatório'}
-          </Button>
-          <Button kind="ghost" onClick={() => setShowCallPanel((v) => !v)}>
+          </Button></ComingSoon>
+          <ComingSoon inline><Button kind="ghost" onClick={() => setShowCallPanel((v) => !v)}>
             {WIco.phone()}  Ligar operador
-          </Button>
-          <Button kind="primary" tone="crit" onClick={() => setShowAlertPanel((v) => !v)}>
+          </Button></ComingSoon>
+          <ComingSoon inline><Button kind="primary" tone="crit" onClick={() => setShowAlertPanel((v) => !v)}>
             {WIco.alert()}  Disparar alerta
-          </Button>
+          </Button></ComingSoon>
         </div>
       </div>
 

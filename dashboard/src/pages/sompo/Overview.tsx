@@ -14,6 +14,7 @@ import {
 import type { Equipment, Region, ToneKey } from '../../types'
 import { Card, ScoreBadge, Trend, KPITile, SectionHeader, Button } from '../../components/shared'
 import { WIco } from '../../components/Icons'
+import { ComingSoon } from '../../components/ComingSoon'
 
 /* -- FilterSeg helper -------------------------------------- */
 
@@ -299,14 +300,14 @@ export default function SompoOverview({
         actions={
           <>
             <Button kind="ghost" onClick={() => setShowFilters((v) => !v)}>{WIco.filter()} Filtros</Button>
-            <Button
+            <ComingSoon inline><Button
               kind="ghost"
               onClick={handleExport}
               style={exporting === 'done' ? { color: '#5AE06B', borderColor: '#5AE06B' } : {}}
             >
               {WIco.download()} {exportLabel}
-            </Button>
-            <Button kind="primary" tone="safe" onClick={() => onNav('simulator')}>Nova análise</Button>
+            </Button></ComingSoon>
+            <ComingSoon inline><Button kind="primary" tone="safe" onClick={() => onNav('simulator')}>Nova análise</Button></ComingSoon>
           </>
         }
       />

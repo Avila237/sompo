@@ -10,6 +10,7 @@ import {
 import type { Equipment } from '../../types'
 import { Card, Chip, ScoreBadge, SectionHeader, Button } from '../../components/shared'
 import { WIco } from '../../components/Icons'
+import { ComingSoon } from '../../components/ComingSoon'
 
 /* ── FilterSeg helper ────────────────────────────────────── */
 
@@ -193,9 +194,9 @@ export default function SompoRanking({
         title="Equipamentos"
         sub={`${views.length} equipamentos cadastrados`}
         actions={
-          <Button kind="ghost" onClick={() => {}}>
+          <ComingSoon inline><Button kind="ghost" onClick={() => {}}>
             {WIco.download()} Exportar CSV
-          </Button>
+          </Button></ComingSoon>
         }
       />
 

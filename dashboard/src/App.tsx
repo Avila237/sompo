@@ -4,6 +4,7 @@ import SideNav from './components/SideNav'
 import { WIco } from './components/Icons'
 import { loadRawData } from './data/api'
 import type { Equipment } from './types'
+import { ComingSoon } from './components/ComingSoon'
 
 import SompoOverview from './pages/sompo/Overview'
 import SompoRanking from './pages/sompo/Ranking'
@@ -54,15 +55,15 @@ export default function App() {
   }
 
   function renderPage() {
-    if (persona === 'broker') return <BrokerView />
-    if (persona === 'tech') return <TechnicianView />
+    if (persona === 'broker') return <ComingSoon><BrokerView /></ComingSoon>
+    if (persona === 'tech') return <ComingSoon><TechnicianView /></ComingSoon>
     switch (screen) {
       case 'overview':  return <SompoOverview onPickEquip={goDetail} onNav={setScreen} />
       case 'ranking':   return <SompoRanking onPickEquip={goDetail} />
       case 'detail':    return <SompoDetail equip={pickEquip} onBack={() => setScreen('ranking')} />
-      case 'simulator': return <SompoSimulator />
-      case 'ubi':       return <SompoUBI />
-      case 'reports':   return <SompoReports />
+      case 'simulator': return <ComingSoon><SompoSimulator /></ComingSoon>
+      case 'ubi':       return <ComingSoon><SompoUBI /></ComingSoon>
+      case 'reports':   return <ComingSoon><SompoReports /></ComingSoon>
       default:          return <SompoOverview onPickEquip={goDetail} onNav={setScreen} />
     }
   }
