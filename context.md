@@ -29,7 +29,7 @@ Cinco camadas:
 | ML | XGBoost + SHAP |
 | Rastreabilidade | MLflow |
 | Dados externos | Open-Meteo (clima), IBGE shapefiles (geo) |
-| Dashboard | React |
+| Dashboard | React 19 + TypeScript + Vite + Tailwind CSS v4 |
 | Banco de dados | Supabase (PostgreSQL) |
 | Deploy | Vercel, Railway ou Render |
 
@@ -56,7 +56,23 @@ Cinco camadas:
 │   ├── core/               ← config, database, auth, utils — Sprint 3
 │   └── requirements.txt
 ├── mobile/                 ← app React Native ou Flutter — Sprint 4
-├── dashboard/              ← React — Sprint 4
+├── dashboard/              ← React 19 + TS + Vite + Tailwind v4 (visão Sompo)
+│   ├── src/
+│   │   ├── App.tsx              ← roteamento por persona + nav lateral
+│   │   ├── main.tsx · types.ts · index.css (tema dark, Tailwind v4)
+│   │   ├── lib/supabase.ts      ← cliente Supabase (VITE_SUPABASE_*)
+│   │   ├── data/
+│   │   │   ├── api.ts           ← fetch + agregação (KPIs, SHAP, histórico)
+│   │   │   └── mock.ts          ← dados mockados (telas não integradas)
+│   │   ├── components/          ← ComingSoon (overlay), Icons, SideNav, TopBar, shared
+│   │   └── pages/
+│   │       ├── sompo/           ← Overview, Ranking, Detail (dados reais Supabase)
+│   │       │                       Simulator, UBI, Reports (overlay "Em breve")
+│   │       ├── broker/          ← Corretor (overlay "Em breve")
+│   │       └── technician/      ← Técnico (overlay "Em breve")
+│   ├── .env.local              ← credenciais VITE_* (não commitado, git-ignored)
+│   ├── package.json · vite.config.ts · tsconfig*.json
+│   └── README.md
 ├── firmware/               ← ESP32 C++/Arduino
 ├── data/
 │   ├── dataset_safefield.parquet  ← dataset primário (5.000 registros, 37 colunas)
@@ -175,6 +191,28 @@ Dependências completas do backend em `backend/requirements.txt`.
 
 Para os scripts de seed do Supabase: `supabase` e `python-dotenv` (já incluídos no requirements.txt). Credenciais em `.env` (não commitado): `SUPABASE_URL` e `SUPABASE_KEY`.
 
+## Dependências Frontend (dashboard)
+
+Stack: **React 19 + TypeScript + Vite + Tailwind CSS v4**.
+
+Instalar e rodar:
+
+```bash
+cd dashboard
+npm install
+npm run dev        # http://localhost:5173 (cai para a próxima porta livre, ex.: 5175)
+```
+
+Principais dependências (`dashboard/package.json`):
+
+- `@supabase/supabase-js` — cliente do banco (consultas das telas integradas)
+- `recharts` — gráficos
+- `lucide-react` — ícones
+- `react` / `react-dom` / `react-router-dom`
+- dev: `vite`, `@vitejs/plugin-react`, `tailwindcss` (v4) + `@tailwindcss/vite`, `typescript`, `eslint`
+
+Credenciais do frontend em `dashboard/.env.local` (não commitado, git-ignored via `*.local`): `VITE_SUPABASE_URL` e `VITE_SUPABASE_KEY`. O Vite só expõe variáveis com prefixo `VITE_`.
+
 ## Metodologia de trabalho com IA
 
 Seguimos o princípio de pair programming com IA (driver/navigator), conforme artigo do Akita. A IA não programa sozinha — o desenvolvedor mantém o controle arquitetural e a IA executa sob supervisão. Features novas representam ~37% dos commits; testes, refactoring, docs e infra compõem os outros 63%.
@@ -205,9 +243,9 @@ Concluído:
 - Supabase (PostgreSQL): 4 tabelas com dados completos (equipamentos, operadores, avaliacoes, predicoes)
 - Predições: score predito + top 5 fatores SHAP em JSONB + versão do modelo por avaliação
 - 251 testes automatizados (226 passando)
+- Dashboard React (visão Sompo): 3 telas integradas ao Supabase (Visão Geral, Ranking, Detalhe com SHAP); demais telas com overlay "Em breve"
 
 Pendente:
-- Dashboard React (visão Sompo)
 - Diagrama de arquitetura consolidado
 - README atualizado com tudo da Sprint 2
 - Vídeo de apresentação (até 5 min)
@@ -252,9 +290,9 @@ Pendente:
 - Supabase (PostgreSQL): 4 tabelas — equipamentos (200), operadores (80), avaliacoes (5000), predicoes (5000)
 - Predições: score predito + top 5 fatores SHAP em JSONB + versão do modelo
 - 251 testes automatizados (226 passando)
+- Dashboard React (visão Sompo): React 19 + TypeScript + Vite + Tailwind v4. 3 telas integradas ao Supabase com dados reais — Visão Geral (KPIs, gráficos, alertas), Ranking (200 equipamentos com filtros e busca) e Detalhe do Equipamento (decomposição SHAP por grupo, top fatores, manutenção, histórico). Telas ainda não integradas (Simulador, UBI, Relatórios, Corretor, Técnico) exibem overlay "Em breve". Rodar com `cd dashboard && npm run dev`.
 
 **Próximo passo imediato (Sprint 2 — pendente):**
-- Dashboard React (visão Sompo)
 - Diagrama de arquitetura atualizado
 - README final da Sprint 2
 - Vídeo de apresentação (até 5 min)
