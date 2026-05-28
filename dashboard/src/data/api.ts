@@ -284,3 +284,164 @@ export function toEquipment(v: EquipamentoView): Equipment {
     maintPct: 0,
   }
 }
+/* ── Detalhe do equipamento (tela de Detalhe) ─────────────── */
+
+export interface ShapFactor {
+  group: string
+  feature: string
+  shap_value: number
+}
+
+export interface PredicaoRow {
+  avaliacao_id: number
+  risco_score_predito: number
+  faixa_predita: string
+  top_fatores_shap: ShapFactor[]
+  modelo_versao: string
+}
+
+export interface AvaliacaoFull {
+  avaliacao_id: number
+  equipamento_id: string
+  operador_id: string
+  timestamp: string
+  temperatura_ar: number
+  precipitacao_mm: number
+  umidade_solo: number
+  velocidade_vento: number
+  condicao_clima: string
+  latitude: number
+  longitude: number
+  tipo_solo: string
+  distancia_agua_m: number
+  declividade: number
+  tipo_operacao: string
+  velocidade_kmh: number
+  vibracao_g: number | null
+  temperatura_motor: number | null
+  horas_operacao: number
+  horario_operacao: number
+  pct_velocidade_acima_recomendada: number
+  freq_eventos_bruscos: number
+  pct_operacoes_noturnas: number
+  score_operador_historico: number
+  ultima_manutencao_dias: number
+  ultima_manutencao_horas_op: number
+  manutencao_atrasada: boolean
+  atraso_manutencao_pct: number
+  risco_score: number
+  faixa_risco: string
+}
+
+export interface HistPoint {
+  ts: string
+  score: number
+}
+
+export interface EquipamentoDetail {
+  equipamento: EquipamentoRow
+  ultima: AvaliacaoFull | null
+  predicao: PredicaoRow | null
+  historico: HistPoint[]
+}
+
+export interface GrupoShap {
+  group: string
+  label: string
+  color: string
+  value: number // soma (com sinal) dos shap_value do grupo
+}
+
+export const SHAP_GROUP_META: Record<string, { label: string; color: string }> = {
+  ambiental:   { label: 'Ambiental',   color: '#6EB9FF' },
+  geografico:  { label: 'Geográfico',  color: '#5AE06B' },
+  operacional: { label: 'Operacional', color: '#A78BFA' },
+  equipamento: { label: 'Equipamento', color: '#34D3C0' },
+  operador:    { label: 'Operador',    color: '#FFB526' },
+  manutencao:  { label: 'Manutenção',  color: '#E8372E' },
+}
+
+export const FEATURE_LABELS: Record<string, string> = {
+  temperatura_ar: 'Temperatura do ar',
+  precipitacao_mm: 'Precipitação (24h)',
+  umidade_solo: 'Umidade do solo',
+  velocidade_vento: 'Velocidade do vento',
+  condicao_clima: 'Condição climática',
+  latitude: 'Latitude',
+  longitude: 'Longitude',
+  tipo_solo: 'Tipo de solo',
+  distancia_agua_m: 'Distância de corpo d’água',
+  declividade: 'Declividade do terreno',
+  tipo_operacao: 'Tipo de operação',
+  velocidade_kmh: 'Velocidade de deslocamento',
+  vibracao_g: 'Vibração',
+  temperatura_motor: 'Temperatura do motor',
+  horas_operacao: 'Horas de operação',
+  horario_operacao: 'Horário da operação',
+  tipo_equipamento: 'Tipo de equipamento',
+  idade_equipamento: 'Idade do equipamento',
+  historico_sinistros: 'Histórico de sinistros',
+  tem_iot: 'Possui IoT',
+  pct_velocidade_acima_recomendada: 'Velocidade acima do recomendado',
+  freq_eventos_bruscos: 'Eventos bruscos',
+  pct_operacoes_noturnas: 'Operações noturnas',
+  score_operador_historico: 'Score histórico do operador',
+  ultima_manutencao_dias: 'Dias desde última manutenção',
+  ultima_manutencao_horas_op: 'Horas desde última manutenção',
+  intervalo_manut_recomendado_dias: 'Intervalo recomendado (dias)',
+  intervalo_manut_recomendado_horas: 'Intervalo recomendado (horas)',
+  manutencao_atrasada: 'Manutenção atrasada',
+  atraso_manutencao_pct: 'Atraso de manutenção',
+}
+
+export function featureLabel(f: string): string {
+  return FEATURE_LABELS[f] ?? f
+}
+
+export function aggregateShapByGroup(factors: ShapFactor[]): GrupoShap[] {
+  const sums = new Map<string, number>()
+  for (const f of factors) {
+    sums.set(f.group, (sums.get(f.group) ?? 0) + Number(f.shap_value))
+  }
+  return [...sums.entries()]
+    .map(([group, value]) => ({
+      group,
+      label: SHAP_GROUP_META[group]?.label ?? group,
+      color: SHAP_GROUP_META[group]?.color ?? '#A8AEAB',
+      value,
+    }))
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+}
+
+export async function loadEquipamentoDetail(id: string): Promise<EquipamentoDetail> {
+  const raw = await loadRawData()
+  const equipamento = raw.equipamentos.find((e) => e.equipamento_id === id)
+  if (!equipamento) throw new Error(`Equipamento ${id} nao encontrado`)
+
+  const { data: avalData, error: avalErr } = await supabase
+    .from('avaliacoes')
+    .select('*')
+    .eq('equipamento_id', id)
+    .order('timestamp', { ascending: false })
+    .limit(1)
+  if (avalErr) throw avalErr
+  const ultima = (avalData?.[0] ?? null) as AvaliacaoFull | null
+
+  let predicao: PredicaoRow | null = null
+  if (ultima) {
+    const { data: predData, error: predErr } = await supabase
+      .from('predicoes')
+      .select('avaliacao_id,risco_score_predito,faixa_predita,top_fatores_shap,modelo_versao')
+      .eq('avaliacao_id', ultima.avaliacao_id)
+      .limit(1)
+    if (predErr) throw predErr
+    predicao = (predData?.[0] ?? null) as PredicaoRow | null
+  }
+
+  const historico = raw.avaliacoes
+    .filter((a) => a.equipamento_id === id)
+    .map((a) => ({ ts: a.timestamp, score: Number(a.risco_score) }))
+    .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+
+  return { equipamento, ultima, predicao, historico }
+}
