@@ -29,6 +29,9 @@ models/*.joblib
 # Configuração local de ferramentas de agente
 .claude/
 
+# Material de terceiros (decks e artigos de referência) — citar, não versionar
+docs/references/*.pdf
+
 # OS
 .DS_Store
 Thumbs.db
