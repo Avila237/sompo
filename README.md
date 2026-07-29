@@ -354,11 +354,34 @@ O XGBoost foi escolhido por três razões principais. Primeiro, lida bem com var
 
 **Entradas:** features ambientais, geográficas, operacionais, do equipamento, do **operador** (perfil comportamental histórico) e de **manutenção** (atraso em relação ao intervalo recomendado) — detalhadas na [seção 4](#4-estruturação-dos-dados). Total: **30 features de entrada** (das 37 colunas do dataset, excluídas IDs, timestamp e targets).
 
-**Saídas:** score de risco (0–100), faixa de risco (baixo/médio/alto), top 3 fatores contribuintes (via SHAP) e recomendação de ação. Desempenho atual (test set 20%): MAE 4.72, RMSE 6.08, R² 0.9466, acurácia faixas 88.3%.
+**Saídas:** score de risco (0–100), faixa de risco (baixo/médio/alto), top 3 fatores contribuintes (via SHAP) e recomendação de ação.
+
+**Desempenho atual** (test set de 1.000 registros, 20% do dataset — valores em [`models/metrics.json`](models/metrics.json)):
+
+| Métrica | Valor | Leitura |
+|---|---|---|
+| MAE | 4.72 | Erro médio de ~5 pontos no score de 0–100 |
+| RMSE | 6.08 | Penaliza os desvios grandes; próximo do MAE indica poucos outliers |
+| R² | 0.9466 | O modelo explica ~95% da variância do score |
+| Acurácia por faixa | 88.3% | Acerto na classificação baixo / médio / alto |
+
+Treino: 4.000 registros · 30 features de entrada.
 
 ### 6.4 Explicabilidade com SHAP
 
-O SHAP (SHapley Additive exPlanations) é aplicado sobre cada predição individual para decompor o score nos fatores que o geraram. Isso atende diretamente às user stories da Sompo, que exigem resultados explicáveis para sustentar conversas técnicas com clientes e áreas internas, e trilha de auditoria para governança do uso de IA. A decomposição por grupo (ambiental, geográfico, operacional, equipamento, operador, manutenção) permite exibir "dos 74 pontos, 45 vêm do ambiente, 18 do operador e 11 da manutenção". Top driver global: `historico_sinistros` (mean |SHAP| = 18.58).
+O SHAP (SHapley Additive exPlanations) é aplicado sobre cada predição individual para decompor o score nos fatores que o geraram. Isso atende diretamente às user stories da Sompo, que exigem resultados explicáveis para sustentar conversas técnicas com clientes e áreas internas, e trilha de auditoria para governança do uso de IA. A decomposição por grupo (ambiental, geográfico, operacional, equipamento, operador, manutenção) permite exibir "dos 74 pontos, 45 vêm do ambiente, 18 do operador e 11 da manutenção".
+
+**Importância global das features.** Cada ponto é um registro do test set; a posição no eixo X é o quanto aquela feature empurrou o score daquele registro para cima (direita) ou para baixo (esquerda). O driver dominante é `historico_sinistros` (mean |SHAP| = 18.58), seguido por horas de operação e distância do corpo d'água.
+
+<p align="center">
+  <img src="data/shap_summary_beeswarm.png" alt="SHAP beeswarm — importância global das features" width="700">
+</p>
+
+**Decomposição de uma predição individual.** O mesmo mecanismo aplicado a um único equipamento classificado como risco alto: partindo da média do dataset (E[f(X)] = 47.6), o histórico de sinistros sozinho adiciona +41.5 pontos, levando o score final a 87.3. É essa cadeia que o endpoint `/explain` devolve ao usuário — não apenas o número.
+
+<p align="center">
+  <img src="data/shap_waterfall_alto.png" alt="SHAP waterfall — decomposição de uma predição de risco alto" width="800">
+</p>
 
 ### 6.5 Exemplo de Saída
 
