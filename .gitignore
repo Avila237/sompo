@@ -26,6 +26,9 @@ models/*.joblib
 *.swp
 *.swo
 
+# Configuração local de ferramentas de agente
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
