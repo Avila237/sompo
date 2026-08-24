@@ -298,7 +298,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
             {topFactors.length ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {topFactors.map((c, i) => {
-                  const meta = SHAP_GROUP_META[c.group]
+                  const meta = SHAP_GROUP_META[c.grupo]
                   const color = meta?.color ?? '#A8AEAB'
                   return (
                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 110px 90px 56px', alignItems: 'center', gap: 10 }}>
@@ -306,7 +306,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
                       <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>{featureLabel(c.feature)}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {WIco.dot(color)}
-                        <span style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{meta?.label ?? c.group}</span>
+                        <span style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{meta?.label ?? c.grupo}</span>
                       </div>
                       <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-elev-2)', overflow: 'hidden' }}>
                         <div style={{ width: `${maxFactorAbs ? (Math.abs(c.shap_value) / maxFactorAbs) * 100 : 0}%`, height: '100%', borderRadius: 3, background: color, opacity: 0.75 }} />

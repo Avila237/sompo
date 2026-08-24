@@ -1,8 +1,251 @@
-﻿import { supabase } from '../lib/supabase'
-import { scoreBand } from './mock'
+/**
+ * Camada de dados do dashboard.
+ *
+ * Fala exclusivamente com a API do backend (FastAPI). O SDK do Supabase saiu
+ * do caminho de dados: nenhuma chave de banco chega ao browser (RF-07).
+ *
+ * Contrato: `docs/contrato-api.md` · Swagger: `${VITE_API_BASE_URL}/docs`.
+ */
+
+import { apiGet, apiPostPublico } from '../lib/apiClient'
+import { setSessao, limparSessao } from '../lib/auth'
 import type { Equipment, Region, ToneKey } from '../types'
 
-/* ── Tipos das linhas vindas do Supabase ──────────────────── */
+/* ── Autenticacao ─────────────────────────────────────────── */
+
+interface TokenResp {
+  access_token: string
+  token_type: string
+  perfil: string
+  expira_em_minutos: number
+}
+
+/** POST /auth/token — emite o JWT e abre a sessao. */
+export async function login(usuario: string, senha: string): Promise<void> {
+  const r = await apiPostPublico<TokenResp>('/auth/token', { usuario, senha })
+  setSessao({
+    token: r.access_token,
+    perfil: r.perfil,
+    expiraEm: Date.now() + r.expira_em_minutos * 60_000,
+  })
+}
+
+export function logout(): void {
+  limparSessao()
+}
+
+/* ── Faixa de risco ───────────────────────────────────────── */
+
+/**
+ * A API e a fonte da faixa (`derive_faixa` no backend). Os limiares sao os
+ * mesmos do `scoreBand` do frontend (<=33 baixo, <=66 medio, senao alto),
+ * entao a migracao nao muda nenhuma classificacao ja exibida.
+ */
+export function faixaToTone(faixa: string): ToneKey {
+  return faixa === 'baixo' ? 'safe' : faixa === 'medio' ? 'warn' : 'crit'
+}
+
+/* ── GET /equipamentos ────────────────────────────────────── */
+
+interface EquipamentoItemResp {
+  equipamento_id: string
+  modelo_equipamento: string
+  tipo_equipamento: 'trator' | 'colheitadeira' | 'implemento'
+  idade_equipamento: number
+  historico_sinistros: number
+  tem_iot: boolean
+  risco_score: number
+  score_medio: number
+  faixa_risco: string
+  tendencia: number
+  total_avaliacoes: number
+  operador_id: string
+  ultima_avaliacao: string | null
+  latitude: number
+  longitude: number
+}
+
+/** Uma linha por equipamento, ja agregada pelo servidor. */
+export interface EquipamentoView {
+  id: string
+  modelo: string
+  tipo: 'trator' | 'colheitadeira' | 'implemento'
+  idade: number
+  sinistros: number
+  iot: boolean
+  score: number       // score da avaliacao mais recente (arredondado)
+  scoreMedio: number  // media das avaliacoes do equipamento
+  trend: number       // ultima avaliacao - penultima
+  faixa: ToneKey
+  avaliacoes: number
+  operador: string
+  ultimaTs: string
+  lat: number
+  lon: number
+}
+
+function toView(e: EquipamentoItemResp): EquipamentoView {
+  return {
+    id: e.equipamento_id,
+    modelo: e.modelo_equipamento,
+    tipo: e.tipo_equipamento,
+    idade: e.idade_equipamento,
+    sinistros: e.historico_sinistros,
+    iot: e.tem_iot,
+    score: Math.round(e.risco_score),
+    scoreMedio: Math.round(e.score_medio),
+    trend: Math.round(e.tendencia),
+    faixa: faixaToTone(e.faixa_risco),
+    avaliacoes: e.total_avaliacoes,
+    operador: e.operador_id || '—',
+    ultimaTs: e.ultima_avaliacao ?? '',
+    lat: e.latitude,
+    lon: e.longitude,
+  }
+}
+
+/**
+ * Busca os 200 equipamentos de uma vez. Filtro, busca e ordenacao seguem no
+ * cliente: a lista e pequena, a interacao fica instantanea e a busca por
+ * operador (que o parametro `busca` da API nao cobre) continua funcionando.
+ */
+export async function loadEquipamentos(): Promise<EquipamentoView[]> {
+  const r = await apiGet<{ total: number; itens: EquipamentoItemResp[] }>('/equipamentos')
+  return r.itens.map(toView)
+}
+
+/* ── GET /kpis + GET /alertas ─────────────────────────────── */
+
+export interface Kpis {
+  totalEquip: number
+  totalAval: number
+  scoreMedio: number
+  riscoAlto: number
+  pctRiscoAlto: number
+  /** Ausente enquanto a API nao expuser `total_operadores` — ver nota abaixo. */
+  operadores: number | null
+}
+
+/** Agregacao por tipo de operacao — terceiro eixo exigido pelo RF-09. */
+export interface OperacaoAgg {
+  tipo: string
+  avaliacoes: number
+  scoreMedio: number
+  riscoAlto: number
+}
+
+export interface Alerta {
+  sev: ToneKey
+  msg: string
+  time: string
+  equipamentoId: string
+}
+
+export interface VisaoGeral {
+  kpis: Kpis
+  porOperacao: OperacaoAgg[]
+  regioes: Region[]
+  alertas: Alerta[]
+  /**
+   * Serie de media diaria de score. `null` enquanto a API nao devolver
+   * `tendencia` em GET /kpis — a Visao geral esconde o grafico nesse caso em
+   * vez de exibir dado vazio. Ver "Pendencias de contrato" no PR.
+   */
+  tendencia: number[] | null
+}
+
+interface KpisResp {
+  kpis: {
+    total_equipamentos: number
+    total_avaliacoes: number
+    score_medio: number
+    equipamentos_risco_alto: number
+    pct_risco_alto: number
+    avaliacoes_por_faixa: Record<string, number>
+    total_operadores?: number
+  }
+  por_operacao: Array<{
+    tipo_operacao: string
+    total_avaliacoes: number
+    score_medio: number
+    avaliacoes_risco_alto: number
+  }>
+  por_regiao: Array<{
+    nome: string
+    latitude: number
+    longitude: number
+    x: number
+    y: number
+    total_equipamentos: number
+    score_medio: number
+  }>
+  /** Campo aditivo ainda nao implementado no backend. */
+  tendencia?: Array<{ dia: string; score_medio: number }>
+}
+
+interface AlertaResp {
+  avaliacao_id: number
+  equipamento_id: string
+  operador_id: string
+  risco_score: number
+  faixa_risco: string
+  tipo_operacao: string
+  timestamp: string
+  mensagem: string
+}
+
+function horaLocal(ts: string): string {
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return '--:--'
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/**
+ * Carrega tudo que a Visao geral precisa em duas requisicoes paralelas.
+ *
+ * @param dias janela da serie de tendencia; repassada como `?dias=` para o
+ *   momento em que a API implementar o campo. Parametro desconhecido e
+ *   ignorado pelo FastAPI, entao nao quebra hoje.
+ */
+export async function loadVisaoGeral(dias: number): Promise<VisaoGeral> {
+  const [k, a] = await Promise.all([
+    apiGet<KpisResp>('/kpis', { dias }),
+    apiGet<{ total: number; itens: AlertaResp[] }>('/alertas'),
+  ])
+
+  return {
+    kpis: {
+      totalEquip: k.kpis.total_equipamentos,
+      totalAval: k.kpis.total_avaliacoes,
+      scoreMedio: Math.round(k.kpis.score_medio),
+      riscoAlto: k.kpis.equipamentos_risco_alto,
+      pctRiscoAlto: k.kpis.pct_risco_alto,
+      operadores: k.kpis.total_operadores ?? null,
+    },
+    porOperacao: k.por_operacao.map((o) => ({
+      tipo: o.tipo_operacao,
+      avaliacoes: o.total_avaliacoes,
+      scoreMedio: Math.round(o.score_medio),
+      riscoAlto: o.avaliacoes_risco_alto,
+    })),
+    regioes: k.por_regiao.map((r) => ({
+      name: r.nome,
+      x: r.x,
+      y: r.y,
+      count: r.total_equipamentos,
+      avg: Math.round(r.score_medio),
+    })),
+    alertas: a.itens.map((it) => ({
+      sev: faixaToTone(it.faixa_risco),
+      msg: it.mensagem,
+      time: horaLocal(it.timestamp),
+      equipamentoId: it.equipamento_id,
+    })),
+    tendencia: k.tendencia ? k.tendencia.map((p) => p.score_medio) : null,
+  }
+}
+
+/* ── GET /equipamentos/{id} ───────────────────────────────── */
 
 export interface EquipamentoRow {
   equipamento_id: string
@@ -16,280 +259,19 @@ export interface EquipamentoRow {
   intervalo_manut_recomendado_horas: number
 }
 
-export interface AvaliacaoLite {
-  avaliacao_id: number
-  equipamento_id: string
-  operador_id: string
-  risco_score: number
-  faixa_risco: string
-  timestamp: string
-  latitude: number
-  longitude: number
-}
-
-export interface RawData {
-  equipamentos: EquipamentoRow[]
-  avaliacoes: AvaliacaoLite[]
-}
-
-/* ── Visao agregada por equipamento (uma linha por equip.) ── */
-
-export interface EquipamentoView {
-  id: string
-  modelo: string
-  tipo: 'trator' | 'colheitadeira' | 'implemento'
-  idade: number
-  sinistros: number
-  iot: boolean
-  score: number          // score da avaliacao mais recente (arredondado)
-  scoreMedio: number     // media das avaliacoes do equipamento
-  trend: number          // ultima avaliacao - penultima
-  faixa: ToneKey         // 'safe' | 'warn' | 'crit'
-  avaliacoes: number     // total de avaliacoes do equipamento
-  operador: string       // operador da avaliacao mais recente
-  ultimaTs: string       // timestamp da avaliacao mais recente
-  lat: number
-  lon: number
-}
-
-/* ── Fetch paginado (PostgREST limita ~1000 linhas/req) ───── */
-
-const PAGE = 1000
-
-async function fetchAvaliacoes(): Promise<AvaliacaoLite[]> {
-  const cols =
-    'avaliacao_id,equipamento_id,operador_id,risco_score,faixa_risco,timestamp,latitude,longitude'
-  const all: AvaliacaoLite[] = []
-  let from = 0
-  for (;;) {
-    const { data, error } = await supabase
-      .from('avaliacoes')
-      .select(cols)
-      .order('avaliacao_id', { ascending: true })
-      .range(from, from + PAGE - 1)
-    if (error) throw error
-    const rows = (data ?? []) as AvaliacaoLite[]
-    for (const r of rows) {
-      r.risco_score = Number(r.risco_score)
-      r.latitude = Number(r.latitude)
-      r.longitude = Number(r.longitude)
-    }
-    all.push(...rows)
-    if (rows.length < PAGE) break
-    from += PAGE
-  }
-  return all
-}
-
-async function fetchEquipamentos(): Promise<EquipamentoRow[]> {
-  const { data, error } = await supabase
-    .from('equipamentos')
-    .select('*')
-    .order('equipamento_id', { ascending: true })
-  if (error) throw error
-  return (data ?? []) as EquipamentoRow[]
-}
-
-/* ── Loader com cache de modulo (busca uma unica vez) ─────── */
-
-let cache: Promise<RawData> | null = null
-
-export function loadRawData(): Promise<RawData> {
-  if (!cache) {
-    cache = Promise.all([fetchEquipamentos(), fetchAvaliacoes()]).then(
-      ([equipamentos, avaliacoes]) => ({ equipamentos, avaliacoes }),
-    )
-    cache.catch(() => {
-      cache = null // permite nova tentativa apos falha
-    })
-  }
-  return cache
-}
-
-/* ── Agregacao: uma EquipamentoView por equipamento ───────── */
-
-export function buildEquipamentos(data: RawData): EquipamentoView[] {
-  const porEquip = new Map<string, AvaliacaoLite[]>()
-  for (const a of data.avaliacoes) {
-    const list = porEquip.get(a.equipamento_id)
-    if (list) list.push(a)
-    else porEquip.set(a.equipamento_id, [a])
-  }
-
-  return data.equipamentos.map((eq) => {
-    const avals = (porEquip.get(eq.equipamento_id) ?? []).slice().sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    )
-    const latest = avals[0]
-    const prev = avals[1]
-    const soma = avals.reduce((s, a) => s + a.risco_score, 0)
-    const scoreMedio = avals.length ? soma / avals.length : 0
-    const score = latest ? latest.risco_score : 0
-    const trend =
-      latest && prev ? Math.round(latest.risco_score - prev.risco_score) : 0
-
-    return {
-      id: eq.equipamento_id,
-      modelo: eq.modelo_equipamento,
-      tipo: eq.tipo_equipamento,
-      idade: eq.idade_equipamento,
-      sinistros: eq.historico_sinistros,
-      iot: eq.tem_iot,
-      score: Math.round(score),
-      scoreMedio: Math.round(scoreMedio),
-      trend,
-      faixa: scoreBand(score),
-      avaliacoes: avals.length,
-      operador: latest ? latest.operador_id : '—',
-      ultimaTs: latest ? latest.timestamp : '',
-      lat: latest ? latest.latitude : 0,
-      lon: latest ? latest.longitude : 0,
-    }
-  })
-}
-
-/* ── KPIs da Visao geral ──────────────────────────────────── */
-
-export interface Kpis {
-  totalEquip: number
-  totalAval: number
-  scoreMedio: number
-  riscoAlto: number
-  pctRiscoAlto: number
-}
-
-export function computeKpis(data: RawData, views: EquipamentoView[]): Kpis {
-  const totalAval = data.avaliacoes.length
-  const soma = data.avaliacoes.reduce((s, a) => s + a.risco_score, 0)
-  const scoreMedio = totalAval ? soma / totalAval : 0
-  const riscoAlto = views.filter((v) => v.faixa === 'crit').length
-  const totalEquip = views.length
-  return {
-    totalEquip,
-    totalAval,
-    scoreMedio: Math.round(scoreMedio),
-    riscoAlto,
-    pctRiscoAlto: totalEquip ? (riscoAlto / totalEquip) * 100 : 0,
-  }
-}
-
-/* ── Tendencia: media diaria nos ultimos N dias do dataset ── */
-
-export function buildTrend(data: RawData, days: number): number[] {
-  if (data.avaliacoes.length === 0) return []
-  let maxTs = 0
-  for (const a of data.avaliacoes) {
-    const t = new Date(a.timestamp).getTime()
-    if (t > maxTs) maxTs = t
-  }
-  const start = maxTs - days * 86400000
-  const porDia = new Map<string, { soma: number; n: number }>()
-  for (const a of data.avaliacoes) {
-    const t = new Date(a.timestamp).getTime()
-    if (t < start) continue
-    const dia = a.timestamp.slice(0, 10)
-    const acc = porDia.get(dia)
-    if (acc) {
-      acc.soma += a.risco_score
-      acc.n++
-    } else {
-      porDia.set(dia, { soma: a.risco_score, n: 1 })
-    }
-  }
-  return [...porDia.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([, v]) => v.soma / v.n)
-}
-
-/* ── Distribuicao geografica a partir de lat/long reais ───── */
-
-const LAT_MIN = -33.75
-const LAT_MAX = -2.5
-const LON_MIN = -73.99
-const LON_MAX = -34.79
-
-function clamp01(v: number): number {
-  return Math.max(0.04, Math.min(0.96, v))
-}
-
-export function buildRegions(views: EquipamentoView[]): Region[] {
-  const cells = new Map<string, { soma: number; n: number; lat: number; lon: number }>()
-  for (const v of views) {
-    if (!v.ultimaTs) continue
-    const rlat = Math.round(v.lat / 3) * 3
-    const rlon = Math.round(v.lon / 3) * 3
-    const key = `${rlat},${rlon}`
-    const c = cells.get(key)
-    if (c) {
-      c.soma += v.score
-      c.n++
-    } else {
-      cells.set(key, { soma: v.score, n: 1, lat: rlat, lon: rlon })
-    }
-  }
-  return [...cells.values()]
-    .map((c) => ({
-      name: `${Math.abs(c.lat).toFixed(0)}°S ${Math.abs(c.lon).toFixed(0)}°O`,
-      x: clamp01((c.lon - LON_MIN) / (LON_MAX - LON_MIN)),
-      y: clamp01((LAT_MAX - c.lat) / (LAT_MAX - LAT_MIN)),
-      count: c.n,
-      avg: Math.round(c.soma / c.n),
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 14)
-}
-
-/* ── Alertas: avaliacoes recentes de maior risco ──────────── */
-
-export interface Alerta {
-  sev: ToneKey
-  msg: string
-  time: string
-}
-
-export function buildAlertas(data: RawData, limit = 7): Alerta[] {
-  return data.avaliacoes
-    .slice()
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .filter((a) => a.faixa_risco !== 'baixo')
-    .slice(0, limit)
-    .map((a) => {
-      const d = new Date(a.timestamp)
-      const hh = String(d.getHours()).padStart(2, '0')
-      const mm = String(d.getMinutes()).padStart(2, '0')
-      return {
-        sev: scoreBand(a.risco_score),
-        msg: `${a.equipamento_id} · score ${Math.round(a.risco_score)} · risco ${a.faixa_risco}`,
-        time: `${hh}:${mm}`,
-      }
-    })
-}
-
-/* ── Adapta EquipamentoView ao tipo Equipment (tela Detalhe) ─ */
-
-export function toEquipment(v: EquipamentoView): Equipment {
-  return {
-    id: v.id,
-    model: v.modelo,
-    type: v.tipo,
-    op: v.operador,
-    opName: v.operador,
-    client: '—',
-    region: v.ultimaTs ? `${Math.abs(v.lat).toFixed(1)}°S ${Math.abs(v.lon).toFixed(1)}°O` : '—',
-    score: v.score,
-    trend: v.trend,
-    lastAlert: v.ultimaTs ? new Date(v.ultimaTs).toLocaleDateString('pt-BR') : '—',
-    hours: 0,
-    maint: 'em dia',
-    maintPct: 0,
-  }
-}
-/* ── Detalhe do equipamento (tela de Detalhe) ─────────────── */
-
+/**
+ * Fator SHAP como a API devolve.
+ *
+ * O banco tem dois formatos gravados — as 5.000 predicoes do seed usam
+ * `group` (ingles) e nao gravaram `valor`; as geradas pela API usam `grupo`.
+ * A API normaliza na leitura e sempre entrega o formato em portugues, por
+ * isso aqui so existe `grupo`. `valor` e opcional porque vem nulo no seed.
+ */
 export interface ShapFactor {
-  group: string
   feature: string
+  grupo: string
   shap_value: number
+  valor?: number | null
 }
 
 export interface PredicaoRow {
@@ -345,11 +327,50 @@ export interface EquipamentoDetail {
   historico: HistPoint[]
 }
 
+interface DetalheResp {
+  equipamento: EquipamentoRow
+  ultima_avaliacao: AvaliacaoFull | null
+  predicao: PredicaoRow | null
+  historico: Array<{ timestamp: string; risco_score: number }>
+}
+
+export async function loadEquipamentoDetail(id: string): Promise<EquipamentoDetail> {
+  const r = await apiGet<DetalheResp>(`/equipamentos/${encodeURIComponent(id)}`)
+  return {
+    equipamento: r.equipamento,
+    ultima: r.ultima_avaliacao,
+    predicao: r.predicao,
+    historico: (r.historico ?? []).map((h) => ({ ts: h.timestamp, score: h.risco_score })),
+  }
+}
+
+/* ── Adapta EquipamentoView ao tipo Equipment (tela Detalhe) ─ */
+
+export function toEquipment(v: EquipamentoView): Equipment {
+  return {
+    id: v.id,
+    model: v.modelo,
+    type: v.tipo,
+    op: v.operador,
+    opName: v.operador,
+    client: '—',
+    region: v.ultimaTs ? `${Math.abs(v.lat).toFixed(1)}°S ${Math.abs(v.lon).toFixed(1)}°O` : '—',
+    score: v.score,
+    trend: v.trend,
+    lastAlert: v.ultimaTs ? new Date(v.ultimaTs).toLocaleDateString('pt-BR') : '—',
+    hours: 0,
+    maint: 'em dia',
+    maintPct: 0,
+  }
+}
+
+/* ── Decomposicao SHAP por grupo ──────────────────────────── */
+
 export interface GrupoShap {
   group: string
   label: string
   color: string
-  value: number // soma (com sinal) dos shap_value do grupo
+  value: number // soma COM SINAL dos shap_value do grupo
 }
 
 export const SHAP_GROUP_META: Record<string, { label: string; color: string }> = {
@@ -398,10 +419,16 @@ export function featureLabel(f: string): string {
   return FEATURE_LABELS[f] ?? f
 }
 
+/**
+ * Soma os SHAP por grupo preservando o sinal: positivo aumenta o risco,
+ * negativo reduz. Difere de `group_contributions()` do backend, que soma
+ * |SHAP| para medir magnitude — a semantica com sinal e a que o
+ * DivergingBar exibe.
+ */
 export function aggregateShapByGroup(factors: ShapFactor[]): GrupoShap[] {
   const sums = new Map<string, number>()
   for (const f of factors) {
-    sums.set(f.group, (sums.get(f.group) ?? 0) + Number(f.shap_value))
+    sums.set(f.grupo, (sums.get(f.grupo) ?? 0) + Number(f.shap_value))
   }
   return [...sums.entries()]
     .map(([group, value]) => ({
@@ -411,37 +438,4 @@ export function aggregateShapByGroup(factors: ShapFactor[]): GrupoShap[] {
       value,
     }))
     .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-}
-
-export async function loadEquipamentoDetail(id: string): Promise<EquipamentoDetail> {
-  const raw = await loadRawData()
-  const equipamento = raw.equipamentos.find((e) => e.equipamento_id === id)
-  if (!equipamento) throw new Error(`Equipamento ${id} nao encontrado`)
-
-  const { data: avalData, error: avalErr } = await supabase
-    .from('avaliacoes')
-    .select('*')
-    .eq('equipamento_id', id)
-    .order('timestamp', { ascending: false })
-    .limit(1)
-  if (avalErr) throw avalErr
-  const ultima = (avalData?.[0] ?? null) as AvaliacaoFull | null
-
-  let predicao: PredicaoRow | null = null
-  if (ultima) {
-    const { data: predData, error: predErr } = await supabase
-      .from('predicoes')
-      .select('avaliacao_id,risco_score_predito,faixa_predita,top_fatores_shap,modelo_versao')
-      .eq('avaliacao_id', ultima.avaliacao_id)
-      .limit(1)
-    if (predErr) throw predErr
-    predicao = (predData?.[0] ?? null) as PredicaoRow | null
-  }
-
-  const historico = raw.avaliacoes
-    .filter((a) => a.equipamento_id === id)
-    .map((a) => ({ ts: a.timestamp, score: Number(a.risco_score) }))
-    .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
-
-  return { equipamento, ultima, predicao, historico }
 }

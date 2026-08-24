@@ -1,10 +1,8 @@
 ﻿import { useState, useMemo, useEffect } from 'react'
 import { WTONE, scoreBandLabel } from '../../data/mock'
 import {
-  loadRawData,
-  buildEquipamentos,
+  loadEquipamentos,
   toEquipment,
-  type RawData,
   type EquipamentoView,
 } from '../../data/api'
 import type { Equipment } from '../../types'
@@ -105,7 +103,7 @@ export default function SompoRanking({
 }: {
   onPickEquip: (e: Equipment) => void
 }) {
-  const [raw, setRaw] = useState<RawData | null>(null)
+  const [views, setViews] = useState<EquipamentoView[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -117,13 +115,11 @@ export default function SompoRanking({
 
   useEffect(() => {
     let active = true
-    loadRawData()
-      .then((d) => { if (active) { setRaw(d); setLoading(false) } })
+    loadEquipamentos()
+      .then((eqs) => { if (active) { setViews(eqs); setLoading(false) } })
       .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
     return () => { active = false }
   }, [])
-
-  const views = useMemo<EquipamentoView[]>(() => (raw ? buildEquipamentos(raw) : []), [raw])
 
   const handleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -175,7 +171,7 @@ export default function SompoRanking({
   if (loading) {
     return (
       <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: 'var(--fg-mute)', fontSize: 14 }}>
-        Carregando equipamentos do Supabase…
+        Carregando equipamentos da API…
       </div>
     )
   }
