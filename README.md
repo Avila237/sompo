@@ -766,12 +766,8 @@ Request revisado pelo outro integrante antes do merge.
 ---
 ## 9. Vídeo de Apresentação
 
-🔗 ⟨link do vídeo⟩
+🔗 https://youtu.be/Wy_LPCzjrlQ
 
-> Até 5 minutos, narração humana, publicado como **não listado**. Demonstra a entrada de um dado,
-> a geração do score e a apresentação na interface, e explica a arquitetura integrada.
->
-> Aguardando a gravação (RF-13, [BRA-296](https://linear.app/tallinn-capital/issue/BRA-296)).
 > O vídeo da entrega anterior continua disponível em https://youtu.be/lLwrnie-Qmk.
 
 ---
