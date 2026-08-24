@@ -310,10 +310,14 @@ Quatro componentes foram incorporados ao escopo na transição para a Sprint 2:
 
 ## Referências
 
-- Enunciado do Challenge: `docs/references/challenge_sompo.txt`
-- Apresentação institucional Sompo: `docs/references/apresentacao_sompo.pdf`
-- Documentação de hardware: `docs/references/hardware_iot.txt`
-- Artigo Akita (metodologia IA): `docs/references/akita_ia.pdf`
+- Enunciado da Sprint 1: `docs/references/Sprint 01 - Fiap.txt`
+- Documentação de hardware IoT: `docs/references/# Hardware IoT .txt`
+- Spec de requisitos da Entrega 3: `docs/spec-sprint-03.md`
+- Spec de implementação da Entrega 3: `docs/spec-implementacao-entrega-03.md`
+- Contrato da API: `docs/contrato-api.md` · schema OpenAPI: `docs/openapi.json`
+
+> A apresentação institucional da Sompo e o artigo Akita eram PDFs de terceiros,
+> removidos do versionamento no commit `501bd08`.
 
 
 ## Fluxo de trabalho com Git

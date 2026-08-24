@@ -1,22 +1,23 @@
 # Plataforma de Análise Preditiva de Riscos para Equipamentos Agrícolas
 
 > **Challenge FIAP + Sompo Seguros**
-> Sprint 2 — Modelo, Explicabilidade e Dados
+> Entrega 3 — Integração: backend, ingestão validada, segurança e dashboard num fluxo de ponta a ponta
 
 ---
 
 ## Sumário
 
-0. [Como Rodar o Projeto](#-como-rodar-o-projeto)
+0. [Como Rodar o Projeto](#como-rodar-o-projeto)
 1. [Descrição do Problema](#1-descrição-do-problema)
 2. [Solução Proposta](#2-solução-proposta)
 3. [Personas e Necessidades](#3-personas-e-necessidades)
 4. [Estruturação dos Dados](#4-estruturação-dos-dados)
 5. [Arquitetura da Solução](#5-arquitetura-da-solução)
 6. [Modelo Preditivo](#6-modelo-preditivo)
-7. [Planejamento das Próximas Etapas](#7-planejamento-das-próximas-etapas)
-8. [Vídeo de Apresentação](#8-vídeo-de-apresentação)
-9. [Equipe](#9-equipe)
+7. [Evolução em Relação à Entrega Anterior](#7-evolução-em-relação-à-entrega-anterior)
+8. [Planejamento das Próximas Etapas](#8-planejamento-das-próximas-etapas)
+9. [Vídeo de Apresentação](#9-vídeo-de-apresentação)
+10. [Equipe](#10-equipe)
 
 ---
 
@@ -39,6 +40,11 @@ deste passo.
 
 ### Primeira vez (setup completo)
 
+O sistema tem duas metades que sobem em terminais separados: a **API** e o **dashboard**. A API
+precisa estar no ar primeiro — sem ela o dashboard não tem de onde ler.
+
+#### Terminal 1 — backend e API
+
 ```bash
 # 1. Clonar o repositório
 git clone https://github.com/Avila237/sompo.git
@@ -59,38 +65,56 @@ pip install -r backend/requirements.txt
 # 5. Gerar o dataset
 python scripts/generate_dataset.py
 
-# 6. Treinar o modelo (gera models/*.joblib, exigidos pelos testes)
+# 6. Treinar o modelo (gera models/*.joblib, exigidos pelos testes e pela API)
 python backend/ml/train.py
 
 # 7. Rodar os testes
 pytest tests/ -v
 
-# 8. Abrir o notebook de EDA (opcional)
-jupyter notebook
-# Navegar até notebooks/01_eda.ipynb
+# 8. Subir a API
+uvicorn backend.api.main:app --reload --port 8000
 ```
 
-### Rodar o dashboard (visão Sompo)
+Com a API no ar, o Swagger navegável fica em **http://localhost:8000/docs** e a verificação de
+saúde em **http://localhost:8000/health**.
 
-Em outro terminal:
+#### Terminal 2 — dashboard
 
 ```bash
-# Rodar o dashboard (em outro terminal)
 cd dashboard
+cp .env.example .env.local     # VITE_API_BASE_URL=http://localhost:8000
 npm install
 npm run dev
 # Abrir http://localhost:5175
 ```
 
-O dashboard precisa de credenciais do Supabase em `dashboard/.env.local` (use o `.env.example` como base): `VITE_SUPABASE_URL` e `VITE_SUPABASE_KEY`.
+O dashboard pede usuário e senha na abertura. As credenciais são trocadas por um JWT em
+`POST /auth/token` — **nenhuma credencial fica no bundle nem em `.env.local`**, cuja única
+variável é a base da API.
+
+#### Configuração do backend (`.env` na raiz)
+
+Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. As credenciais de
+demonstração (`DEMO_USERS`) e a `SUPABASE_SERVICE_ROLE_KEY` são combinadas fora do repositório.
+
+> ⚠️ A `service_role` é superusuário do banco: só server-side, nunca no frontend, nunca versionada.
+
+#### Notas de ambiente
+
+Se `pytest` falhar reclamando de artefato de modelo ausente, o passo 6 não rodou — os `.joblib`
+são git-ignored e precisam ser gerados localmente.
+
+Se a tela de login acusar que não consegue falar com a API, confira se o Terminal 1 está de pé e
+se a porta em `VITE_API_BASE_URL` bate com a do `uvicorn`.
 
 ### Atualizando (repositório já clonado)
 
 ```bash
 git pull
-.venv\Scripts\activate
-python scripts/generate_dataset.py
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
 pytest tests/ -v
+cd dashboard && npm install      # se package.json mudou
 ```
 
 ---
@@ -244,101 +268,119 @@ Para o desenvolvimento e validação do modelo, foi gerado um dataset simulado c
 
 A arquitetura é organizada em cinco camadas:
 
-### 5.1 Camada 1 — Fontes de Dados
+### 5.1 O invariante
 
-Os dados entram no sistema por três vias: o **aplicativo móvel** (GPS, inputs do operador, acelerômetro do celular), o **dispositivo IoT ESP32** (acelerômetro + giroscópio MPU-6050 GY-521, sensor de temperatura DS18B20, conexão OBD-II via ELM327) e **APIs externas** (Open-Meteo para clima, IBGE shapefiles para dados geográficos e hidrográficos).
+**Nenhum cliente fala com o banco.**
 
-### 5.2 Camada 2 — Ingestão e Processamento
+A API é a única porta. O browser não carrega chave de banco; o acesso ao PostgreSQL é feito
+server-side com `service_role`, e a RLS está ativa sem policy para `anon` — leitura anônima
+retorna zero linhas. Tudo o mais nesta seção decorre disso.
 
-O app móvel recebe dados do IoT via Bluetooth Low Energy e os transmite junto com seus próprios dados para o backend. O backend em **FastAPI** é responsável por receber, validar e enriquecer os dados — por exemplo, cruzando a posição GPS com shapefiles do IBGE para calcular distância até corpos d'água e tipo de solo, e consultando a Open-Meteo para obter condições climáticas atuais da coordenada.
+Na entrega anterior o dashboard lia o Supabase direto, com a chave embutida no bundle do browser.
+Quem abrisse a página conseguia ler e escrever as tabelas. Com dado sintético o dano ficava
+contido; com dado de segurado real, seria exposição de dado pessoal sob a LGPD.
 
-### 5.3 Camada 3 — Motor de IA e Scoring de Risco
+### 5.2 Direção de dependência
 
-O modelo **XGBoost** recebe as features processadas e gera o score de risco (0–100). O **SHAP** é aplicado sobre a predição para extrair os fatores que mais contribuíram para aquele score específico, garantindo explicabilidade por grupo de features (ambiental, operador, manutenção). O **MLflow** registra cada execução do modelo (versão, parâmetros, métricas, dados de entrada) para manter trilha de auditoria. O modelo é treinado offline com dados históricos simulados e serve predições em tempo real via API. O componente de **RAG** (LlamaIndex/LangChain + LLM) usa os top fatores SHAP para buscar trechos da base de conhecimento técnico simulada e gerar recomendações em linguagem natural (endpoint /explain).
+```
+api ──▶ services ──▶ ml
+              └────▶ db
+     core ◀── todos          (core não importa ninguém)
+```
 
-### 5.4 Camada 4 — API e Serviços
+A direção nunca se inverte. `core` concentra configuração, segurança e exceções, e não conhece
+quem o usa — o que permite testar as camadas de cima sem subir banco nem carregar modelo.
 
-O FastAPI expõe endpoints REST para: submissão de dados e obtenção do score de risco, consulta de alertas ativos por equipamento, histórico de scores e eventos, e geração de relatórios por fazenda/região/período. A autenticação é feita via **JWT** com controle de acesso por perfil (operador, gestor, analista Sompo).
+### 5.3 Entrada de dados
 
-### 5.5 Camada 5 — Interfaces
+A entrada acontece por `POST /avaliacoes`, autenticada. Duas origens estão previstas:
 
-- **App móvel (React Native ou Flutter):** interface principal para operadores e gestores — exibe alertas em tempo real, score de risco, recomendações e histórico. Funciona como hub de coleta e entrega de informação.
-- **Dashboard web (React):** interface analítica para a Sompo — visão agregada de risco por região, ranking de equipamentos, tendências, relatórios com explicabilidade SHAP e trilha de auditoria. Futuramente incluirá **simulador de cenários** e painel de **Usage-Based Insurance** com índice de risco histórico por equipamento/operador.
+- **Simulador de telemetria** (⏳ RF-05) — emite leituras contra a API, cobrindo o requisito de
+  ingestão *"por simulação ou por dispositivos reais"*
+- **App móvel + ESP32 via BLE** — evolução futura; o hardware está especificado em
+  [`docs/references/`](docs/references/), fora do escopo desta entrega
 
-**Dashboard implementado (Sprint 2):** o dashboard da visão Sompo já está funcional com **dados reais do Supabase**. São **3 telas integradas**:
+Fontes externas: **Open-Meteo** para clima pela coordenada da leitura (⏳ RF-05). O enriquecimento
+geográfico via shapefiles do IBGE saiu de escopo — solo, distância de água e declividade já vêm
+no dataset.
 
-- **Visão Geral** — KPIs (200 equipamentos, 5.000 avaliações, score médio, risco alto) e gráficos a partir dos dados reais
-- **Ranking de equipamentos** — tabela dos 200 equipamentos com filtros e busca sobre dados reais
-- **Detalhe do equipamento** — decomposição SHAP por grupo, top fatores, manutenção e histórico de score
+### 5.4 Processamento e modelo
 
-Outras **5 telas** (Simulador, UBI, Relatórios, Corretor, Técnico) já têm o design visual pronto e exibem um overlay **"Em breve"** até serem integradas. Stack: **React 19 + TypeScript + Vite + Tailwind CSS v4**. Para rodar: `cd dashboard && npm run dev`.
+A API valida com Pydantic, complementa com o cadastro do equipamento, persiste a avaliação, monta
+o vetor de 30 features com a **mesma função usada no treino** e chama o modelo.
 
-### 5.6 Diagrama de Fluxo
+O **XGBoost** é carregado uma vez no startup, não por requisição, e devolve score de 0 a 100. O
+**SHAP** decompõe esse score em contribuições por grupo de features, preservando o sinal. O
+**MLflow** registra os runs de treino (experimento `safefield-xgboost`).
 
-Pipeline completo de dados, das fontes até o dashboard (4 camadas):
+O percurso completo, salto a salto e com o estado real de cada um, está em
+**[5.7](#57-o-caminho-de-um-dado-salto-a-salto)**.
+
+### 5.5 Segurança
+
+Autenticação por **JWT próprio** (`python-jose`), emitido em `POST /auth/token` com validade de
+8 horas e perfil (`operador`, `gestor`, `analista`). Todas as rotas de dado exigem
+`Authorization: Bearer`; só `/auth/token` e `/health` são públicas.
+
+Dívidas assumidas nesta entrega, registradas em vez de escondidas: as credenciais de demonstração
+vivem em variável de ambiente, sem tabela de usuários com hash; os três perfis ainda enxergam o
+mesmo conjunto de dados. Ambas devem ser resolvidas juntas na leva seguinte.
+
+### 5.6 Interfaces
+
+**Dashboard web (React)** — interface analítica da Sompo, consumindo exclusivamente a API. Três
+telas integradas:
+
+| Tela | Consome | Exibe |
+|---|---|---|
+| Visão Geral | `GET /kpis`, `GET /alertas` | KPIs, distribuição geográfica, agregação por tipo de operação e alertas recentes |
+| Ranking | `GET /equipamentos` | 200 equipamentos com filtro, busca e ordenação |
+| Detalhe | `GET /equipamentos/{id}` | Decomposição SHAP por grupo, top fatores, manutenção e histórico |
+
+As outras cinco telas (Simulador, UBI, Relatórios, Corretor, Técnico) têm o design pronto e exibem
+overlay **"Em breve"**. Stack: React 19 + TypeScript + Vite + Tailwind CSS v4.
+
+**App móvel** — previsto para operadores e gestores; fora do escopo desta entrega.
+
+### 5.6.1 Diagrama de arquitetura
+
+A API como orquestradora entre entrada, banco, modelo e interface. As setas tracejadas marcam o
+que está especificado e ainda não implementado.
 
 ```mermaid
 flowchart TB
-    subgraph L1["1 - Fontes de Dados"]
-        APP["App movel<br/>GPS + inputs do operador"]
-        IOT["ESP32 + sensores<br/>MPU-6050 / DS18B20 (BLE)"]
-        METEO["Open-Meteo API<br/>clima"]
-        IBGE["IBGE shapefiles<br/>solo / hidrografia"]
+    SIM["Simulador de telemetria<br/>scripts/simulate_telemetry.py"]
+    DASH["Dashboard React<br/>Visao Geral / Ranking / Detalhe"]
+    METEO["Open-Meteo<br/>clima pela coordenada"]
+
+    subgraph API["API FastAPI — unica porta"]
+        direction TB
+        VAL["Validacao Pydantic<br/>faixas e consistencia"]
+        ENR["Enriquecimento climatico<br/>fallback: payload"]
+        PERSA["Persiste avaliacao<br/>fonte, clima_origem"]
+        PRE["preprocess_features<br/>vetor de 30 features"]
+        MOD["XGBoost + SHAP<br/>carregado no startup"]
+        PERSP["Persiste predicao<br/>+ auditoria"]
+        VAL --> ENR --> PERSA --> PRE --> MOD --> PERSP
     end
 
-    subgraph L2["2 - Armazenamento: Supabase (PostgreSQL)"]
-        EQUIP[("equipamentos<br/>200")]
-        OPER[("operadores<br/>80")]
-        AVAL[("avaliacoes<br/>5.000")]
-        PRED[("predicoes<br/>5.000")]
+    subgraph DB["Supabase — PostgreSQL + RLS"]
+        TAB[("equipamentos 200<br/>operadores 80<br/>avaliacoes 5.000<br/>predicoes 5.000")]
+        AUD[("auditoria")]
     end
 
-    subgraph L3["3 - Motor de IA"]
-        XGB["XGBoost<br/>30 features -> score 0-100"]
-        SHAP["SHAP<br/>top fatores por grupo"]
-        MLF["MLflow<br/>rastreabilidade"]
-    end
-
-    subgraph L4["4 - Interfaces"]
-        DASH["Dashboard React<br/>Visao Geral / Ranking / Detalhe (SHAP)"]
-        MOBILE["App movel (futuro)"]
-    end
-
-    IOT -->|BLE| APP
-    APP -->|GPS + telemetria| AVAL
-    METEO --> AVAL
-    IBGE --> AVAL
-    EQUIP -.-> AVAL
-    OPER -.-> AVAL
-
-    AVAL -->|30 features| XGB
-    XGB --> SHAP
-    XGB -.-> MLF
-    SHAP -->|score + top fatores SHAP| PRED
-
-    AVAL --> DASH
-    PRED --> DASH
-    EQUIP --> DASH
-    PRED -.-> MOBILE
+    SIM -->|"POST /avaliacoes · Bearer"| VAL
+    DASH -->|"GET /equipamentos /kpis /alertas · Bearer"| API
+    API -->|JSON| DASH
+    ENR -.->|RF-05| METEO
+    PERSA -->|service_role| TAB
+    PERSP -->|service_role| TAB
+    PERSP -.->|RF-08| AUD
+    DASH --x|"anon: RLS nega"| DB
 ```
 
-> **Representação textual alternativa do mesmo fluxo:**
-
-```
-Sensores IoT (ESP32) ──BLE──▶ App Móvel ──HTTP──▶ FastAPI ──▶ Enriquecimento
-        GPS do celular ─────────┘                              (Open-Meteo + IBGE)
-                                                                      │
-                                                                      ▼
-                                                               XGBoost + SHAP
-                                                                      │
-                                                                      ▼
-                                                              Score + Alertas
-                                                                      │
-                                                        ┌─────────────┼─────────────┐
-                                                        ▼                           ▼
-                                                   App Móvel                  Dashboard React
-                                                (operador/gestor)            (Sompo/analistas)
-```
+> **A seta cortada é o ponto da entrega.** Na Entrega 2 ela existia e era o caminho principal:
+> o dashboard lia o banco direto. Agora está fechada, e toda leitura passa pela API.
 
 ### 5.7 O caminho de um dado, salto a salto
 
@@ -488,19 +530,24 @@ passar por autenticação.
 
 ### 5.8 Stack Tecnológica
 
-| Componente | Tecnologia |
-|---|---|
-| Firmware IoT | ESP32 (DOIT DevKit) — C++ / Arduino IDE |
-| Sensores | MPU-6050 GY-521 (acelerômetro + giroscópio), DS18B20 (temperatura), LM2596 (regulador) |
-| OBD-II | ELM327 Bluetooth |
-| App Móvel | React Native ou Flutter |
-| Backend / API | FastAPI (Python) |
-| Modelo de ML | XGBoost + SHAP |
-| Rastreabilidade ML | MLflow |
-| Dados externos | Open-Meteo (clima), IBGE (shapefiles geográficos) |
-| Dashboard | React 19 + TypeScript + Vite + Tailwind CSS v4 |
-| Banco de dados | Supabase (PostgreSQL) |
-| Deploy | Vercel, Railway ou Render |
+| Componente | Tecnologia | Estado |
+|---|---|---|
+| Backend / API | FastAPI + Uvicorn (Python 3.13) | ✅ em uso |
+| Validação de entrada | Pydantic | ✅ faixas · 🟡 consistência cruzada |
+| Autenticação | JWT via `python-jose` | ✅ em uso |
+| Modelo de ML | XGBoost | ✅ em uso |
+| Explicabilidade | SHAP | ✅ em uso |
+| Rastreabilidade ML | MLflow (`safefield-xgboost`) | ✅ em uso |
+| Banco de dados | Supabase (PostgreSQL + RLS) | ✅ em uso |
+| Dashboard | React 19 + TypeScript + Vite + Tailwind CSS v4 | ✅ em uso |
+| Clima | Open-Meteo | ⏳ RF-05 |
+| Simulador de telemetria | Python | ⏳ RF-05 |
+| Log e auditoria | `logging` + tabela `auditoria` | ⏳ RF-08 |
+| Firmware IoT | ESP32 (DOIT DevKit) — C++ / Arduino | 📋 especificado, fora de escopo |
+| Sensores | MPU-6050 GY-521, DS18B20, LM2596 | 📋 especificado, fora de escopo |
+| OBD-II | ELM327 Bluetooth | 📋 especificado, fora de escopo |
+| App Móvel | React Native ou Flutter | 📋 futuro |
+| Deploy | execução local nesta entrega | 📋 futuro |
 
 ---
 
@@ -541,7 +588,7 @@ O SHAP (SHapley Additive exPlanations) é aplicado sobre cada predição individ
   <img src="data/shap_summary_beeswarm.png" alt="SHAP beeswarm — importância global das features" width="700">
 </p>
 
-**Decomposição de uma predição individual.** O mesmo mecanismo aplicado a um único equipamento classificado como risco alto: partindo da média do dataset (E[f(X)] = 47.6), o histórico de sinistros sozinho adiciona +41.5 pontos, levando o score final a 87.3. É essa cadeia que o endpoint `/explain` devolve ao usuário — não apenas o número.
+**Decomposição de uma predição individual.** O mesmo mecanismo aplicado a um único equipamento classificado como risco alto: partindo da média do dataset (E[f(X)] = 47.6), o histórico de sinistros sozinho adiciona +41.5 pontos, levando o score final a 87.3. É essa cadeia que a API devolve — em `POST /avaliacoes` e em `GET /equipamentos/{id}` — não apenas o número.
 
 <p align="center">
   <img src="data/shap_waterfall_alto.png" alt="SHAP waterfall — decomposição de uma predição de risco alto" width="800">
@@ -549,32 +596,55 @@ O SHAP (SHapley Additive exPlanations) é aplicado sobre cada predição individ
 
 ### 6.5 Exemplo de Saída
 
+Resposta real de `POST /avaliacoes`, capturada da API em execução. O contrato completo está em
+[`docs/contrato-api.md`](docs/contrato-api.md).
+
 ```json
 {
-  "equipamento_id": "EQ-001",
-  "risco_score": 74,
+  "avaliacao_id": 5001,
+  "equipamento_id": "EQ-0042",
+  "risco_score": 69.47,
   "faixa_risco": "alto",
-  "contribuicao_ambiental": 45,
-  "contribuicao_operador": 18,
-  "contribuicao_manutencao": 11,
-  "fatores_principais": [
-    {"fator": "precipitacao_mm", "valor": 42, "contribuicao": "+18"},
-    {"fator": "distancia_agua_m", "valor": 120, "contribuicao": "+15"},
-    {"fator": "atraso_manutencao_pct", "valor": 1.4, "contribuicao": "+12"}
+  "contribuicoes_por_grupo": {
+    "ambiental": 17.7577,
+    "geografico": 12.0574,
+    "operacional": -2.0559,
+    "equipamento": -4.9901,
+    "operador": -0.9026,
+    "manutencao": -0.0194
+  },
+  "top_fatores": [
+    { "feature": "distancia_agua_m", "valor": 120.0, "shap_value": 11.5357, "grupo": "geografico" },
+    { "feature": "precipitacao_mm",  "valor": 42.0,  "shap_value": 11.3671, "grupo": "ambiental" }
   ],
-  "recomendacao": "Solo argiloso com alta umidade após chuva significativa. Manutenção 40% atrasada. Recomenda-se avaliar adiamento da operação.",
-  "modelo_versao": "v0.1.0",
-  "timestamp": "2026-04-06T14:30:00Z"
+  "modelo_versao": "xgboost-v1-baseline",
+  "timestamp": "2026-08-24T13:02:53.465989+00:00"
 }
 ```
+
+**O score nunca vem sozinho** (RF-10): sempre acompanhado da faixa, da decomposição por grupo e dos
+fatores que o produziram, rotulados em português na interface.
+
+As contribuições somam **com sinal** — positivo empurra o risco para cima, negativo puxa para
+baixo. No exemplo, o equipamento pontuou alto por geografia e clima *apesar* do perfil do operador
+e do estado de manutenção, que reduziram o score. É essa leitura que sustenta a decisão, e não o
+número isolado.
 
 ### 6.6 Rastreabilidade com MLflow
 
 Cada treinamento e cada versão do modelo são registrados no MLflow com: parâmetros (hiperparâmetros do XGBoost), métricas (RMSE, MAE, distribuição de erros por faixa), artefatos (modelo serializado, gráficos SHAP globais) e dataset utilizado. Isso permite auditoria completa e rollback para versões anteriores se necessário.
 
-### 6.7 Explicação Contextual (RAG)
+### 6.7 Explicação Contextual (RAG) — fora de escopo
 
-Os top fatores SHAP de cada predição são usados para buscar trechos relevantes em uma base de conhecimento técnico simulada (manuais de operação e manutenção por tipo de equipamento, em formato Markdown). Um LLM sintetiza esses trechos em uma recomendação em linguagem natural, acessível via endpoint /explain da API. A implementação usa LlamaIndex ou LangChain e é construída **após** o treinamento do XGBoost.
+A proposta inicial previa usar os top fatores SHAP para buscar trechos em uma base de conhecimento
+técnico simulada e sintetizar recomendações em linguagem natural via LLM, num endpoint `/explain`.
+
+**Isso foi retirado do escopo.** O enunciado desta entrega não menciona RAG, LLM nem geração de
+linguagem natural, e restringe a solução às disciplinas do primeiro ano. Construir o componente
+consumiria esforço em algo não avaliado.
+
+A explicabilidade exigida pelo RF-10 é atendida pelo SHAP, que já entrega a decomposição por grupo
+e os fatores rotulados. A camada de linguagem natural permanece como evolução possível.
 
 ### 6.8 Evolução Futura
 
@@ -582,68 +652,108 @@ Na fase de protótipo, o modelo será treinado com dados simulados (~5.000 regis
 
 ---
 
-## 7. Planejamento das Próximas Etapas
+## 7. Evolução em Relação à Entrega Anterior
 
-### Sprint 1 — Fundação e Dados ✅ CONCLUÍDA
+O enunciado pede descrição explícita da evolução. O eixo desta entrega é **integração**: os
+componentes já existiam isolados; o que mudou é que passaram a conversar.
 
-- Documentação e estrutura do repositório
-- Dataset v1, EDA inicial e primeira suíte de testes
+| Dimensão | Entrega 2 | Entrega 3 |
+|---|---|---|
+| Backend | `backend/api/` continha só `__init__.py`; FastAPI declarado e não usado | API integradora no ar: 7 rotas, validação, scoring e persistência |
+| Caminho do dado | dashboard lia o Supabase direto pelo SDK | toda leitura passa pela API; nenhum cliente fala com o banco |
+| Segurança | chave do Supabase embutida no bundle do browser; RLS sem policy | JWT por perfil, chave de banco fora do frontend, `service_role` só server-side |
+| Predição | batch offline, gravada por script | em processo, por requisição, com o modelo carregado no startup |
+| Pré-processamento | `preprocess_features()` dentro de `train.py` | extraída para `ml/preprocess.py`; treino e inferência usam a mesma função |
+| Interface | 3 telas lendo o banco | as mesmas 3 telas lendo a API, mais agregação por tipo de operação |
+| Eixos de agregação | equipamento e região | equipamento, região **e operação** — os três que o enunciado pede |
+| Alertas | derivados em memória no cliente | `GET /alertas`, com regra no servidor e parametrizável |
 
-### Sprint 2 — Modelo, Explicabilidade e Dados (entrega: 04/06/2026)
+### O que a entrega anterior deixava quebrado
 
-**Concluído:**
-- Dataset expandido para 37 colunas (operador, manutenção, metadados RAG)
-- Modelo XGBoost treinado e validado (MAE 4.72, R² 0.9466, acurácia faixas 88.3%)
-- SHAP para explicabilidade por grupo de features (6 grupos)
-- MLflow para rastreabilidade (experimento `safefield-xgboost`)
-- Notebooks documentados: EDA v2 (`01_eda.ipynb`) + pipeline de treinamento (`02_treinamento.ipynb`)
-- Supabase (PostgreSQL): 4 tabelas com dados completos (equipamentos, operadores, avaliacoes, predicoes)
-- Predições com top 5 fatores SHAP em JSONB + versão do modelo
-- 251 testes automatizados passando (test_dataset 70, test_generate_dataset 63, test_model 26, test_shap 38, test_mlflow 25, test_supabase 18, test_predicoes 11)
-- Dashboard React (visão Sompo): 3 telas integradas ao Supabase — Visão Geral (KPIs e gráficos), Ranking de equipamentos (filtros e busca) e Detalhe do equipamento (decomposição SHAP por grupo e histórico)
-- Demais telas com overlay "Em breve": Simulador, UBI, Relatórios, Corretor, Técnico
-- Diagrama de arquitetura (Mermaid) no README
+Dois pontos que não eram melhorias pendentes, e sim defeitos:
 
-**Pendente:**
-- Vídeo de apresentação (até 5 min)
+**O dashboard não exibia dado nenhum.** A RLS foi habilitada sem policy para `anon`. A anon key
+que o browser usava passou a enxergar zero linhas nas quatro tabelas. Religar à API foi o conserto.
 
-### Sprint 3 — Backend e API (a definir)
+**A chave de banco viajava no bundle.** Qualquer visitante da página conseguia ler e escrever as
+tabelas diretamente. Com dado sintético o dano ficava contido; a correção veio antes de existir
+dado real.
 
-- API FastAPI completa (endpoints de score, alertas, histórico, /explain)
-- Implementação do RAG (LlamaIndex/LangChain + LLM)
-- Base de conhecimento simulada (Markdowns para RAG)
-- Integração Open-Meteo + IBGE shapefiles
-- Testes de integração do backend
+### O que continua pendente
 
-### Sprint 4 — App Móvel e UBI (a definir)
+RF-05 (Open-Meteo e simulador), RF-08 (log estruturado e auditoria) e a migration
+`001_entrega03.sql` com as colunas de procedência e a RLS explícita. Estão marcados como ⏳ ao
+longo deste README, em vez de descritos como prontos.
 
-- App mobile (telas de operador e gestor)
-- Integração app ↔ backend (API REST) e app ↔ IoT via BLE
-- Dashboard React completo (simulador de cenários + UBI)
-- Usage-Based Insurance para precificação dinâmica baseada em risco histórico
+---
 
-**Entrega final: 15/09/2026**
+## 8. Planejamento das Próximas Etapas
+
+### Entregas concluídas
+
+**Entrega 1 — Fundação e Dados** ✅
+Documentação, estrutura do repositório, dataset v1, EDA inicial e primeira suíte de testes.
+
+**Entrega 2 — Modelo, Explicabilidade e Dados** ✅
+Dataset expandido para 37 colunas; XGBoost treinado e validado (MAE 4.72, R² 0.9466, acurácia de
+faixas 88.3%); SHAP por grupo de features; MLflow; Supabase com 4 tabelas e 10.280 registros;
+notebooks de EDA e treinamento; dashboard React com 3 telas.
+
+**Entrega 3 — Integração** (esta entrega)
+API integradora FastAPI, autenticação JWT, dashboard religado à API, agregação pelos três eixos e
+documentação do caminho do dado. Estado detalhado na [seção 7](#7-evolução-em-relação-à-entrega-anterior).
+
+### Pendente dentro desta entrega
+
+| Requisito | O que falta |
+|---|---|
+| RF-05 | Cliente Open-Meteo com fallback e `scripts/simulate_telemetry.py` |
+| RF-08 | Log estruturado com `request_id` e tabela `auditoria` |
+| RF-03 | `migrations/001_entrega03.sql` — colunas `fonte` e `clima_origem`, RLS explícita |
+
+### Próximas etapas
+
+**Segurança e acesso** — substituir credenciais em variável de ambiente por tabela de usuários com
+hash, migrar para Supabase Auth e dar escopo de dados distinto a cada perfil. As três coisas são a
+mesma dívida vista de três ângulos e devem ser resolvidas juntas.
+
+**Modelo** — recalibrar os pesos: hoje `historico_sinistros` domina a predição e as features de
+operador e manutenção têm peso quase nulo. Depois disso, sincronizar a fórmula de score
+documentada em `docs/data schema.md` com a do código.
+
+**Produto** — simulador de cenários e Usage-Based Insurance no dashboard; app móvel para operador e
+gestor; integração com o ESP32 via BLE.
+
+**Infraestrutura** — deploy (hoje roda local) e CI com lint, testes e auditoria de dependências.
 
 ### Divisão de Responsabilidades
 
 | Responsável | Frente Principal |
 |---|---|
 | Guilherme | Backend (FastAPI), modelo de ML (XGBoost/SHAP), arquitetura geral |
-| Kainan | App móvel, integração BLE/IoT, dashboard React |
+| Kainan | Dashboard React, integração com a API, app móvel e BLE/IoT |
 | Ambos | Documentação, dataset simulado, testes integrados, apresentação |
 
 ### Ferramentas de Gestão
 
-O acompanhamento do projeto é feito via **Notion**, com checklist semanal de entregas e status por fase.
+O acompanhamento é feito no **Linear**, com uma issue por requisito funcional (RF-00 a RF-14),
+responsável definido e relações de bloqueio entre elas. Cada issue vira uma branch e um Pull
+Request revisado pelo outro integrante antes do merge.
 
 ---
-## 8. Vídeo de Apresentação
+## 9. Vídeo de Apresentação
 
-🔗 https://youtu.be/lLwrnie-Qmk
+🔗 ⟨link do vídeo⟩
+
+> Até 5 minutos, narração humana, publicado como **não listado**. Demonstra a entrada de um dado,
+> a geração do score e a apresentação na interface, e explica a arquitetura integrada.
+>
+> Aguardando a gravação (RF-13, [BRA-296](https://linear.app/tallinn-capital/issue/BRA-296)).
+> O vídeo da entrega anterior continua disponível em https://youtu.be/lLwrnie-Qmk.
 
 ---
 
-## 9. Equipe
+## 10. Equipe
 
 | Nome | RM |
 |---|---|
