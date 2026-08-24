@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from backend.core import config
 from backend.core.exceptions import SafeFieldError
+from backend.core.logging import configurar as configurar_logging, novo_request_id, request_id_atual
 from backend.ml.predictor import get_predictor
 
 logger = logging.getLogger("safefield.api")
@@ -21,6 +22,7 @@ logger = logging.getLogger("safefield.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configurar_logging()
     try:
         p = get_predictor(config.MODELS_DIR)
         logger.info("modelo carregado (%d features)", len(p.features))
@@ -47,6 +49,15 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def correlacionar(request: Request, call_next):
+    """Um request_id por requisicao, presente em toda linha de log e nos erros."""
+    rid = novo_request_id()
+    resposta = await call_next(request)
+    resposta.headers["X-Request-ID"] = rid
+    return resposta
+
+
 @app.exception_handler(SafeFieldError)
 async def tratar_erro_dominio(request: Request, exc: SafeFieldError):
     """Excecoes de dominio viram resposta legivel — nunca stack trace."""
@@ -63,7 +74,10 @@ async def tratar_erro_inesperado(request: Request, exc: Exception):
     logger.exception("erro nao tratado em %s", request.url.path)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Erro interno. Consulte os logs do servidor."},
+        content={
+            "detail": "Erro interno. Consulte os logs do servidor.",
+            "request_id": request_id_atual(),
+        },
     )
 
 
