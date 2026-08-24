@@ -781,4 +781,4 @@ Request revisado pelo outro integrante antes do merge.
 
 ---
 
-> **Nota:** Este repositório é privado e foi compartilhado exclusivamente com os tutores conforme orientação do enunciado.
+
