@@ -1,4 +1,4 @@
-﻿"""
+"""
 Explicabilidade SHAP para o modelo de risco SafeField.
 
 Uso principal:
@@ -21,16 +21,11 @@ MODELS_DIR = "models"
 DATA_DIR = "data"
 DATA_PATH = "data/dataset_safefield.parquet"
 
-FEATURE_GROUPS: dict = {
-    "ambiental":   ["temperatura_ar", "precipitacao_mm", "umidade_solo", "velocidade_vento", "condicao_clima"],
-    "geografico":  ["latitude", "longitude", "tipo_solo", "distancia_agua_m", "declividade"],
-    "operacional": ["tipo_operacao", "velocidade_kmh", "vibracao_g", "temperatura_motor", "horas_operacao", "horario_operacao"],
-    "equipamento": ["tipo_equipamento", "idade_equipamento", "historico_sinistros", "tem_iot"],
-    "operador":    ["pct_velocidade_acima_recomendada", "freq_eventos_bruscos", "pct_operacoes_noturnas", "score_operador_historico"],
-    "manutencao":  ["ultima_manutencao_dias", "ultima_manutencao_horas_op", "intervalo_manut_recomendado_dias", "intervalo_manut_recomendado_horas", "manutencao_atrasada", "atraso_manutencao_pct"],
-}
+# Definidos em preprocess.py para que a API os use sem carregar matplotlib.
+# Reexportados aqui porque tests/ e o restante do modulo importam daqui.
+from backend.ml.preprocess import FEATURE_GROUPS, FEATURE_TO_GROUP  # noqa: E402
 
-_FEATURE_TO_GROUP: dict = {feat: grp for grp, feats in FEATURE_GROUPS.items() for feat in feats}
+_FEATURE_TO_GROUP = FEATURE_TO_GROUP
 
 
 def load_artifacts(models_dir: str = MODELS_DIR):

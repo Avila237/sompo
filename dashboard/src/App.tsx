@@ -2,7 +2,9 @@
 import TopBar from './components/TopBar'
 import SideNav from './components/SideNav'
 import { WIco } from './components/Icons'
-import { loadRawData } from './data/api'
+import { loadEquipamentos, logout } from './data/api'
+import { getSessao, assinarSessao, type Sessao } from './lib/auth'
+import Login from './components/Login'
 import type { Equipment } from './types'
 import { ComingSoon } from './components/ComingSoon'
 
@@ -26,12 +28,20 @@ export default function App() {
   const [screen, setScreen] = useState('overview')
   const [pickEquip, setPickEquip] = useState<Equipment | null>(null)
   const [equipCount, setEquipCount] = useState<number | undefined>(undefined)
+  const [sessao, setSessaoState] = useState<Sessao | null>(() => getSessao())
+
+  // Um 401 em qualquer chamada limpa a sessao no apiClient; aqui a interface
+  // reage voltando para o login em vez de ficar exibindo tela vazia.
+  useEffect(() => assinarSessao(setSessaoState), [])
 
   useEffect(() => {
-    loadRawData()
-      .then((d) => setEquipCount(d.equipamentos.length))
-      .catch(() => setEquipCount(undefined))
-  }, [])
+    if (!sessao) return
+    let ativo = true
+    loadEquipamentos()
+      .then((eqs) => { if (ativo) setEquipCount(eqs.length) })
+      .catch(() => { if (ativo) setEquipCount(undefined) })
+    return () => { ativo = false }
+  }, [sessao])
 
   const sompoNav = [
     { k: 'overview',  label: 'Visao geral',          icon: <WIco.map /> },
@@ -68,9 +78,11 @@ export default function App() {
     }
   }
 
+  if (!sessao) return <Login onEntrar={() => setSessaoState(getSessao())} />
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
-      <TopBar persona={persona} setPersona={handlePersona} />
+      <TopBar persona={persona} setPersona={handlePersona} perfil={sessao.perfil} onSair={logout} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {persona === 'sompo' && (
           <SideNav items={sompoNav} active={screen} onPick={setScreen} />

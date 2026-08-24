@@ -1,20 +1,41 @@
 ﻿import { useState, useMemo, useEffect } from 'react'
 import { WTONE, scoreBand } from '../../data/mock'
 import {
-  loadRawData,
-  buildEquipamentos,
-  computeKpis,
-  buildTrend,
-  buildRegions,
-  buildAlertas,
+  loadEquipamentos,
+  loadVisaoGeral,
   toEquipment,
-  type RawData,
   type EquipamentoView,
+  type OperacaoAgg,
+  type VisaoGeral,
 } from '../../data/api'
 import type { Equipment, Region, ToneKey } from '../../types'
-import { Card, ScoreBadge, Trend, KPITile, SectionHeader, Button } from '../../components/shared'
+import { Card, ScoreBadge, ScoreBar, Trend, KPITile, SectionHeader, Button } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
+
+/* -- Agregacao por tipo de operacao (terceiro eixo do RF-09) -- */
+
+function OperacaoRow({ o }: { o: OperacaoAgg }) {
+  const tone = scoreBand(o.scoreMedio)
+  const pctAlto = o.avaliacoes ? (o.riscoAlto / o.avaliacoes) * 100 : 0
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 52px 110px 120px', alignItems: 'center', gap: 12 }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', textTransform: 'capitalize' }}>
+        {o.tipo}
+      </span>
+      <ScoreBar score={o.scoreMedio} height={8} />
+      <span className="tabular" style={{ fontSize: 13, fontWeight: 700, color: WTONE[tone].fg, textAlign: 'right' }}>
+        {o.scoreMedio}
+      </span>
+      <span className="tabular" style={{ fontSize: 11, color: 'var(--fg-mute)', textAlign: 'right' }}>
+        {o.avaliacoes.toLocaleString('pt-BR')} avaliações
+      </span>
+      <span className="tabular" style={{ fontSize: 11, color: 'var(--fg-dim)', textAlign: 'right' }}>
+        {o.riscoAlto.toLocaleString('pt-BR')} altas · {pctAlto.toFixed(0)} %
+      </span>
+    </div>
+  )
+}
 
 /* -- FilterSeg helper -------------------------------------- */
 
@@ -206,7 +227,8 @@ export default function SompoOverview({
   onPickEquip: (e: Equipment) => void
   onNav: (screen: string) => void
 }) {
-  const [raw, setRaw] = useState<RawData | null>(null)
+  const [views, setViews] = useState<EquipamentoView[]>([])
+  const [visao, setVisao] = useState<VisaoGeral | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -216,26 +238,35 @@ export default function SompoOverview({
   const [typeFilter, setTypeFilter] = useState<'all' | 'colheitadeira' | 'trator' | 'implemento'>('all')
   const [exporting, setExporting] = useState<null | 'working' | 'done'>(null)
 
+  // A lista de equipamentos alimenta o Top 5 e nao depende do periodo.
   useEffect(() => {
     let active = true
-    loadRawData()
-      .then((d) => { if (active) { setRaw(d); setLoading(false) } })
-      .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
+    loadEquipamentos()
+      .then((eqs) => { if (active) setViews(eqs) })
+      .catch((e) => { if (active) setError(String(e?.message ?? e)) })
     return () => { active = false }
   }, [])
 
-  const views = useMemo<EquipamentoView[]>(() => (raw ? buildEquipamentos(raw) : []), [raw])
-  const kpis = useMemo(() => (raw ? computeKpis(raw, views) : null), [raw, views])
-  const operadores = useMemo(
-    () => (raw ? new Set(raw.avaliacoes.map((a) => a.operador_id)).size : 0),
-    [raw],
+  // KPIs, regioes, alertas e tendencia vem de /kpis + /alertas. Refaz a busca
+  // ao trocar o periodo porque a janela da serie e resolvida no servidor.
+  useEffect(() => {
+    let active = true
+    const dias = period === '30d' ? 30 : period === '60d' ? 60 : 90
+    loadVisaoGeral(dias)
+      .then((v) => { if (active) { setVisao(v); setLoading(false) } })
+      .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
+    return () => { active = false }
+  }, [period])
+
+  const kpis = visao?.kpis ?? null
+  const operadores = visao?.kpis.operadores ?? null
+  const trend = visao?.tendencia ?? null
+  const regions = useMemo(() => visao?.regioes ?? [], [visao])
+  const porOperacao = useMemo(
+    () => [...(visao?.porOperacao ?? [])].sort((a, b) => b.scoreMedio - a.scoreMedio),
+    [visao],
   )
-  const trend = useMemo(
-    () => (raw ? buildTrend(raw, period === '30d' ? 30 : period === '60d' ? 60 : 90) : []),
-    [raw, period],
-  )
-  const regions = useMemo(() => buildRegions(views), [views])
-  const alertas = useMemo(() => (raw ? buildAlertas(raw) : []), [raw])
+  const alertas = useMemo(() => visao?.alertas ?? [], [visao])
 
   const top5 = useMemo(() => {
     let list = [...views]
@@ -262,10 +293,10 @@ export default function SompoOverview({
     }
   }, [exporting])
 
-  const handleAlertClick = (msg: string) => {
-    const match = msg.match(/EQ-\d+/)
-    if (!match) return
-    const v = views.find((e) => e.id === match[0])
+  // A API devolve equipamento_id no alerta, entao nao e mais preciso extrair
+  // o id da mensagem por regex.
+  const handleAlertClick = (equipamentoId: string) => {
+    const v = views.find((e) => e.id === equipamentoId)
     if (v) onPickEquip(toEquipment(v))
   }
 
@@ -276,7 +307,7 @@ export default function SompoOverview({
   if (loading) {
     return (
       <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: 'var(--fg-mute)', fontSize: 14 }}>
-        Carregando dados do Supabase…
+        Carregando dados da API…
       </div>
     )
   }
@@ -352,12 +383,14 @@ export default function SompoOverview({
       )}
 
       {/* --- KPIs --- */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${operadores === null ? 4 : 5}, 1fr)`, gap: 10 }}>
         <KPITile label="Equipamentos" value={kpis.totalEquip} sub="Frota monitorada" />
         <KPITile label="Avaliações" value={kpis.totalAval.toLocaleString('pt-BR')} sub="Registros de risco" />
         <KPITile label="Score médio" value={kpis.scoreMedio} unit="/100" accent={scoreTone} sub={scoreToneLabel} subTone={scoreTone} />
         <KPITile label="Risco alto" value={kpis.riscoAlto} accent="crit" sub={`${kpis.pctRiscoAlto.toFixed(1)} % da frota`} subTone="crit" />
-        <KPITile label="Operadores" value={operadores} sub="Perfis monitorados" />
+        {operadores !== null && (
+          <KPITile label="Operadores" value={operadores} sub="Perfis monitorados" />
+        )}
       </div>
 
       {/* --- Map + Trend --- */}
@@ -371,6 +404,7 @@ export default function SompoOverview({
         <Card
           title="Evolução do score médio"
           action={
+            trend === null ? null : (
             <div style={{ display: 'flex', gap: 4 }}>
               {(['30d', '60d', '90d'] as const).map((p) => (
                 <button
@@ -387,12 +421,40 @@ export default function SompoOverview({
                 </button>
               ))}
             </div>
+            )
           }
           pad={16}
         >
-          <TrendChart data={trend} />
+          {trend === null ? (
+            <div style={{
+              height: 340, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              textAlign: 'center', padding: '0 24px', color: 'var(--fg-mute)',
+              fontSize: 12, lineHeight: 1.6,
+            }}>
+              Série temporal ainda não exposta pela API.
+              <br />
+              Aguarda o campo <span className="mono">tendencia</span> em <span className="mono">GET /kpis</span>.
+            </div>
+          ) : (
+            <TrendChart data={trend} />
+          )}
         </Card>
       </div>
+
+      {/* --- Aggregation by operation type (RF-09) --- */}
+      <Card title={`Risco por tipo de operação · ${porOperacao.length} tipos`} pad={18}>
+        {porOperacao.length ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {porOperacao.map((o) => (
+              <OperacaoRow key={o.tipo} o={o} />
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--fg-mute)', fontSize: 13 }}>
+            Sem avaliações agregadas por operação.
+          </div>
+        )}
+      </Card>
 
       {/* --- Top 5 + Alerts --- */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14 }}>
@@ -435,7 +497,7 @@ export default function SompoOverview({
             {filteredAlerts.map((a, i) => (
               <button
                 key={i}
-                onClick={() => handleAlertClick(a.msg)}
+                onClick={() => handleAlertClick(a.equipamentoId)}
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 10, padding: '2px 0 10px',
                   background: 'transparent', border: 'none',

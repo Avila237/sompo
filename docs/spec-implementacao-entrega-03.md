@@ -344,5 +344,7 @@ Assumidas conscientemente nesta entrega, para a leva de melhorias seguinte:
 | D6 | Dashboard sem router — sem deep link por equipamento | não avaliado | `react-router-dom` já está instalado |
 | D7 | **Sem deploy** — roda local | decisão 5 | Railway/Render/Vercel |
 | D8 | **Sem CI** | não avaliado | lint + testes + audit de dependências |
+| D9 | **JWT em `sessionStorage`** no dashboard, exposto a XSS | a alternativa (memória apenas) força login a cada refresh; escopo é demo local com dado sintético e token sem permissão de escrita | cookie `httpOnly` + `SameSite`, quando houver backend de sessão |
 
-> D1, D2 e D3 são a mesma dívida vista de três ângulos e devem ser resolvidas juntas.
+> D1, D2, D3 e D9 são a mesma dívida — autenticação — vista de quatro ângulos, e devem ser
+> resolvidas juntas.

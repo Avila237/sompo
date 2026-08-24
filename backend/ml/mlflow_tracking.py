@@ -1,4 +1,4 @@
-﻿"""
+"""
 Rastreabilidade de experimentos com MLflow para o modelo SafeField.
 
 Uso:
@@ -11,6 +11,12 @@ Visualizar experimentos:
 
 import os
 from typing import Optional
+
+# O MLflow 3.x recusa o backend de arquivos (file:./mlruns) por padrao — ele entrou
+# em modo de manutencao e exige opt-in explicito. Sem isto, log_training_run() cai no
+# fallback e o treino roda sem rastreabilidade. Definido antes de qualquer import de
+# mlflow (que acontece dentro da funcao, mais abaixo).
+os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 
 EXPERIMENT_NAME = "safefield-xgboost"
 TRACKING_URI = "file:./mlruns"
