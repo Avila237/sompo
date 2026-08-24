@@ -340,7 +340,153 @@ Sensores IoT (ESP32) ──BLE──▶ App Móvel ──HTTP──▶ FastAPI �
                                                 (operador/gestor)            (Sompo/analistas)
 ```
 
-### 5.7 Stack Tecnológica
+### 5.7 O caminho de um dado, salto a salto
+
+Esta seção responde à exigência do enunciado de *"definição clara de como os dados chegam ao
+sistema e como são utilizados para alimentar o modelo preditivo"*. O percurso é o mesmo para
+qualquer leitura, do momento em que ela é emitida até aparecer na tela.
+
+```
+origem → validação → complemento cadastral → enriquecimento climático → persistência da
+avaliação → vetor de 30 features → XGBoost → SHAP → persistência da predição → API → interface
+```
+
+Legenda de estado: **✅ implementado** · **🟡 parcial** · **⏳ especificado, pendente**
+
+#### 1. Origem ✅
+
+Uma leitura chega por `POST /avaliacoes`, autenticada com `Authorization: Bearer <JWT>`. O cliente
+envia **apenas o que observa em campo** — posição, telemetria, tipo de operação, dados do operador
+e da última manutenção. Não envia nada que possa forjar o resultado: o cadastro do equipamento e a
+faixa de risco são resolvidos pelo servidor.
+
+Na Entrega 3 a origem prevista é o simulador de telemetria (⏳ `scripts/simulate_telemetry.py`,
+RF-05). O app móvel com ESP32 via BLE permanece como evolução futura — o enunciado aceita
+explicitamente *"por simulação ou por dispositivos reais"*.
+
+#### 2. Validação ✅ (faixas) 🟡 (consistência)
+
+`backend/api/schemas.py` valida com Pydantic antes de qualquer escrita. Cada campo tem faixa
+declarada — latitude entre −33,75 e −2,50, velocidade entre 0 e 40 km/h, `equipamento_id` no
+padrão `EQ-9999`, e assim por diante. Payload fora de faixa recebe **`422`** com o campo e o
+motivo, e **não é persistido**.
+
+Pendente: as regras de consistência cruzada de [`docs/data schema.md`](docs/data%20schema.md) —
+operação `parado` implica velocidade zero, e `tem_iot=false` implica `temperatura_motor` nula.
+Hoje os dois campos de sensor já são opcionais no schema, o que cobre parcialmente o segundo caso.
+
+#### 3. Complemento cadastral ✅
+
+O servidor busca no banco o que não vem no payload: tipo, modelo, idade, histórico de sinistros,
+`tem_iot` e os intervalos de manutenção recomendados pelo fabricante. A partir disso **deriva**
+`atraso_manutencao_pct` e `manutencao_atrasada`, seguindo a Regra 14 do schema de dados.
+
+Equipamento inexistente interrompe o fluxo com **`404`**, antes de qualquer escrita.
+
+#### 4. Enriquecimento climático ⏳
+
+**Hoje:** os cinco campos climáticos (`temperatura_ar`, `precipitacao_mm`, `umidade_solo`,
+`velocidade_vento`, `condicao_clima`) são **obrigatórios** no payload.
+
+**Especificado (RF-05):** passam a opcionais; ausentes, são buscados na Open-Meteo pela coordenada
+da leitura, com timeout curto. `OPENMETEO_BASE_URL` e `OPENMETEO_TIMEOUT_S` já existem em
+`backend/core/config.py`, ainda sem uso.
+
+**Quando a Open-Meteo não responde** — timeout, rede fora, resposta malformada — a requisição
+**não falha**. O sistema cai para os valores do próprio payload e registra o incidente. A decisão
+é deliberada: uma leitura de campo com clima menos preciso vale mais que nenhuma leitura. O que
+não pode acontecer é a origem do dado ficar invisível, e é por isso que existe a coluna de
+procedência descrita abaixo.
+
+A mudança é **aditiva**: campos obrigatórios virando opcionais não quebra nenhum cliente existente.
+
+#### 5. Persistência da avaliação ✅ (linha) ⏳ (procedência)
+
+A leitura validada e enriquecida vira uma linha em `avaliacoes`.
+
+**Procedência ⏳** — duas colunas previstas em `backend/db/migrations/001_entrega03.sql`
+(migration ainda não criada) tornam a origem auditável sem cruzar log com banco:
+
+| Coluna | Valores | Responde a |
+|---|---|---|
+| `fonte` | `seed` · `telemetria` | O registro veio da carga inicial ou de uma leitura real? |
+| `clima_origem` | `seed` · `open-meteo` · `payload` | O clima foi buscado na API, ou é o fallback? |
+
+Sem elas, as 5.000 linhas do seed e as geradas pela API ficam indistinguíveis — e um score
+calculado com clima de fallback pareceria idêntico a um calculado com clima medido.
+
+> ⚠️ `backend/db/schema.sql` começa com `DROP TABLE`. Reexecutá-lo apaga os 10.280 registros já
+> carregados. Toda mudança de estrutura vai em `migrations/001_entrega03.sql`, que é idempotente.
+
+#### 6. Vetor de 30 features ✅
+
+`backend/ml/preprocess.py` converte a linha persistida no vetor que o modelo espera, na ordem
+declarada em `models/features.json`, aplicando o mesmo encoding do treino.
+
+O ponto importante é que **é a mesma função** — `preprocess_features()` foi extraída de `train.py`
+justamente para que treino e inferência não divirjam. Divergência de pré-processamento é a classe
+de bug que não aparece em teste unitário e envenena silenciosamente toda predição em produção.
+
+#### 7. XGBoost → score ✅
+
+O modelo é carregado **uma vez no startup**, não a cada requisição, e devolve um score contínuo de
+0 a 100. A faixa vem de `derive_faixa()`: `≤33` baixo, `≤66` médio, acima disso alto. O dashboard
+usa exatamente os mesmos limiares, então a classificação é a mesma nos dois lados.
+
+#### 8. SHAP → explicação ✅
+
+Sobre a mesma predição, o SHAP decompõe o score em contribuições por feature, agregadas em seis
+grupos: ambiental, geográfico, operacional, equipamento, operador e manutenção.
+
+A soma preserva o **sinal**: contribuição positiva empurra o risco para cima, negativa puxa para
+baixo. É o que permite a leitura *"este equipamento pontuou alto apesar do operador, por causa da
+proximidade de água"* — que é a informação acionável, não o número sozinho.
+
+#### 9. Persistência da predição ✅
+
+O resultado vira uma linha em `predicoes`, ligada à avaliação por `avaliacao_id`, contendo score,
+faixa, os top fatores SHAP em JSONB e a **versão do modelo** que a gerou.
+
+Guardar `modelo_versao` é o que torna o histórico auditável: uma predição de seis meses atrás
+continua explicável pelo modelo que a produziu, mesmo depois de retreino. O histórico é
+append-only — reprocessar não sobrescreve predição anterior.
+
+> **Formato dos fatores SHAP:** as 5.000 predições do seed foram gravadas com a chave `group`
+> (inglês) e sem o campo `valor`; as geradas pela API usam `grupo` e `valor`. A API **normaliza na
+> leitura** e sempre devolve o formato em português, com `valor` nulo quando a predição é do seed.
+> Sem essa normalização a interface quebraria em silêncio conforme o equipamento aberto.
+
+#### 10. Registro de uso ⏳
+
+Especificado no RF-08: log estruturado em stdout com `request_id` e uma tabela `auditoria`
+registrando quem pediu, quando, para qual equipamento, qual score saiu e qual versão do modelo
+decidiu. Ainda não implementado — hoje não há uso de `logging` no repositório.
+
+#### 11. API → interface ✅
+
+O dashboard nunca toca o banco. Ele lê três rotas, todas autenticadas:
+
+| Rota | Alimenta |
+|---|---|
+| `GET /equipamentos` | Ranking e Top 5 — uma linha por equipamento, já agregada |
+| `GET /kpis` | KPIs, distribuição geográfica e agregação por tipo de operação |
+| `GET /alertas` | Alertas recentes, filtráveis por faixa mínima |
+| `GET /equipamentos/{id}` | Detalhe: última avaliação, predição, decomposição SHAP e histórico |
+
+O contrato completo, capturado da API em execução, está em
+[`docs/contrato-api.md`](docs/contrato-api.md); o schema OpenAPI, em
+[`docs/openapi.json`](docs/openapi.json).
+
+#### O invariante que sustenta tudo
+
+**Nenhum cliente fala com o banco.** O browser não carrega chave de banco; o acesso é feito
+server-side com `service_role`, e a RLS nega leitura anônima. É o que faz do caminho acima o
+**único** caminho — não há atalho pelo qual um dado entre sem passar por validação, ou saia sem
+passar por autenticação.
+
+---
+
+### 5.8 Stack Tecnológica
 
 | Componente | Tecnologia |
 |---|---|
