@@ -20,12 +20,16 @@ API="http://localhost:${API_PORT}"
 LEITURAS=5
 AUTO=""
 LOG="/tmp/safefield-demo-api.log"
+LOG_WEB="/tmp/safefield-demo-web.log"
+PORTA_WEB=5173
+SEM_WEB=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --auto)     AUTO="${2:-4}"; shift 2 ;;
     --leituras) LEITURAS="${2:-5}"; shift 2 ;;
     --porta)    API_PORT="${2:-8000}"; API="http://localhost:${API_PORT}"; shift 2 ;;
+    --sem-web)  SEM_WEB=1; shift ;;
     -h|--help)  sed -n '3,16p' "$0"; exit 0 ;;
     *) echo "opcao desconhecida: $1"; exit 1 ;;
   esac
@@ -54,7 +58,9 @@ encerrar() {
   echo
   nota "encerrando a API..."
   pkill -f "uvicorn backend.api.main.*${API_PORT}" 2>/dev/null
-  nota "log da API em ${LOG}"
+  pkill -f "vite.*${PORTA_WEB}" 2>/dev/null
+  pkill -f "npm run dev" 2>/dev/null
+  nota "logs: API em ${LOG}${SEM_WEB:+ }${SEM_WEB:-, dashboard em ${LOG_WEB}}"
 }
 trap encerrar EXIT
 
@@ -106,6 +112,43 @@ else
 fi
 
 nota "Swagger navegavel em ${API}/docs"
+
+if [ -z "$SEM_WEB" ]; then
+  if [ ! -f dashboard/src/lib/apiClient.ts ]; then
+    falha "dashboard ainda nao religado a API (falta dashboard/src/lib/apiClient.ts)."
+    nota  "Esta branch nao tem o PR do dashboard. Use --sem-web para seguir so com a API,"
+    nota  "ou faca merge da branch do dashboard antes de gravar."
+    exit 1
+  fi
+
+  if [ ! -f dashboard/.env.local ]; then
+    cp dashboard/.env.example dashboard/.env.local
+    nota "dashboard/.env.local criado a partir do .env.example"
+  fi
+  if ! grep -q "^VITE_API_BASE_URL=${API}$" dashboard/.env.local; then
+    printf 'VITE_API_BASE_URL=%s\n' "$API" > dashboard/.env.local
+    nota "VITE_API_BASE_URL apontado para ${API}"
+  fi
+
+  if [ ! -d dashboard/node_modules ]; then
+    nota "instalando dependencias do dashboard (primeira vez)..."
+    ( cd dashboard && npm install --silent ) || { falha "npm install falhou"; exit 1; }
+  fi
+
+  nota "subindo o dashboard..."
+  ( cd dashboard && npm run dev -- --port "$PORTA_WEB" --strictPort ) > "$LOG_WEB" 2>&1 &
+
+  for _ in $(seq 1 60); do
+    curl -s -o /dev/null "http://localhost:${PORTA_WEB}/" 2>/dev/null && break
+    sleep 0.5
+  done
+  if curl -s -o /dev/null "http://localhost:${PORTA_WEB}/" 2>/dev/null; then
+    ok "dashboard no ar em http://localhost:${PORTA_WEB}"
+    nota "faca login com o usuario 'analista' — a senha esta em: grep DEMO_USERS .env"
+  else
+    falha "dashboard nao subiu; veja ${LOG_WEB}"
+  fi
+fi
 pausa
 
 # ---------------------------------------------------------------- 2. seguranca
@@ -289,6 +332,7 @@ print(f'  auditoria        {contar(\"auditoria\")}')
 "
 echo
 nota "A API segue no ar em ${API} — Swagger em ${API}/docs"
+[ -z "$SEM_WEB" ] && nota "Dashboard em http://localhost:${PORTA_WEB} — use-o para a parte visual"
 nota "Encerre com Ctrl+C quando terminar de gravar."
 echo
 if [ -z "$AUTO" ]; then
