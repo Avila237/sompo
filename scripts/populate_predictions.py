@@ -1,12 +1,14 @@
-﻿"""
+"""
 Popular tabela predicoes no Supabase.
 
 Roda o modelo XGBoost sobre as 5000 avaliacoes, calcula SHAP values,
 e insere as predicoes com os top 5 fatores explicativos.
 
 Uso:
-    python scripts/populate_predictions.py
+    python scripts/populate_predictions.py            # append-only
+    python scripts/populate_predictions.py --reset    # apaga antes (destrutivo)
 """
+import argparse
 import os
 import sys
 
@@ -30,6 +32,13 @@ MODELO_VERSAO = "xgboost-v1-baseline"
 
 
 def fetch_avaliacao_ids(client) -> list[int]:
+    """
+    So as avaliacoes vindas do seed em lote.
+
+    A ingestao pela API grava fonte='telemetria' e ja produz a propria predicao
+    no mesmo fluxo. Sem este filtro, o script tentaria parear as linhas de
+    telemetria com o dataset e o assert de contagem falharia.
+    """
     all_ids = []
     page_size = 1000
     offset = 0
@@ -37,6 +46,7 @@ def fetch_avaliacao_ids(client) -> list[int]:
         result = (
             client.table("avaliacoes")
             .select("avaliacao_id")
+            .eq("fonte", "seed")
             .order("avaliacao_id")
             .range(offset, offset + page_size - 1)
             .execute()
@@ -49,6 +59,13 @@ def fetch_avaliacao_ids(client) -> list[int]:
 
 
 def clear_predicoes(client):
+    """
+    DESTRUTIVO. So e chamado sob --reset.
+
+    RF-04 exige integridade historica para auditoria: apagar predicoes a cada
+    execucao destruiria a trilha que sustenta a rastreabilidade do modelo.
+    O comportamento padrao passou a ser append-only.
+    """
     client.table("predicoes").delete().gte("predicao_id", 0).execute()
 
 
@@ -62,6 +79,14 @@ def insert_batch(client, records: list[dict]):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Popular predicoes do SafeField")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="APAGA todas as predicoes antes de inserir (destroi o historico)",
+    )
+    args = parser.parse_args()
+
     print("=" * 60)
     print("SafeField -- Popular Tabela de Predicoes")
     print("=" * 60)
@@ -86,7 +111,8 @@ def main():
     client = get_supabase_client()
     avaliacao_ids = fetch_avaliacao_ids(client)
     assert len(avaliacao_ids) == len(df), (
-        f"Mismatch: {len(avaliacao_ids)} avaliacoes no Supabase vs {len(df)} no dataset"
+        f"Mismatch: {len(avaliacao_ids)} avaliacoes de seed no Supabase vs "
+        f"{len(df)} no dataset. Rode scripts/seed_supabase.py antes."
     )
     print(f"  {len(avaliacao_ids)} avaliacao_ids obtidos")
 
@@ -102,8 +128,13 @@ def main():
             "modelo_versao": MODELO_VERSAO,
         })
 
-    print("\nLimpando predicoes existentes...")
-    clear_predicoes(client)
+    if args.reset:
+        print("\n[--reset] APAGANDO todas as predicoes existentes...")
+        clear_predicoes(client)
+    else:
+        existentes = client.table("predicoes").select("*", count="exact").limit(0).execute().count
+        print(f"\nModo append-only: {existentes} predicoes preservadas.")
+        print("Use --reset para apagar antes de inserir.")
 
     print("\nInserindo predicoes...")
     insert_batch(client, records)
