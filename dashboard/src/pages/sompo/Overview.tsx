@@ -5,12 +5,37 @@ import {
   loadVisaoGeral,
   toEquipment,
   type EquipamentoView,
+  type OperacaoAgg,
   type VisaoGeral,
 } from '../../data/api'
 import type { Equipment, Region, ToneKey } from '../../types'
-import { Card, ScoreBadge, Trend, KPITile, SectionHeader, Button } from '../../components/shared'
+import { Card, ScoreBadge, ScoreBar, Trend, KPITile, SectionHeader, Button } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
+
+/* -- Agregacao por tipo de operacao (terceiro eixo do RF-09) -- */
+
+function OperacaoRow({ o }: { o: OperacaoAgg }) {
+  const tone = scoreBand(o.scoreMedio)
+  const pctAlto = o.avaliacoes ? (o.riscoAlto / o.avaliacoes) * 100 : 0
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 52px 110px 120px', alignItems: 'center', gap: 12 }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', textTransform: 'capitalize' }}>
+        {o.tipo}
+      </span>
+      <ScoreBar score={o.scoreMedio} height={8} />
+      <span className="tabular" style={{ fontSize: 13, fontWeight: 700, color: WTONE[tone].fg, textAlign: 'right' }}>
+        {o.scoreMedio}
+      </span>
+      <span className="tabular" style={{ fontSize: 11, color: 'var(--fg-mute)', textAlign: 'right' }}>
+        {o.avaliacoes.toLocaleString('pt-BR')} avaliações
+      </span>
+      <span className="tabular" style={{ fontSize: 11, color: 'var(--fg-dim)', textAlign: 'right' }}>
+        {o.riscoAlto.toLocaleString('pt-BR')} altas · {pctAlto.toFixed(0)} %
+      </span>
+    </div>
+  )
+}
 
 /* -- FilterSeg helper -------------------------------------- */
 
@@ -237,6 +262,10 @@ export default function SompoOverview({
   const operadores = visao?.kpis.operadores ?? null
   const trend = visao?.tendencia ?? null
   const regions = useMemo(() => visao?.regioes ?? [], [visao])
+  const porOperacao = useMemo(
+    () => [...(visao?.porOperacao ?? [])].sort((a, b) => b.scoreMedio - a.scoreMedio),
+    [visao],
+  )
   const alertas = useMemo(() => visao?.alertas ?? [], [visao])
 
   const top5 = useMemo(() => {
@@ -411,6 +440,21 @@ export default function SompoOverview({
           )}
         </Card>
       </div>
+
+      {/* --- Aggregation by operation type (RF-09) --- */}
+      <Card title={`Risco por tipo de operação · ${porOperacao.length} tipos`} pad={18}>
+        {porOperacao.length ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {porOperacao.map((o) => (
+              <OperacaoRow key={o.tipo} o={o} />
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--fg-mute)', fontSize: 13 }}>
+            Sem avaliações agregadas por operação.
+          </div>
+        )}
+      </Card>
 
       {/* --- Top 5 + Alerts --- */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14 }}>
