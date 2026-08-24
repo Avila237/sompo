@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import sys
 
@@ -20,37 +20,22 @@ from sklearn.preprocessing import OrdinalEncoder
 DATA_PATH = "data/dataset_safefield.parquet"
 MODELS_DIR = "models"
 
-EXCLUDE_COLS = {
-    "equipamento_id",
-    "timestamp",
-    "operador_id",
-    "modelo_equipamento",
-    "categoria_manual",
-    "risco_score",
-    "faixa_risco",
-}
-TARGET = "risco_score"
-CAT_COLS = ["tipo_equipamento", "tipo_operacao", "tipo_solo", "condicao_clima"]
-BOOL_COLS = ["tem_iot", "manutencao_atrasada"]
+# Este modulo tambem roda como script (python backend/ml/train.py), caso em que a
+# raiz do projeto nao esta no sys.path e o import absoluto abaixo falharia.
+_PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _PROJ_ROOT not in sys.path:
+    sys.path.insert(0, _PROJ_ROOT)
 
-
-def derive_faixa(score: float) -> str:
-    if score <= 33:
-        return "baixo"
-    elif score <= 66:
-        return "medio"
-    return "alto"
-
-
-def preprocess_features(df: pd.DataFrame, encoder: OrdinalEncoder) -> pd.DataFrame:
-    X = df.copy()
-    for col in BOOL_COLS:
-        X[col] = X[col].astype(int)
-    X[CAT_COLS] = encoder.transform(X[CAT_COLS])
-    # Cast any object-dtype columns to float (handles None -> NaN from dict inputs)
-    for col in X.select_dtypes(include="object").columns:
-        X[col] = pd.to_numeric(X[col], errors="coerce")
-    return X
+# Constantes e pre-processamento vivem em preprocess.py, compartilhados com a API.
+# Reexportados aqui porque tests/ e scripts/ importam de backend.ml.train.
+from backend.ml.preprocess import (  # noqa: E402,F401
+    BOOL_COLS,
+    CAT_COLS,
+    EXCLUDE_COLS,
+    TARGET,
+    derive_faixa,
+    preprocess_features,
+)
 
 
 def main():
@@ -164,9 +149,6 @@ def main():
         print(f"  - {fname} ({size_kb:.1f} KB)")
 
     try:
-        _proj_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        if _proj_root not in sys.path:
-            sys.path.insert(0, _proj_root)
         from backend.ml.mlflow_tracking import log_training_run
         log_training_run(
             model=model,
