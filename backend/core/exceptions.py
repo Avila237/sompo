@@ -41,3 +41,14 @@ class BancoIndisponivel(SafeFieldError):
 class CredenciaisInvalidas(SafeFieldError):
     status_code = 401
     mensagem = "Usuario ou senha invalidos."
+
+
+class ClimaIndisponivel(SafeFieldError):
+    status_code = 502
+
+    def __init__(self, campos: list[str]):
+        self.mensagem = (
+            "Open-Meteo indisponivel e o payload nao traz o clima completo. "
+            "Campos ausentes: " + ", ".join(campos) + "."
+        )
+        super().__init__(self.mensagem)

@@ -16,6 +16,10 @@ Todas as rotas exigem `Authorization: Bearer <token>`, exceto `POST /auth/token`
 - Credencial errada → `401 {"detail": "Usuario ou senha invalidos."}`
 - Equipamento inexistente → `404 {"detail": "Equipamento 'EQ-9999' nao encontrado."}`
 - Payload inválido → `422` com `detail[]` do Pydantic (campo em `loc`, motivo em `msg`)
+- **Campo desconhecido → `422` `extra_forbidden`.** O schema recusa o que não conhece em vez de
+  descartar em silêncio. Vale para os campos derivados no servidor (`faixa_risco`,
+  `atraso_manutencao_pct`, `manutencao_atrasada`): enviá-los é erro, não é ignorado.
+- Open-Meteo fora **e** payload sem clima → `502` com os campos ausentes no `detail`
 
 Token expira em 480 min. Perfis: `operador`, `gestor`, `analista` (sem escopo de dados distinto nesta entrega).
 
@@ -234,8 +238,19 @@ cadastral no banco (tipo, idade, histórico de sinistros, `tem_iot`, intervalos 
 **deriva** o que não pode ser forjado: `atraso_manutencao_pct`, `manutencao_atrasada` (Regra 14 de
 `docs/data schema.md`) e `faixa_risco`.
 
-Os cinco campos climáticos são obrigatórios hoje. Quando o enriquecimento via Open-Meteo entrar
-(RF-05), passam a **opcionais** — mudança aditiva, nada quebra.
+**Os cinco campos climáticos são opcionais.** Se ausentes, o servidor busca na Open-Meteo pela
+coordenada. Se presentes, servem de fallback caso a API externa falhe.
+
+A resposta traz `clima_origem` dizendo de onde veio o dado:
+
+| valor | significado |
+|---|---|
+| `open-meteo` | enriquecido pela API externa |
+| `payload` | Open-Meteo falhou; usados os valores enviados pelo cliente |
+| `seed` | linha histórica, populada pelo seed em lote |
+
+Se a Open-Meteo falhar **e** o payload não trouxer o clima completo, a requisição é recusada com
+`502` — o servidor não inventa clima para alimentar o modelo.
 
 ```json
 // resposta 201

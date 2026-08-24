@@ -521,40 +521,76 @@
             "title": "Ultima Manutencao Horas Op"
           },
           "temperatura_ar": {
-            "type": "number",
-            "maximum": 45.0,
-            "minimum": -5.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 45.0,
+                "minimum": -5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Temperatura Ar"
           },
           "precipitacao_mm": {
-            "type": "number",
-            "maximum": 120.0,
-            "minimum": 0.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 120.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Precipitacao Mm"
           },
           "umidade_solo": {
-            "type": "number",
-            "maximum": 95.0,
-            "minimum": 5.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 95.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Umidade Solo"
           },
           "velocidade_vento": {
-            "type": "number",
-            "maximum": 80.0,
-            "minimum": 0.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 80.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Velocidade Vento"
           },
           "condicao_clima": {
-            "type": "string",
-            "enum": [
-              "ensolarado",
-              "nublado",
-              "chuvoso",
-              "tempestade"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ensolarado",
+                  "nublado",
+                  "chuvoso",
+                  "tempestade"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Condicao Clima"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "equipamento_id",
@@ -573,12 +609,7 @@
           "pct_operacoes_noturnas",
           "score_operador_historico",
           "ultima_manutencao_dias",
-          "ultima_manutencao_horas_op",
-          "temperatura_ar",
-          "precipitacao_mm",
-          "umidade_solo",
-          "velocidade_vento",
-          "condicao_clima"
+          "ultima_manutencao_horas_op"
         ],
         "title": "LeituraTelemetria",
         "description": "Uma leitura de campo: telemetria + ambiente + operacao."
@@ -605,6 +636,10 @@
               "alto"
             ],
             "title": "Faixa Risco"
+          },
+          "clima_origem": {
+            "type": "string",
+            "title": "Clima Origem"
           },
           "contribuicoes_por_grupo": {
             "additionalProperties": {
@@ -635,6 +670,7 @@
           "equipamento_id",
           "risco_score",
           "faixa_risco",
+          "clima_origem",
           "contribuicoes_por_grupo",
           "top_fatores",
           "modelo_versao",
