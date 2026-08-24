@@ -1,4 +1,4 @@
-﻿# Plataforma de Análise Preditiva de Riscos para Equipamentos Agrícolas
+# Plataforma de Análise Preditiva de Riscos para Equipamentos Agrícolas
 
 > **Challenge FIAP + Sompo Seguros**
 > Sprint 2 — Modelo, Explicabilidade e Dados
@@ -22,6 +22,21 @@
 
 ## Como rodar o projeto
 
+### Pré-requisitos
+
+**Python 3.13.** Não use 3.14 — `xgboost`, `shap` e `numpy` ainda não publicam wheels para
+essa versão e a instalação falha ou tenta compilar do zero.
+
+**macOS — `libomp` (OpenMP).** O XGBoost depende do runtime OpenMP, que **não** vem pelo
+`pip`. Sem ele, `import xgboost` falha com `libxgboost.dylib could not be loaded`:
+
+```bash
+brew install libomp
+```
+
+Linux e Windows já trazem o runtime equivalente (`libgomp` / `vcomp140`) e não precisam
+deste passo.
+
 ### Primeira vez (setup completo)
 
 ```bash
@@ -29,8 +44,8 @@
 git clone https://github.com/Avila237/sompo.git
 cd sompo
 
-# 2. Criar ambiente virtual
-python -m venv .venv
+# 2. Criar ambiente virtual (Python 3.13)
+python3.13 -m venv .venv
 
 # 3. Ativar ambiente virtual
 # Windows:
@@ -44,10 +59,13 @@ pip install -r backend/requirements.txt
 # 5. Gerar o dataset
 python scripts/generate_dataset.py
 
-# 6. Rodar os testes
+# 6. Treinar o modelo (gera models/*.joblib, exigidos pelos testes)
+python backend/ml/train.py
+
+# 7. Rodar os testes
 pytest tests/ -v
 
-# 7. Abrir o notebook de EDA (opcional)
+# 8. Abrir o notebook de EDA (opcional)
 jupyter notebook
 # Navegar até notebooks/01_eda.ipynb
 ```
