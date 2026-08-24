@@ -295,13 +295,14 @@ quem o usa — o que permite testar as camadas de cima sem subir banco nem carre
 
 A entrada acontece por `POST /avaliacoes`, autenticada. Duas origens estão previstas:
 
-- **Simulador de telemetria** (⏳ RF-05) — emite leituras contra a API, cobrindo o requisito de
-  ingestão *"por simulação ou por dispositivos reais"*
+- **Simulador de telemetria** (`scripts/simulate_telemetry.py`) — emite leituras contra a API,
+  cobrindo o requisito de ingestão *"por simulação ou por dispositivos reais"*
 - **App móvel + ESP32 via BLE** — evolução futura; o hardware está especificado em
   [`docs/references/`](docs/references/), fora do escopo desta entrega
 
-Fontes externas: **Open-Meteo** para clima pela coordenada da leitura (⏳ RF-05). O enriquecimento
-geográfico via shapefiles do IBGE saiu de escopo — solo, distância de água e declividade já vêm
+Fontes externas: **Open-Meteo** para clima pela coordenada da leitura, com fallback para o payload
+e recusa explícita (`502`) se ambos faltarem. O enriquecimento geográfico via shapefiles do IBGE
+saiu de escopo — solo, distância de água e declividade já vêm
 no dataset.
 
 ### 5.4 Processamento e modelo
@@ -344,8 +345,8 @@ overlay **"Em breve"**. Stack: React 19 + TypeScript + Vite + Tailwind CSS v4.
 
 ### 5.6.1 Diagrama de arquitetura
 
-A API como orquestradora entre entrada, banco, modelo e interface. As setas tracejadas marcam o
-que está especificado e ainda não implementado.
+A API como orquestradora entre entrada, banco, modelo e interface. A aresta tracejada para a
+Open-Meteo marca a dependência externa, que tem fallback; a aresta cortada marca o caminho fechado.
 
 ```mermaid
 flowchart TB
@@ -372,10 +373,10 @@ flowchart TB
     SIM -->|"POST /avaliacoes · Bearer"| VAL
     DASH -->|"GET /equipamentos /kpis /alertas · Bearer"| API
     API -->|JSON| DASH
-    ENR -.->|RF-05| METEO
+    ENR -.->|"fallback: payload"| METEO
     PERSA -->|service_role| TAB
     PERSP -->|service_role| TAB
-    PERSP -.->|RF-08| AUD
+    PERSP -->|service_role| AUD
     DASH --x|"anon: RLS nega"| DB
 ```
 
@@ -393,7 +394,7 @@ origem → validação → complemento cadastral → enriquecimento climático �
 avaliação → vetor de 30 features → XGBoost → SHAP → persistência da predição → API → interface
 ```
 
-Legenda de estado: **✅ implementado** · **🟡 parcial** · **⏳ especificado, pendente**
+Legenda de estado: **✅ implementado** · **🟡 parcial**
 
 #### 1. Origem ✅
 
@@ -402,9 +403,9 @@ envia **apenas o que observa em campo** — posição, telemetria, tipo de opera
 e da última manutenção. Não envia nada que possa forjar o resultado: o cadastro do equipamento e a
 faixa de risco são resolvidos pelo servidor.
 
-Na Entrega 3 a origem prevista é o simulador de telemetria (⏳ `scripts/simulate_telemetry.py`,
-RF-05). O app móvel com ESP32 via BLE permanece como evolução futura — o enunciado aceita
-explicitamente *"por simulação ou por dispositivos reais"*.
+Na Entrega 3 a origem é o simulador de telemetria (`scripts/simulate_telemetry.py`), que emite
+leituras contra a API. O app móvel com ESP32 via BLE permanece como evolução futura — o enunciado
+aceita explicitamente *"por simulação ou por dispositivos reais"*.
 
 #### 2. Validação ✅ (faixas) 🟡 (consistência)
 
@@ -413,9 +414,15 @@ declarada — latitude entre −33,75 e −2,50, velocidade entre 0 e 40 km/h, `
 padrão `EQ-9999`, e assim por diante. Payload fora de faixa recebe **`422`** com o campo e o
 motivo, e **não é persistido**.
 
+O schema também **recusa campo desconhecido** (`extra="forbid"`) em vez de descartar em silêncio.
+Isso vale para os campos que o servidor deriva — `faixa_risco`, `atraso_manutencao_pct`,
+`manutencao_atrasada`: enviá-los é erro, não é ignorado. É o que impede um cliente de forjar o
+resultado passando o campo já pronto.
+
 Pendente: as regras de consistência cruzada de [`docs/data schema.md`](docs/data%20schema.md) —
-operação `parado` implica velocidade zero, e `tem_iot=false` implica `temperatura_motor` nula.
-Hoje os dois campos de sensor já são opcionais no schema, o que cobre parcialmente o segundo caso.
+operação `parado` implica velocidade zero, e `tem_iot=false` implica `temperatura_motor` nula. Não
+há validador cruzado em `schemas.py`; os dois campos de sensor são opcionais, o que cobre
+parcialmente o segundo caso.
 
 #### 3. Complemento cadastral ✅
 
@@ -425,29 +432,29 @@ O servidor busca no banco o que não vem no payload: tipo, modelo, idade, histó
 
 Equipamento inexistente interrompe o fluxo com **`404`**, antes de qualquer escrita.
 
-#### 4. Enriquecimento climático ⏳
+#### 4. Enriquecimento climático ✅
 
-**Hoje:** os cinco campos climáticos (`temperatura_ar`, `precipitacao_mm`, `umidade_solo`,
-`velocidade_vento`, `condicao_clima`) são **obrigatórios** no payload.
-
-**Especificado (RF-05):** passam a opcionais; ausentes, são buscados na Open-Meteo pela coordenada
-da leitura, com timeout curto. `OPENMETEO_BASE_URL` e `OPENMETEO_TIMEOUT_S` já existem em
-`backend/core/config.py`, ainda sem uso.
+Os cinco campos climáticos (`temperatura_ar`, `precipitacao_mm`, `umidade_solo`,
+`velocidade_vento`, `condicao_clima`) são **opcionais**. Ausentes, o servidor busca na Open-Meteo
+pela coordenada da leitura, com timeout curto (`OPENMETEO_TIMEOUT_S`). Presentes, servem de
+fallback caso a API externa falhe.
 
 **Quando a Open-Meteo não responde** — timeout, rede fora, resposta malformada — a requisição
-**não falha**. O sistema cai para os valores do próprio payload e registra o incidente. A decisão
-é deliberada: uma leitura de campo com clima menos preciso vale mais que nenhuma leitura. O que
-não pode acontecer é a origem do dado ficar invisível, e é por isso que existe a coluna de
-procedência descrita abaixo.
+**não falha**, desde que o payload traga o clima. O sistema usa os valores enviados, marca
+`clima_origem='payload'` e registra o incidente no log. A decisão é deliberada: uma leitura de
+campo com clima menos preciso vale mais que nenhuma leitura.
 
-A mudança é **aditiva**: campos obrigatórios virando opcionais não quebra nenhum cliente existente.
+**Quando falham os dois** — Open-Meteo fora *e* payload sem clima completo — a requisição é
+recusada com **`502`**, listando os campos ausentes. O servidor não inventa clima para alimentar o
+modelo: um score derivado de dado fabricado é pior que score nenhum.
 
-#### 5. Persistência da avaliação ✅ (linha) ⏳ (procedência)
+#### 5. Persistência da avaliação ✅
 
 A leitura validada e enriquecida vira uma linha em `avaliacoes`.
 
-**Procedência ⏳** — duas colunas previstas em `backend/db/migrations/001_entrega03.sql`
-(migration ainda não criada) tornam a origem auditável sem cruzar log com banco:
+**Procedência** — duas colunas criadas em
+`supabase/migrations/20260824120000_entrega03.sql` tornam a origem auditável sem cruzar log com
+banco:
 
 | Coluna | Valores | Responde a |
 |---|---|---|
@@ -458,7 +465,8 @@ Sem elas, as 5.000 linhas do seed e as geradas pela API ficam indistinguíveis �
 calculado com clima de fallback pareceria idêntico a um calculado com clima medido.
 
 > ⚠️ `backend/db/schema.sql` começa com `DROP TABLE`. Reexecutá-lo apaga os 10.280 registros já
-> carregados. Toda mudança de estrutura vai em `migrations/001_entrega03.sql`, que é idempotente.
+> carregados. Toda mudança de estrutura vai na migration em `supabase/migrations/`, que é
+> idempotente (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`) e não destrói nada.
 
 #### 6. Vetor de 30 features ✅
 
@@ -498,11 +506,20 @@ append-only — reprocessar não sobrescreve predição anterior.
 > leitura** e sempre devolve o formato em português, com `valor` nulo quando a predição é do seed.
 > Sem essa normalização a interface quebraria em silêncio conforme o equipamento aberto.
 
-#### 10. Registro de uso ⏳
+#### 10. Registro de uso ✅
 
-Especificado no RF-08: log estruturado em stdout com `request_id` e uma tabela `auditoria`
-registrando quem pediu, quando, para qual equipamento, qual score saiu e qual versão do modelo
-decidiu. Ainda não implementado — hoje não há uso de `logging` no repositório.
+Duas trilhas paralelas, atendendo ao RF-08.
+
+**Log estruturado** (`backend/core/logging.py`) — cada linha carrega um `request_id` propagado por
+`ContextVar`, correlacionando a entrada da requisição, a decisão do modelo e a resposta. Um erro
+de produção é rastreável de ponta a ponta por esse identificador.
+
+**Tabela `auditoria`** (`backend/services/auditoria.py`) — registra quem pediu, quando, para qual
+equipamento, qual score saiu, qual versão do modelo decidiu e se a operação teve sucesso.
+
+A diferença entre as duas importa: o log responde *"o que aconteceu naquela requisição"* e é
+volátil; a tabela responde *"quem é responsável por esta predição"* e é permanente. Governança de
+uso de IA exige a segunda.
 
 #### 11. API → interface ✅
 
@@ -540,9 +557,9 @@ passar por autenticação.
 | Rastreabilidade ML | MLflow (`safefield-xgboost`) | ✅ em uso |
 | Banco de dados | Supabase (PostgreSQL + RLS) | ✅ em uso |
 | Dashboard | React 19 + TypeScript + Vite + Tailwind CSS v4 | ✅ em uso |
-| Clima | Open-Meteo | ⏳ RF-05 |
-| Simulador de telemetria | Python | ⏳ RF-05 |
-| Log e auditoria | `logging` + tabela `auditoria` | ⏳ RF-08 |
+| Clima | Open-Meteo (`requests`) | ✅ em uso |
+| Simulador de telemetria | Python | ✅ em uso |
+| Log e auditoria | `logging` + tabela `auditoria` | ✅ em uso |
 | Firmware IoT | ESP32 (DOIT DevKit) — C++ / Arduino | 📋 especificado, fora de escopo |
 | Sensores | MPU-6050 GY-521, DS18B20, LM2596 | 📋 especificado, fora de escopo |
 | OBD-II | ELM327 Bluetooth | 📋 especificado, fora de escopo |
@@ -681,9 +698,14 @@ dado real.
 
 ### O que continua pendente
 
-RF-05 (Open-Meteo e simulador), RF-08 (log estruturado e auditoria) e a migration
-`001_entrega03.sql` com as colunas de procedência e a RLS explícita. Estão marcados como ⏳ ao
-longo deste README, em vez de descritos como prontos.
+Uma coisa dentro do escopo: as **regras de consistência cruzada** da validação de entrada —
+operação `parado` implicando velocidade zero e `tem_iot=false` implicando `temperatura_motor` nula.
+As faixas de cada campo são validadas, e campo desconhecido é recusado; o que falta é a validação
+entre campos. Está marcada como 🟡 na seção 5.7, em vez de descrita como pronta.
+
+Do lado do dashboard, dois campos aditivos ainda não expostos pela API deixam a Visão Geral
+incompleta: a série temporal que alimentava o gráfico de evolução do score, e `total_operadores`.
+Nenhum dos dois quebra a tela — o gráfico explica que aguarda o campo e o KPI é omitido.
 
 ---
 
@@ -707,9 +729,10 @@ documentação do caminho do dado. Estado detalhado na [seção 7](#7-evolução
 
 | Requisito | O que falta |
 |---|---|
-| RF-05 | Cliente Open-Meteo com fallback e `scripts/simulate_telemetry.py` |
-| RF-08 | Log estruturado com `request_id` e tabela `auditoria` |
-| RF-03 | `migrations/001_entrega03.sql` — colunas `fonte` e `clima_origem`, RLS explícita |
+| RF-05 | Regras de consistência cruzada na validação (`parado` ⇒ velocidade 0, `tem_iot=false` ⇒ motor nulo) |
+| RF-09 | Série temporal e `total_operadores` em `GET /kpis` — dois campos aditivos |
+| RF-13 | Gravação do vídeo |
+| RF-14 | Compartilhar o repositório com `fiap-tutoria` |
 
 ### Próximas etapas
 
