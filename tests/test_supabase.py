@@ -1,4 +1,4 @@
-﻿"""Testes do Supabase — conexao, contagens, integridade, distribuicao, tipos e indexes."""
+"""Testes do Supabase — conexao, contagens, integridade, distribuicao, tipos e indexes."""
 import os
 import sys
 
@@ -75,10 +75,12 @@ class TestContagens:
         result = client.table("operadores").select("*", count="exact").limit(0).execute()
         assert 70 <= result.count <= 90
 
+    @pytest.mark.seed
     def test_avaliacoes_exatamente_5000(self, client):
         result = client.table("avaliacoes").select("*", count="exact").limit(0).execute()
         assert result.count == 5000
 
+    @pytest.mark.seed
     def test_predicoes_5000(self, client):
         result = client.table("predicoes").select("*", count="exact").limit(0).execute()
         assert result.count == 5000

@@ -1,4 +1,4 @@
-﻿"""Testes da tabela predicoes — contagem, integridade, distribuicao, SHAP, consistencia."""
+"""Testes da tabela predicoes — contagem, integridade, distribuicao, SHAP, consistencia."""
 import os
 import sys
 
@@ -56,6 +56,7 @@ def sample_predicoes(client):
 
 
 class TestContagem:
+    @pytest.mark.seed
     def test_predicoes_5000(self, client):
         result = client.table("predicoes").select("*", count="exact").limit(0).execute()
         assert result.count == 5000
