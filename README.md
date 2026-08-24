@@ -588,10 +588,10 @@ O XGBoost foi escolhido por três razões principais. Primeiro, lida bem com var
 
 | Métrica | Valor | Leitura |
 |---|---|---|
-| MAE | 4.72 | Erro médio de ~5 pontos no score de 0–100 |
-| RMSE | 6.08 | Penaliza os desvios grandes; próximo do MAE indica poucos outliers |
-| R² | 0.9466 | O modelo explica ~95% da variância do score |
-| Acurácia por faixa | 88.3% | Acerto na classificação baixo / médio / alto |
+| MAE | 4.67 | Erro médio de ~5 pontos no score de 0–100 |
+| RMSE | 6.04 | Penaliza os desvios grandes; próximo do MAE indica poucos outliers |
+| R² | 0.9473 | O modelo explica ~95% da variância do score |
+| Acurácia por faixa | 89.1% | Acerto na classificação baixo / médio / alto |
 
 Treino: 4.000 registros · 30 features de entrada.
 

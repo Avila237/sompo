@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -26,8 +26,12 @@ models/*.joblib
 *.swp
 *.swo
 
-# Configuração local de ferramentas de agente
-.claude/
+# Configuração local de ferramentas de agente.
+# Ignora o conteudo, nao o diretorio: com '.claude/' o Git nem percorre a pasta
+# e a excecao abaixo nunca seria avaliada.
+.claude/*
+# Excecao: o handoff precisa atravessar entre as maquinas
+!.claude/handoff.md
 
 # Material de terceiros (decks e artigos de referência) — citar, não versionar
 docs/references/*.pdf

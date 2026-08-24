@@ -96,7 +96,7 @@ backend/
 │   └── predictor.py         carrega artefatos uma vez, prediz + SHAP
 └── db/
     └── migrations/
-        └── 001_entrega03.sql   idempotente, SEM DROP
+        └── (ver supabase/migrations/)
 
 scripts/
 └── simulate_telemetry.py    emite leituras contra a API
@@ -107,13 +107,13 @@ tests/
 
 > ⚠️ **`backend/db/schema.sql` começa com `DROP TABLE`.** Reexecutá-lo apaga os 10.280 registros
 > que acabaram de ser confirmados. Toda alteração de estrutura nesta entrega vai em
-> `migrations/001_entrega03.sql`, que é idempotente e não destrói nada.
+> `supabase/migrations/20260824120000_entrega03.sql`, que é idempotente e não destrói nada.
 
 ---
 
 ## 4. Mudanças no banco
 
-`backend/db/migrations/001_entrega03.sql`:
+`supabase/migrations/20260824120000_entrega03.sql`:
 
 ```sql
 -- Procedência do dado (decisão 8)
@@ -322,7 +322,7 @@ commit da spec.
 | Risco | Impacto | Mitigação |
 |---|---|---|
 | `xgboost`/`shap`/`numpy` sem wheel no Python instalado | bloqueia tudo | venv em 3.13, não 3.14 |
-| Reexecutar `schema.sql` | apaga 10.280 registros | toda mudança via `migrations/001_entrega03.sql` |
+| Reexecutar `schema.sql` | apaga 10.280 registros | toda mudança via `supabase/migrations/` |
 | Métricas do retreino divergirem de `metrics.json` | ruído de última hora | registrar a divergência, não perseguir; o modelo não é objeto da entrega |
 | `service_role` vazar para o frontend ou para o Git | acesso total ao banco | só em `.env`; `.env.example` com placeholder; conferir bundle antes de gravar o vídeo |
 | Open-Meteo indisponível durante a gravação | demo interrompida | fallback da decisão 15 já cobre |
