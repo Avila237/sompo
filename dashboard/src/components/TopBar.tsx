@@ -22,7 +22,13 @@ const PERSONAS: { key: string; label: string; icon: () => JSX.Element }[] = [
 ]
 
 /* ── TopBar ── */
-export default function TopBar({ persona, setPersona }: { persona: string; setPersona: (p: string) => void }) {
+export default function TopBar({ persona, setPersona, perfil, onSair }: {
+  persona: string
+  setPersona: (p: string) => void
+  /** Perfil da sessao autenticada (operador | gestor | analista). */
+  perfil?: string
+  onSair?: () => void
+}) {
   const [showNotifs, setShowNotifs] = useState(false)
   const [unread, setUnread] = useState(NOTIFS.length)
   const dropRef = useRef<HTMLDivElement>(null)
@@ -162,9 +168,22 @@ export default function TopBar({ persona, setPersona }: { persona: string; setPe
               Luisa Andrade
             </div>
             <div style={{ fontSize: 10, color: 'var(--fg-mute)' }}>
-              Analista de riscos
+              {perfil ? `Perfil: ${perfil}` : 'Analista de riscos'}
             </div>
           </div>
+          {onSair && (
+            <button
+              onClick={onSair}
+              title="Encerrar sessao"
+              style={{
+                marginLeft: 6, padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                cursor: 'pointer', background: 'transparent', color: 'var(--fg-dim)',
+                border: '1px solid var(--line-2)',
+              }}
+            >
+              Sair
+            </button>
+          )}
         </div>
       </div>
     </header>
