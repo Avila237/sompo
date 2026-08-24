@@ -133,8 +133,11 @@ def kpis() -> dict:
     for a in avals:
         por_faixa[_faixa(float(a["risco_score"]))] += 1
 
+    operadores = {a["operador_id"] for a in avals if a.get("operador_id")}
+
     return {
         "total_equipamentos": total_eq,
+        "total_operadores": len(operadores),
         "total_avaliacoes": total_aval,
         "score_medio": round(soma / total_aval, 2) if total_aval else 0.0,
         "equipamentos_risco_alto": risco_alto,
@@ -235,3 +238,33 @@ def alertas(limite: int = 7, faixa_minima: str = "medio") -> list[dict]:
         if len(saida) >= limite:
             break
     return saida
+
+
+def tendencia(dias: int = 30) -> list[dict]:
+    """
+    Media diaria de score nos ultimos `dias` COM DADOS.
+
+    A janela conta dias que tem avaliacao, nao dias corridos. O seed cobre 2025
+    e a ingestao grava em 2026: ancorar num intervalo de calendario devolveria
+    uma serie de um ponto so, porque nao ha nada entre as duas pontas.
+
+    Antes vivia no cliente (buildTrend), que precisava baixar as 5.000
+    avaliacoes para calcular. Passou para o servidor com as demais agregacoes.
+    """
+    avals = repo.listar_avaliacoes_resumo()
+    if not avals:
+        return []
+
+    por_dia: dict[str, list[float]] = defaultdict(list)
+    for a in avals:
+        por_dia[a["timestamp"][:10]].append(float(a["risco_score"]))
+
+    ultimos = sorted(por_dia)[-dias:]
+    return [
+        {
+            "dia": dia,
+            "score_medio": round(sum(por_dia[dia]) / len(por_dia[dia]), 2),
+            "avaliacoes": len(por_dia[dia]),
+        }
+        for dia in ultimos
+    ]

@@ -312,25 +312,51 @@
         ],
         "summary": "Obter Kpis",
         "operationId": "obter_kpis_kpis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dias",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "description": "janela da serie de tendencia",
+              "default": 30,
+              "title": "Dias"
+            },
+            "description": "janela da serie de tendencia"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Obter Kpis Kpis Get"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     }
   },

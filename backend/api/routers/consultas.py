@@ -50,9 +50,13 @@ def listar_alertas(
 
 
 @router.get("/kpis")
-def obter_kpis(usuario: dict = Depends(usuario_atual)) -> dict:
+def obter_kpis(
+    dias: int = Query(30, ge=1, le=365, description="janela da serie de tendencia"),
+    usuario: dict = Depends(usuario_atual),
+) -> dict:
     return {
         "kpis": consultas.kpis(),
         "por_operacao": consultas.agregado_por_operacao(),
         "por_regiao": consultas.agregado_por_regiao(),
+        "tendencia": consultas.tendencia(dias),
     }

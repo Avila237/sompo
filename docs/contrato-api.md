@@ -297,3 +297,20 @@ a predição é do seed, que não o gravou — trate como opcional.
 **2. `contribuicoes_por_grupo` soma COM SINAL.** Positivo aumenta o risco, negativo reduz. Difere
 de `shap_explainer.group_contributions()`, que soma `|SHAP|` para medir magnitude. A semântica com
 sinal é a correta para exibir "+ aumenta / − reduz".
+
+## Campos acrescentados após a revisão do dashboard
+
+Duas lacunas apontadas na revisão do PR #1, ambas aditivas:
+
+**`kpis.total_operadores`** — contagem de operadores distintos. Alimenta o KPI que antes era
+calculado no cliente sobre as 5.000 avaliações baixadas.
+
+**`tendencia`** em `GET /kpis?dias=N` — série de média diária de score:
+
+```json
+"tendencia": [ { "dia": "2025-12-28", "score_medio": 46.35, "avaliacoes": 11 } ]
+```
+
+`dias` (1–365, default 30) conta **dias com dados**, não dias corridos. O seed cobre 2025 e a
+ingestão grava em 2026: uma janela de calendário devolveria um ponto só, porque não há nada entre
+as duas pontas.
