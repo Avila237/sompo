@@ -9,7 +9,7 @@ nunca aceito do cliente.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 TipoOperacao = Literal["colheita", "plantio", "pulverizacao", "transporte", "parado"]
 TipoSolo = Literal["arenoso", "argiloso", "misto"]
@@ -18,6 +18,11 @@ CondicaoClima = Literal["ensolarado", "nublado", "chuvoso", "tempestade"]
 
 class LeituraTelemetria(BaseModel):
     """Uma leitura de campo: telemetria + ambiente + operacao."""
+
+    # Rejeita campo desconhecido em vez de descarta-lo em silencio. Sem isto, um
+    # cliente que enviasse 'atraso_manutencao_pct' ou 'faixa_risco' — ambos
+    # derivados no servidor — receberia 201 achando que definiu o valor.
+    model_config = ConfigDict(extra="forbid")
 
     equipamento_id: str = Field(..., pattern=r"^EQ-\d{4}$")
     operador_id: str = Field(..., pattern=r"^OP-\d{4}$")
@@ -47,13 +52,13 @@ class LeituraTelemetria(BaseModel):
     ultima_manutencao_dias: int = Field(..., ge=0, le=365)
     ultima_manutencao_horas_op: float = Field(..., ge=0.0, le=2000.0)
 
-    # Ambiental. Passarao a ser opcionais quando o enriquecimento via
-    # Open-Meteo entrar (RF-05) — tornar opcional e mudanca aditiva.
-    temperatura_ar: float = Field(..., ge=-5.0, le=45.0)
-    precipitacao_mm: float = Field(..., ge=0.0, le=120.0)
-    umidade_solo: float = Field(..., ge=5.0, le=95.0)
-    velocidade_vento: float = Field(..., ge=0.0, le=80.0)
-    condicao_clima: CondicaoClima
+    # Ambiental — opcional. Quando ausente, o servidor busca na Open-Meteo pela
+    # coordenada. Quando presente, serve de fallback se a API externa falhar.
+    temperatura_ar: float | None = Field(None, ge=-5.0, le=45.0)
+    precipitacao_mm: float | None = Field(None, ge=0.0, le=120.0)
+    umidade_solo: float | None = Field(None, ge=5.0, le=95.0)
+    velocidade_vento: float | None = Field(None, ge=0.0, le=80.0)
+    condicao_clima: CondicaoClima | None = None
 
 
 class FatorSHAP(BaseModel):
@@ -70,6 +75,7 @@ class RespostaScore(BaseModel):
     equipamento_id: str
     risco_score: float
     faixa_risco: Literal["baixo", "medio", "alto"]
+    clima_origem: str
     contribuicoes_por_grupo: dict[str, float]
     top_fatores: list[FatorSHAP]
     modelo_versao: str

@@ -18,5 +18,5 @@ def criar_avaliacao(
     Recebe uma leitura de campo, persiste, roda o modelo e devolve o score
     acompanhado da decomposicao SHAP.
     """
-    resultado = processar_leitura(leitura.model_dump())
+    resultado = processar_leitura(leitura.model_dump(), usuario)
     return RespostaScore(**resultado)
