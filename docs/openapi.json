@@ -1,0 +1,733 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SafeField API",
+    "description": "Score de risco para equipamentos agricolas — Challenge Sompo",
+    "version": "0.3.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "description": "Aberto (sem token): usado para checar se a API subiu.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/token": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Emitir Token",
+        "operationId": "emitir_token_auth_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/avaliacoes": {
+      "post": {
+        "tags": [
+          "avaliacoes"
+        ],
+        "summary": "Criar Avaliacao",
+        "description": "Recebe uma leitura de campo, persiste, roda o modelo e devolve o score\nacompanhado da decomposicao SHAP.",
+        "operationId": "criar_avaliacao_avaliacoes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeituraTelemetria"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaScore"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/equipamentos": {
+      "get": {
+        "tags": [
+          "consultas"
+        ],
+        "summary": "Listar Equipamentos",
+        "operationId": "listar_equipamentos_equipamentos_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "faixa",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(baixo|medio|alto)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Faixa"
+            }
+          },
+          {
+            "name": "busca",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Busca"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Equipamentos Equipamentos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/equipamentos/{equipamento_id}": {
+      "get": {
+        "tags": [
+          "consultas"
+        ],
+        "summary": "Detalhe Equipamento",
+        "operationId": "detalhe_equipamento_equipamentos__equipamento_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "equipamento_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Equipamento Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Detalhe Equipamento Equipamentos  Equipamento Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alertas": {
+      "get": {
+        "tags": [
+          "consultas"
+        ],
+        "summary": "Listar Alertas",
+        "operationId": "listar_alertas_alertas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 7,
+              "title": "Limite"
+            }
+          },
+          {
+            "name": "faixa_minima",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(baixo|medio|alto)$",
+              "default": "medio",
+              "title": "Faixa Minima"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Listar Alertas Alertas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kpis": {
+      "get": {
+        "tags": [
+          "consultas"
+        ],
+        "summary": "Obter Kpis",
+        "operationId": "obter_kpis_kpis_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Obter Kpis Kpis Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "FatorSHAP": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor"
+          },
+          "shap_value": {
+            "type": "number",
+            "title": "Shap Value"
+          },
+          "grupo": {
+            "type": "string",
+            "title": "Grupo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "valor",
+          "shap_value",
+          "grupo"
+        ],
+        "title": "FatorSHAP"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LeituraTelemetria": {
+        "properties": {
+          "equipamento_id": {
+            "type": "string",
+            "pattern": "^EQ-\\d{4}$",
+            "title": "Equipamento Id"
+          },
+          "operador_id": {
+            "type": "string",
+            "pattern": "^OP-\\d{4}$",
+            "title": "Operador Id"
+          },
+          "latitude": {
+            "type": "number",
+            "maximum": -2.5,
+            "minimum": -33.75,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": -34.79,
+            "minimum": -73.99,
+            "title": "Longitude"
+          },
+          "tipo_solo": {
+            "type": "string",
+            "enum": [
+              "arenoso",
+              "argiloso",
+              "misto"
+            ],
+            "title": "Tipo Solo"
+          },
+          "distancia_agua_m": {
+            "type": "number",
+            "maximum": 5000.0,
+            "minimum": 10.0,
+            "title": "Distancia Agua M"
+          },
+          "declividade": {
+            "type": "number",
+            "maximum": 45.0,
+            "minimum": 0.0,
+            "title": "Declividade"
+          },
+          "tipo_operacao": {
+            "type": "string",
+            "enum": [
+              "colheita",
+              "plantio",
+              "pulverizacao",
+              "transporte",
+              "parado"
+            ],
+            "title": "Tipo Operacao"
+          },
+          "velocidade_kmh": {
+            "type": "number",
+            "maximum": 40.0,
+            "minimum": 0.0,
+            "title": "Velocidade Kmh"
+          },
+          "horas_operacao": {
+            "type": "number",
+            "maximum": 24.0,
+            "minimum": 0.0,
+            "title": "Horas Operacao"
+          },
+          "horario_operacao": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Horario Operacao"
+          },
+          "vibracao_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 4.0,
+                "minimum": 0.1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vibracao G"
+          },
+          "temperatura_motor": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 120.0,
+                "minimum": 50.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperatura Motor"
+          },
+          "pct_velocidade_acima_recomendada": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Pct Velocidade Acima Recomendada"
+          },
+          "freq_eventos_bruscos": {
+            "type": "number",
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Freq Eventos Bruscos"
+          },
+          "pct_operacoes_noturnas": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Pct Operacoes Noturnas"
+          },
+          "score_operador_historico": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score Operador Historico"
+          },
+          "ultima_manutencao_dias": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Ultima Manutencao Dias"
+          },
+          "ultima_manutencao_horas_op": {
+            "type": "number",
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Ultima Manutencao Horas Op"
+          },
+          "temperatura_ar": {
+            "type": "number",
+            "maximum": 45.0,
+            "minimum": -5.0,
+            "title": "Temperatura Ar"
+          },
+          "precipitacao_mm": {
+            "type": "number",
+            "maximum": 120.0,
+            "minimum": 0.0,
+            "title": "Precipitacao Mm"
+          },
+          "umidade_solo": {
+            "type": "number",
+            "maximum": 95.0,
+            "minimum": 5.0,
+            "title": "Umidade Solo"
+          },
+          "velocidade_vento": {
+            "type": "number",
+            "maximum": 80.0,
+            "minimum": 0.0,
+            "title": "Velocidade Vento"
+          },
+          "condicao_clima": {
+            "type": "string",
+            "enum": [
+              "ensolarado",
+              "nublado",
+              "chuvoso",
+              "tempestade"
+            ],
+            "title": "Condicao Clima"
+          }
+        },
+        "type": "object",
+        "required": [
+          "equipamento_id",
+          "operador_id",
+          "latitude",
+          "longitude",
+          "tipo_solo",
+          "distancia_agua_m",
+          "declividade",
+          "tipo_operacao",
+          "velocidade_kmh",
+          "horas_operacao",
+          "horario_operacao",
+          "pct_velocidade_acima_recomendada",
+          "freq_eventos_bruscos",
+          "pct_operacoes_noturnas",
+          "score_operador_historico",
+          "ultima_manutencao_dias",
+          "ultima_manutencao_horas_op",
+          "temperatura_ar",
+          "precipitacao_mm",
+          "umidade_solo",
+          "velocidade_vento",
+          "condicao_clima"
+        ],
+        "title": "LeituraTelemetria",
+        "description": "Uma leitura de campo: telemetria + ambiente + operacao."
+      },
+      "RespostaScore": {
+        "properties": {
+          "avaliacao_id": {
+            "type": "integer",
+            "title": "Avaliacao Id"
+          },
+          "equipamento_id": {
+            "type": "string",
+            "title": "Equipamento Id"
+          },
+          "risco_score": {
+            "type": "number",
+            "title": "Risco Score"
+          },
+          "faixa_risco": {
+            "type": "string",
+            "enum": [
+              "baixo",
+              "medio",
+              "alto"
+            ],
+            "title": "Faixa Risco"
+          },
+          "contribuicoes_por_grupo": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Contribuicoes Por Grupo"
+          },
+          "top_fatores": {
+            "items": {
+              "$ref": "#/components/schemas/FatorSHAP"
+            },
+            "type": "array",
+            "title": "Top Fatores"
+          },
+          "modelo_versao": {
+            "type": "string",
+            "title": "Modelo Versao"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "avaliacao_id",
+          "equipamento_id",
+          "risco_score",
+          "faixa_risco",
+          "contribuicoes_por_grupo",
+          "top_fatores",
+          "modelo_versao",
+          "timestamp"
+        ],
+        "title": "RespostaScore",
+        "description": "O score nunca viaja sozinho: sempre com faixa e decomposicao (RF-10)."
+      },
+      "TokenRequest": {
+        "properties": {
+          "usuario": {
+            "type": "string",
+            "title": "Usuario"
+          },
+          "senha": {
+            "type": "string",
+            "title": "Senha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "usuario",
+          "senha"
+        ],
+        "title": "TokenRequest"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "perfil": {
+            "type": "string",
+            "title": "Perfil"
+          },
+          "expira_em_minutos": {
+            "type": "integer",
+            "title": "Expira Em Minutos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "perfil",
+          "expira_em_minutos"
+        ],
+        "title": "TokenResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
