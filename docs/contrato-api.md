@@ -117,14 +117,23 @@ Público. Diz se a API subiu e se o modelo carregou.
 
 ```json
 // resposta 200, modelo carregado
-{"status": "ok", "modelo": {"carregado": true, "n_features": 30}, "modelo_versao": "xgboost-v1-baseline"}
+{"status": "ok", "modelo": {"carregado": true, "n_features": 30}, "modelo_versao": "xgboost-v1.1"}
 // resposta 200, modelo ausente
-{"status": "degradado", "modelo": {"carregado": false}, "modelo_versao": "xgboost-v1-baseline"}
+{"status": "degradado", "modelo": {"carregado": false}, "modelo_versao": "xgboost-v1.1"}
 ```
 
 Responde `200` mesmo degradado; quem monitora deve ler `status`. A rota é pública, então não diz
 **por que** o modelo não carregou: o motivo vai para o log. Com o modelo ausente, cada chamada
 tenta carregá-lo de novo.
+
+**Versões do modelo.** `modelo_versao` vem de `MODELO_VERSAO` no `.env` e identifica qual modelo
+gerou cada predição. Com a unicidade `(avaliacao_id, modelo_versao)`, versões diferentes convivem
+sem sobrescrever nada.
+
+| Versão | O que é | Onde aparece |
+|---|---|---|
+| `xgboost-v1-baseline` | modelo que gerou o seed, em 24/08/2026 | as 5.000 predições do seed |
+| `xgboost-v1.1` | mesmo XGBoost, treinado pelo `preprocess_features` da inferência (`739e70f`) | predições da API a partir de 28/09/2026 |
 
 ## GET /equipamentos
 
@@ -268,7 +277,7 @@ posição (minimização, em Perfis).
       },
       "..."
     ],
-    "modelo_versao": "xgboost-v1-baseline",
+    "modelo_versao": "xgboost-v1.1",
     "contribuicoes_por_grupo": {
       "ambiental": 17.7577,
       "geografico": 12.0574,
@@ -541,7 +550,7 @@ opcional `null` como o mesmo payload.
       "criterio": "distancia_agua_m=120 < 200 e precipitacao_mm=42 > 25"
     }
   ],
-  "modelo_versao": "xgboost-v1-baseline",
+  "modelo_versao": "xgboost-v1.1",
   "timestamp": "2026-08-24T13:02:53.465989+00:00"
 }
 ```
