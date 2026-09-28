@@ -6,7 +6,7 @@ import {
   type EquipamentoView,
 } from '../../data/api'
 import type { Equipment } from '../../types'
-import { Card, Chip, ScoreBadge, SectionHeader, Button } from '../../components/shared'
+import { Card, Chip, ScoreBadge, SectionHeader, Button, ErroCarga } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
 
@@ -112,14 +112,17 @@ export default function SompoRanking({
   const [type, setType] = useState('all')
   const [sortKey, setSortKey] = useState<SortKey>('score')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
     let active = true
-    loadEquipamentos()
-      .then((eqs) => { if (active) { setViews(eqs); setLoading(false) } })
+    loadEquipamentos({ recarregar: tentativa > 0 })
+      .then((eqs) => { if (active) { setViews(eqs); setError(null); setLoading(false) } })
       .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
     return () => { active = false }
-  }, [])
+  }, [tentativa])
+
+  const tentarDeNovo = () => { setLoading(true); setError(null); setTentativa((t) => t + 1) }
 
   const handleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -178,11 +181,7 @@ export default function SompoRanking({
   }
 
   if (error) {
-    return (
-      <div style={{ padding: '24px 28px', color: 'var(--red)', fontSize: 14 }}>
-        Erro ao carregar equipamentos: {error}
-      </div>
-    )
+    return <ErroCarga titulo="Não foi possível carregar os equipamentos." msg={error} onTentar={tentarDeNovo} />
   }
 
   return (

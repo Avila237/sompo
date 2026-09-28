@@ -9,7 +9,7 @@ import {
   type VisaoGeral,
 } from '../../data/api'
 import type { Equipment, Region, ToneKey } from '../../types'
-import { Card, ScoreBadge, ScoreBar, Trend, KPITile, SectionHeader, Button } from '../../components/shared'
+import { Card, ScoreBadge, ScoreBar, Trend, KPITile, SectionHeader, Button, ErroCarga } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
 
@@ -230,7 +230,11 @@ export default function SompoOverview({
   const [views, setViews] = useState<EquipamentoView[]>([])
   const [visao, setVisao] = useState<VisaoGeral | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Erros separados: falha só em /equipamentos afeta só o Top 5, não a página toda
+  const [erroVisao, setErroVisao] = useState<string | null>(null)
+  const [erroEquip, setErroEquip] = useState<string | null>(null)
+  const [tentVisao, setTentVisao] = useState(0)
+  const [tentEquip, setTentEquip] = useState(0)
 
   const [period, setPeriod] = useState<'30d' | '60d' | '90d'>('30d')
   const [showFilters, setShowFilters] = useState(false)
@@ -240,11 +244,11 @@ export default function SompoOverview({
   // A lista de equipamentos alimenta o Top 5 e nao depende do periodo.
   useEffect(() => {
     let active = true
-    loadEquipamentos()
-      .then((eqs) => { if (active) setViews(eqs) })
-      .catch((e) => { if (active) setError(String(e?.message ?? e)) })
+    loadEquipamentos({ recarregar: tentEquip > 0 })
+      .then((eqs) => { if (active) { setViews(eqs); setErroEquip(null) } })
+      .catch((e) => { if (active) setErroEquip(String(e?.message ?? e)) })
     return () => { active = false }
-  }, [])
+  }, [tentEquip])
 
   // KPIs, regioes, alertas e tendencia vem de /kpis + /alertas. Refaz a busca
   // ao trocar o periodo porque a janela da serie e resolvida no servidor.
@@ -252,10 +256,13 @@ export default function SompoOverview({
     let active = true
     const dias = period === '30d' ? 30 : period === '60d' ? 60 : 90
     loadVisaoGeral(dias)
-      .then((v) => { if (active) { setVisao(v); setLoading(false) } })
-      .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
+      .then((v) => { if (active) { setVisao(v); setErroVisao(null); setLoading(false) } })
+      .catch((e) => { if (active) { setErroVisao(String(e?.message ?? e)); setLoading(false) } })
     return () => { active = false }
-  }, [period])
+  }, [period, tentVisao])
+
+  const tentarVisao = () => { setErroVisao(null); setTentVisao((t) => t + 1) }
+  const tentarEquip = () => { setErroEquip(null); setTentEquip((t) => t + 1) }
 
   const kpis = visao?.kpis ?? null
   const operadores = visao?.kpis.operadores ?? null
@@ -297,11 +304,13 @@ export default function SompoOverview({
     )
   }
 
-  if (error || !kpis) {
+  if (!kpis) {
     return (
-      <div style={{ padding: '24px 28px', color: 'var(--red)', fontSize: 14 }}>
-        Erro ao carregar dados: {error ?? 'desconhecido'}
-      </div>
+      <ErroCarga
+        titulo="Não foi possível carregar a visão geral."
+        msg={erroVisao ?? 'A API não devolveu dados.'}
+        onTentar={() => { setLoading(true); tentarVisao() }}
+      />
     )
   }
 
@@ -324,6 +333,13 @@ export default function SompoOverview({
           </>
         }
       />
+
+      {/* Já havia dados e a recarga (ex.: troca de período) falhou: mantém a tela e avisa */}
+      {erroVisao && (
+        <Card pad={0} style={{ padding: '0 18px' }}>
+          <ErroCarga compacto titulo="Falha ao atualizar os indicadores; exibindo os últimos carregados." msg={erroVisao} onTentar={tentarVisao} />
+        </Card>
+      )}
 
       {showFilters && (
         <div style={{
@@ -466,7 +482,10 @@ export default function SompoOverview({
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-mute)', textAlign: 'right' }}>{eq.avaliacoes} aval.</span>
               </button>
             ))}
-            {top5.length === 0 && (
+            {erroEquip && (
+              <ErroCarga compacto titulo="Não foi possível carregar os equipamentos." msg={erroEquip} onTentar={tentarEquip} />
+            )}
+            {!erroEquip && top5.length === 0 && (
               <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--fg-mute)', fontSize: 13 }}>
                 Nenhum equipamento nesta faixa.
               </div>
