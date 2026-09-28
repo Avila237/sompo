@@ -46,6 +46,7 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 | Campo desconhecido no payload | `422` | lista do Pydantic, `type: "extra_forbidden"` |
 | Campos incoerentes entre si (`parado` com velocidade; clima incompatível com a chuva) | `422` | lista do Pydantic, `type: "value_error"`, com a regra violada em `msg` |
 | Leitura incoerente com o cadastro (`temperatura_motor` sem IoT ou em implemento) | `422` | texto com a regra violada, ex.: `"temperatura_motor enviada para EQ-0042, que nao tem IoT (Regra 1)"` |
+| `leitura_id` já gravado com outro payload (`POST /avaliacoes`) | `409` | `"leitura_id <uuid> ja foi usado com outro payload."` |
 | Open-Meteo fora **e** payload sem clima completo | `502` | mensagem com os campos climáticos ausentes |
 | Artefatos do modelo ausentes ou ilegíveis (`POST /avaliacoes`) | `503` | `"Modelo preditivo indisponivel. Verifique os artefatos em models/."` |
 | Supabase inacessível: conexão recusada, sem rota ou timeout (qualquer rota de dado) | `503` | `"Banco de dados indisponivel."` |
@@ -60,7 +61,7 @@ identificador das linhas de log daquela requisição. No `500` ele vem também n
 `request_id`.
 
 **Auditoria das recusas.** Em `POST /avaliacoes`, toda recusa depois da autenticação (`404`,
-`422` de cadastro, `502` e `503` do modelo) grava uma linha em `auditoria` com `status='erro'` e
+`409`, `422` de cadastro, `502` e `503` do modelo) grava uma linha em `auditoria` com `status='erro'` e
 o motivo em `detalhe`. Com o banco fora (`503` do Supabase), a própria auditoria não tem onde
 gravar; a falha fica no log.
 
@@ -218,9 +219,10 @@ clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_
 }
 ```
 
-`predicao.top_fatores_shap` traz os **5** fatores de maior `|shap_value|`. A decomposição completa
-por grupo (`contribuicoes_por_grupo`) só existe na resposta de `POST /avaliacoes` e não é gravada;
-somar os 5 fatores por grupo dá uma aproximação, não o mesmo número.
+`predicao.top_fatores_shap` traz os **5** fatores de maior `|shap_value|`.
+`predicao.contribuicoes_por_grupo` traz a decomposição completa por grupo, a mesma da resposta
+de `POST /avaliacoes`; vem `null` nas predições do seed, gravadas antes dessa coluna existir.
+Somar os 5 fatores por grupo dá só uma aproximação dela.
 
 ## GET /alertas
 
@@ -382,7 +384,7 @@ pelo front (PR #14) e implementado sem mudança de shape.
 Ingestão de uma leitura de campo. O cliente envia **apenas o que observa**; o servidor busca o
 cadastral no banco (tipo, idade, histórico de sinistros, `tem_iot`, intervalos de manutenção) e
 **deriva** o que não pode ser forjado: `atraso_manutencao_pct`, `manutencao_atrasada` (Regra 14 de
-`docs/data schema.md`) e `faixa_risco`. Responde `201`.
+`docs/data schema.md`) e `faixa_risco`. Responde `201`, ou `200` num reenvio (abaixo).
 
 **Os cinco campos climáticos são opcionais, e o clima medido em campo prevalece.** Com os cinco
 no payload, a Open-Meteo nem é consultada. Com parte deles, a Open-Meteo preenche só o que falta
@@ -402,11 +404,25 @@ A resposta traz `clima_origem` dizendo de onde veio o dado:
 Se a Open-Meteo falhar **e** o payload não trouxer o clima completo, a requisição é recusada com
 `502`: o servidor não inventa clima para alimentar o modelo.
 
-O modelo roda **antes** de gravar. Em seguida o servidor grava a avaliação e a predição. Se a
-gravação da predição falhar, a avaliação é removida e a requisição responde `500`.
+O modelo roda **antes** de gravar. Avaliação e predição são gravadas numa **transação só**: se
+qualquer uma falhar, nenhuma fica, e a requisição responde `500`.
 
-**Reenvio duplica.** A rota não tem chave de idempotência: reenviar o mesmo payload grava uma
-segunda avaliação.
+**Idempotência por `leitura_id`.** Campo opcional do payload: um UUID que o cliente gera
+**antes** do primeiro envio e reusa no retry. O servidor guarda junto um hash do payload
+recebido (sem o próprio `leitura_id`, antes do enriquecimento climático).
+
+| situação | resposta |
+|---|---|
+| `leitura_id` novo | `201`, grava |
+| `leitura_id` já gravado, mesmo payload | `200` com o resultado **original**, nada gravado; auditoria `status='reenvio'` |
+| `leitura_id` já gravado, payload diferente | `409`, nada gravado |
+| sem `leitura_id` | `201`, grava; reenviar o mesmo payload grava de novo |
+
+`leitura_id` que não é UUID é `422`.
+
+O reenvio é decidido **antes** de validar o cadastro, consultar a Open-Meteo ou rodar o modelo:
+um retry recebe o resultado original mesmo que a Open-Meteo esteja fora naquele momento. O hash
+trata campo opcional ausente e campo opcional `null` como o mesmo payload.
 
 ```json
 // resposta 201

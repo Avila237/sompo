@@ -32,6 +32,8 @@ requests==2.34.2
 
 # Database
 supabase==2.31.0
+# Importado direto (APIError); a mesma versao que o supabase puxa.
+postgrest==2.31.0
 
 # Utilitários
 python-dotenv==1.2.3

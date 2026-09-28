@@ -17,6 +17,7 @@ import os
 import random
 import sys
 import time
+import uuid
 
 import requests
 
@@ -181,16 +182,23 @@ def main() -> None:
                 "condicao_clima": derivar_condicao_clima(chuva),
             })
 
-        try:
-            r = requests.post(
-                f"{args.api}/avaliacoes", json=leitura, headers=cabecalho, timeout=30
-            )
-        except requests.RequestException as e:
+        # Chave gerada antes do primeiro envio e reusada no retry: se a rede
+        # cair depois de a API gravar, o reenvio nao duplica a leitura.
+        leitura["leitura_id"] = str(uuid.uuid4())
+        r = None
+        for tentativa in (1, 2):
+            try:
+                r = requests.post(
+                    f"{args.api}/avaliacoes", json=leitura, headers=cabecalho, timeout=30
+                )
+                break
+            except requests.RequestException as e:
+                print(f"  [{i}/{args.n}] falha de rede (tentativa {tentativa}): {e}")
+        if r is None:
             falhas += 1
-            print(f"  [{i}/{args.n}] FALHA de rede: {e}")
             continue
 
-        if r.status_code == 201:
+        if r.status_code in (200, 201):
             d = r.json()
             enviadas += 1
             marca = {"baixo": "  ", "medio": "! ", "alto": "!!"}[d["faixa_risco"]]

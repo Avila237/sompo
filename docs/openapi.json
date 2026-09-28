@@ -100,6 +100,19 @@
               }
             }
           },
+          "200": {
+            "description": "Reenvio: leitura_id ja gravado com o mesmo payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RespostaScore"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "leitura_id ja gravado com outro payload"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -512,6 +525,18 @@
       },
       "LeituraTelemetria": {
         "properties": {
+          "leitura_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leitura Id"
+          },
           "equipamento_id": {
             "type": "string",
             "pattern": "^EQ-\\d{4}$",
