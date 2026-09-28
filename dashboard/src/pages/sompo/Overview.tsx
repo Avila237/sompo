@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo } from 'react'
-import { WTONE, scoreBand } from '../../lib/risco'
+import { WTONE, faixaDaMedia } from '../../lib/risco'
 import {
   loadEquipamentos,
   loadVisaoGeral,
@@ -81,7 +81,7 @@ export default function SompoOverview({
     )
   }
 
-  const scoreTone: ToneKey = scoreBand(kpis.scoreMedio)
+  const scoreTone: ToneKey = faixaDaMedia(kpis.scoreMedio)
   const scoreToneLabel = scoreTone === 'safe' ? 'Baixo risco global' : scoreTone === 'warn' ? 'Risco moderado' : 'Risco elevado'
 
   return (
@@ -166,7 +166,8 @@ export default function SompoOverview({
 
         {/* A janela conta dias COM dados (contrato de /kpis): "30d" sugeria dias corridos */}
         <Card
-          title={`Score médio · últimos ${period} dias com dados`}
+          // Período dos dados NA TELA: após uma recarga que falhou, o título não pode prometer o período pedido
+          title={`Score médio · últimos ${visaoC.chaveDados ?? period} dias com dados${visaoC.carregando ? ' · atualizando…' : ''}`}
           action={
             <div style={{ display: 'flex', gap: 4 }}>
               {([30, 60, 90] as const).map((p) => (
@@ -222,7 +223,7 @@ export default function SompoOverview({
                   gap: 12, alignItems: 'center', cursor: 'pointer', color: 'var(--fg)',
                 }}
               >
-                <ScoreBadge score={eq.score} size="sm" />
+                <ScoreBadge score={eq.score} tone={eq.faixa} size="sm" />
                 <div style={{ textAlign: 'left', minWidth: 0 }}>
                   <div className="mono" style={{ fontSize: 10, color: 'var(--fg-mute)', letterSpacing: 0.5, fontWeight: 600 }}>{eq.id}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{eq.modelo}</div>

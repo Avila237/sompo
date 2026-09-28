@@ -1,4 +1,4 @@
-import { WTONE, scoreBand } from '../../../lib/risco'
+import { WTONE, faixaDaMedia } from '../../../lib/risco'
 import type { Region } from '../../../types'
 
 /* -- Brazil map sub-component ------------------------------ */
@@ -22,7 +22,7 @@ export function BrazilMap({ regions, onPickRegion }: { regions: Region[]; onPick
         const cx = r.x * 420
         const cy = r.y * 420
         const radius = Math.sqrt(r.count) * 2.4 + 4
-        const band = scoreBand(r.avg)
+        const band = faixaDaMedia(r.avg)
         const color = WTONE[band].fg
         return (
           <g

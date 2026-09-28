@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { WTONE, scoreBand, scoreBandLabel } from '../../lib/risco'
+import { WTONE, faixaDaMedia } from '../../lib/risco'
 import { loadTendencias, type Eixo, type SerieTendencia } from '../../data/tendencias'
-import { Card, Chip, SectionHeader, Button, ErroCarga, Carregando, FilterSeg } from '../../components/shared'
+import { Card, SectionHeader, Button, ErroCarga, Carregando, FilterSeg } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { useCarga } from '../../lib/useCarga'
 import { fmtDiaIso } from '../../lib/formato'
@@ -40,6 +40,9 @@ export default function SompoReports() {
   const carga = useCarga(() => loadTendencias(eixo, dias), `${eixo}:${dias}`)
   const dados = carga.dados
   const series = useMemo(() => dados?.series ?? [], [dados])
+  // Foco numa série que não veio na nova resposta (troca de período/eixo) não pode
+  // deixar todas as linhas atenuadas: vale só se a chave ainda está na tela
+  const focoAtivo = foco !== null && series.some((s) => s.chave === foco) ? foco : null
   const linhas = useMemo(() => series.map((s, i) => ({ s, cor: CORES[i % CORES.length], ...resumo(s) })), [series])
 
   if (carga.carregando && !dados) return <Carregando msg="Carregando tendência…" />
@@ -96,7 +99,7 @@ export default function SompoReports() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-        <Destaque titulo="Maior score no último ponto" valor={maior ? fmt(maior.fim) : '—'} cor={maior ? WTONE[scoreBand(maior.fim!)].fg : undefined} legenda={maior?.s.rotulo ?? 'sem dados'} />
+        <Destaque titulo="Maior score no último ponto" valor={maior ? fmt(maior.fim) : '—'} cor={maior ? WTONE[faixaDaMedia(maior.fim!)].fg : undefined} legenda={maior?.s.rotulo ?? 'sem dados'} />
         <Destaque titulo="Maior alta no período" valor={alta ? `${alta.variacao! >= 0 ? '+' : '−'}${Math.abs(Math.round(alta.variacao!))}` : '—'} cor={alta && alta.variacao! > 0 ? 'var(--red)' : undefined} legenda={alta?.s.rotulo ?? 'precisa de 2 pontos'} />
         <Destaque titulo="Janela" valor={String(datas.length)} legenda={`dias com dados · ${janela}`} />
       </div>
@@ -112,14 +115,14 @@ export default function SompoReports() {
         <>
           <Card title={`Evolução · top ${series.length} por ${rotulo}`}>
             <div style={{ display: 'flex', gap: 24 }}>
-              <TendenciaChart datas={datas} series={series} cores={CORES} foco={foco} />
+              <TendenciaChart datas={datas} series={series} cores={CORES} foco={focoAtivo} />
               <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: 'var(--fg-mute)', fontWeight: 600 }}>Clique numa linha da tabela para destacar a série.</div>
                 {linhas.map((l) => (
-                  <div key={l.s.chave} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: !foco || foco === l.s.chave ? 1 : 0.4 }}>
+                  <div key={l.s.chave} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: !focoAtivo || focoAtivo === l.s.chave ? 1 : 0.4 }}>
                     <span style={{ width: 14, height: 3, borderRadius: 2, background: l.cor, flexShrink: 0 }} />
                     <span style={{ fontSize: 12, flexGrow: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: dados.eixo === 'operacao' ? 'capitalize' : 'none' }}>{l.s.rotulo}</span>
-                    <span className="tabular" style={{ fontSize: 12, fontWeight: 700, color: l.fim !== null ? WTONE[scoreBand(l.fim)].fg : 'var(--fg-mute)' }}>{fmt(l.fim)}</span>
+                    <span className="tabular" style={{ fontSize: 12, fontWeight: 700, color: l.fim !== null ? WTONE[faixaDaMedia(l.fim)].fg : 'var(--fg-mute)' }}>{fmt(l.fim)}</span>
                   </div>
                 ))}
                 <div style={{ marginTop: 'auto', fontSize: 11, color: 'var(--fg-mute)', lineHeight: 1.5 }}>
@@ -134,7 +137,7 @@ export default function SompoReports() {
               <span>{ROTULO_EIXO[dados.eixo]}</span><span>Início</span><span>Fim</span><span>Variação</span><span>Média</span><span>Pico</span><span>Avaliações</span>
             </div>
             {linhas.map((l) => {
-              const focado = foco === l.s.chave
+              const focado = focoAtivo === l.s.chave
               return (
                 <button
                   key={l.s.chave}
@@ -154,10 +157,8 @@ export default function SompoReports() {
                   <span className="tabular" style={{ color: 'var(--fg-dim)' }}>{fmt(l.inicio)}</span>
                   <span className="tabular" style={{ fontWeight: 700 }}>{fmt(l.fim)}</span>
                   <span className="tabular"><Variacao v={l.variacao} /></span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="tabular">{Math.round(l.s.scoreMedio)}</span>
-                    <Chip state={scoreBand(l.s.scoreMedio)} label={scoreBandLabel(l.s.scoreMedio)} size="sm" />
-                  </span>
+                  {/* média de grupo: sem chip de faixa, que sugeriria uma faixa gravada (armadilha 4) */}
+                  <span className="tabular">{Math.round(l.s.scoreMedio)}</span>
                   <span className="tabular" style={{ color: 'var(--fg-dim)' }}>{fmt(l.pico)}</span>
                   <span className="tabular" style={{ color: 'var(--fg-dim)' }}>{l.s.avaliacoes.toLocaleString('pt-BR')}</span>
                 </button>

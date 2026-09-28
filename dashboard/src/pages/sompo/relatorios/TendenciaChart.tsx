@@ -28,7 +28,8 @@ export function TendenciaChart({ datas, series, cores, foco }: {
   const x = (i: number) => PL + (i / (datas.length - 1)) * CW
   const y = (v: number) => PT + (1 - v / 100) * CH
   const n = datas.length
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round((n - 1) * f))
+  // Únicos: com poucos dias, 5 frações caem no mesmo índice e os rótulos se sobrepõem
+  const ticks = [...new Set([0, 0.25, 0.5, 0.75, 1].map((f) => Math.round((n - 1) * f)))]
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Evolução do score médio por grupo" style={{ display: 'block', flexShrink: 0 }}>

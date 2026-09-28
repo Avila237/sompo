@@ -1,11 +1,11 @@
-import { WTONE, scoreBand } from '../../../lib/risco'
+import { WTONE, faixaDaMedia } from '../../../lib/risco'
 import type { OperacaoAgg } from '../../../data/api'
 import { ScoreBar } from '../../../components/shared'
 
 /* -- Agregacao por tipo de operacao (terceiro eixo do RF-09) -- */
 
 export function OperacaoRow({ o }: { o: OperacaoAgg }) {
-  const tone = scoreBand(o.scoreMedio)
+  const tone = faixaDaMedia(o.scoreMedio)
   const pctAlto = o.avaliacoes ? (o.riscoAlto / o.avaliacoes) * 100 : 0
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 52px 110px 120px', alignItems: 'center', gap: 12 }}>

@@ -1,5 +1,6 @@
 ﻿import { CLIENTS } from '../../data/mock'
 import { Card, ScoreBadge, Trend, KPITile, SectionHeader } from '../../components/shared'
+import { faixaDaMedia } from '../../lib/risco'
 
 export default function SompoUBI() {
   return (
@@ -29,7 +30,7 @@ export default function SompoUBI() {
             }}>
               <span style={{ fontWeight: 600 }}>{c.name}</span>
               <span className="tabular" style={{ color: 'var(--fg-dim)' }}>{c.equips}</span>
-              <ScoreBadge score={c.avg} size="sm" />
+              <ScoreBadge score={c.avg} tone={faixaDaMedia(c.avg)} size="sm" />
               <span className="tabular" style={{ color: c.alerts > 2 ? 'var(--amber)' : 'var(--fg-dim)' }}>{c.alerts}</span>
               <span className="mono" style={{ fontWeight: 600 }}>{c.premium}</span>
               <Trend delta={c.delta} />

@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo } from 'react'
-import { WTONE, scoreBand, scoreBandLabel } from '../../lib/risco'
+import { WTONE, faixaDaMedia, rotuloDaMedia } from '../../lib/risco'
 import { Card, Chip, ScoreBar, Button, SectionHeader } from '../../components/shared'
 
 /* ── Local: FilterSeg ──────────────────────────────────────────────── */
@@ -198,8 +198,8 @@ export default function SompoSimulator() {
     return Math.round(Math.max(2, Math.min(92, sc)) * 10) / 10
   }, [s])
 
-  const band = scoreBand(score)
-  const bandLabel = scoreBandLabel(score)
+  const band = faixaDaMedia(score)
+  const bandLabel = rotuloDaMedia(score)
   const tone = WTONE[band]
 
   return (

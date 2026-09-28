@@ -1,4 +1,4 @@
-import { WTONE, scoreBand } from '../../../lib/risco'
+import { WTONE, faixaDaMedia } from '../../../lib/risco'
 import type { TendenciaPonto } from '../../../data/api'
 import { fmtDiaIso } from '../../../lib/formato'
 
@@ -40,13 +40,13 @@ export function TrendChart({ pontos }: { pontos: TendenciaPonto[] }) {
         <line x1={PAD.l} y1={bandY(33)} x2={W - PAD.r} y2={bandY(33)} stroke="rgba(90,224,107,0.2)" strokeWidth="0.7" strokeDasharray="4,3" />
         <line x1={PAD.l} y1={bandY(66)} x2={W - PAD.r} y2={bandY(66)} stroke="rgba(255,181,38,0.2)" strokeWidth="0.7" strokeDasharray="4,3" />
 
-        <polyline points={pts} fill="none" stroke={WTONE[scoreBand(avg)].fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={pts} fill="none" stroke={WTONE[faixaDaMedia(avg)].fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
 
         {(() => {
           const last = data[data.length - 1]
           const x = W - PAD.r
           const y = PAD.t + (1 - last / 100) * ch
-          const c = WTONE[scoreBand(last)].fg
+          const c = WTONE[faixaDaMedia(last)].fg
           return (
             <>
               <circle cx={x} cy={y} r="5" fill={c} fillOpacity="0.2" />
@@ -57,7 +57,10 @@ export function TrendChart({ pontos }: { pontos: TendenciaPonto[] }) {
 
         {/* Eixo com a data real do ponto: os pontos são dias com dados, não dias corridos */}
         <text x={PAD.l} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight">{fmtDiaIso(pontos[0].dia)}</text>
-        <text x={PAD.l + cw / 2} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="middle">{fmtDiaIso(pontos[Math.floor((pontos.length - 1) / 2)].dia)}</text>
+        {/* com 2 pontos o "meio" é o primeiro: o rótulo se sobreporia */}
+        {pontos.length >= 3 && (
+          <text x={PAD.l + cw / 2} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="middle">{fmtDiaIso(pontos[Math.floor((pontos.length - 1) / 2)].dia)}</text>
+        )}
         <text x={W - PAD.r} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="end">{fmtDiaIso(pontos[pontos.length - 1].dia)}</text>
       </svg>
 
