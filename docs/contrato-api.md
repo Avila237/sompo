@@ -52,9 +52,9 @@ recebem tudo.
 só tem efeito no próximo login, até `JWT_EXPIRE_MINUTES` depois.
 
 Recomendações: todos os perfis recebem todas no detalhe, e cada uma traz o seu `publico`
-(`operador`, `gestor` ou `tecnico`). A API não filtra nem reordena por perfil. O destaque das
-recomendações do perfil logado no dashboard é escopo da BRA-460; hoje o card só filtra por
-`publico` quando o usuário escolhe.
+(`operador`, `gestor` ou `tecnico`). A API não filtra nem reordena por perfil. No dashboard, o
+card de recomendações **abre filtrado no `publico` do perfil logado** (gestor → Gestor, técnico →
+Técnico, operador → Operador; analista → Todos), e o usuário pode trocar o filtro para ver todas.
 
 ### POST /auth/token
 
