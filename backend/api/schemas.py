@@ -9,11 +9,21 @@ nunca aceito do cliente.
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 TipoOperacao = Literal["colheita", "plantio", "pulverizacao", "transporte", "parado"]
 TipoSolo = Literal["arenoso", "argiloso", "misto"]
 CondicaoClima = Literal["ensolarado", "nublado", "chuvoso", "tempestade"]
+
+# Regra 5 de docs/data schema.md: condicoes admitidas por faixa de precipitacao
+# acumulada (teto inclusivo). A Open-Meteo e o simulador geram dentro destas
+# faixas; um payload fora delas descreve um clima que o modelo nunca viu.
+CONDICOES_POR_CHUVA: tuple[tuple[float, frozenset[str]], ...] = (
+    (2.0, frozenset({"ensolarado", "nublado"})),
+    (20.0, frozenset({"nublado", "chuvoso"})),
+    (50.0, frozenset({"chuvoso"})),
+    (float("inf"), frozenset({"chuvoso", "tempestade"})),
+)
 
 
 class LeituraTelemetria(BaseModel):
@@ -59,6 +69,28 @@ class LeituraTelemetria(BaseModel):
     umidade_solo: float | None = Field(None, ge=5.0, le=95.0)
     velocidade_vento: float | None = Field(None, ge=0.0, le=80.0)
     condicao_clima: CondicaoClima | None = None
+
+    @model_validator(mode="after")
+    def _consistencia_entre_campos(self):
+        """
+        Regras de consistencia que dependem so do payload. A que depende do
+        cadastro (temperatura_motor x tem_iot) e checada no servico.
+        """
+        if self.tipo_operacao == "parado" and self.velocidade_kmh > 0:
+            raise ValueError(
+                "tipo_operacao 'parado' exige velocidade_kmh = 0 (Regra 4)"
+            )
+        if self.precipitacao_mm is not None and self.condicao_clima is not None:
+            aceitas = next(
+                c for teto, c in CONDICOES_POR_CHUVA if self.precipitacao_mm <= teto
+            )
+            if self.condicao_clima not in aceitas:
+                raise ValueError(
+                    f"condicao_clima '{self.condicao_clima}' incompativel com "
+                    f"precipitacao_mm={self.precipitacao_mm}: aceitas "
+                    f"{sorted(aceitas)} (Regra 5)"
+                )
+        return self
 
 
 class FatorSHAP(BaseModel):

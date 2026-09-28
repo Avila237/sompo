@@ -14,6 +14,7 @@ from backend.core import config
 from backend.core.exceptions import (
     ClimaIndisponivel,
     EquipamentoNaoEncontrado,
+    LeituraInconsistente,
     OperadorNaoEncontrado,
 )
 from backend.db import repository as repo
@@ -63,6 +64,27 @@ def montar_registro(leitura: dict, equipamento: dict) -> dict:
         }
     )
     return registro
+
+
+def conferir_com_cadastro(leitura: dict, equipamento: dict) -> str | None:
+    """
+    Regras 1 e 10 de docs/data schema.md: so equipamento com IoT mede a
+    temperatura do motor, e implemento nao tem motor proprio. Devolve a
+    mensagem da inconsistencia, ou None se a leitura confere com o cadastro.
+    """
+    if leitura.get("temperatura_motor") is None:
+        return None
+    if not equipamento["tem_iot"]:
+        return (
+            f"temperatura_motor enviada para {equipamento['equipamento_id']}, "
+            "que nao tem IoT (Regra 1)"
+        )
+    if equipamento["tipo_equipamento"] == "implemento":
+        return (
+            f"temperatura_motor enviada para {equipamento['equipamento_id']}, "
+            "um implemento sem motor proprio (Regra 10)"
+        )
+    return None
 
 
 # Colunas cadastrais: vivem em 'equipamentos', nao se repetem em 'avaliacoes'.
@@ -139,6 +161,15 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
             detalhe=f"operador {leitura['operador_id']} nao encontrado",
         )
         raise OperadorNaoEncontrado(leitura["operador_id"])
+
+    inconsistencia = conferir_com_cadastro(leitura, equipamento)
+    if inconsistencia:
+        auditoria.registrar(
+            quem["usuario"], quem["perfil"], "avaliacao", "erro",
+            equipamento_id=leitura["equipamento_id"],
+            detalhe=inconsistencia,
+        )
+        raise LeituraInconsistente(inconsistencia)
 
     leitura, clima_origem = resolver_clima(leitura)
     registro = montar_registro(leitura, equipamento)

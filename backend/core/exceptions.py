@@ -28,6 +28,16 @@ class OperadorNaoEncontrado(SafeFieldError):
         super().__init__(self.mensagem)
 
 
+class LeituraInconsistente(SafeFieldError):
+    """Leitura que contradiz o cadastro do equipamento (ex.: sensor que ele nao tem)."""
+
+    status_code = 422
+
+    def __init__(self, mensagem: str):
+        self.mensagem = mensagem
+        super().__init__(self.mensagem)
+
+
 class ModeloIndisponivel(SafeFieldError):
     status_code = 503
     mensagem = "Modelo preditivo indisponivel. Verifique os artefatos em models/."
