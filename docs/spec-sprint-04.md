@@ -372,14 +372,18 @@ principais decisões técnicas"* · *"até 5 minutos"* · *"não listado"*
 #### R4-16 · Conformidade do repositório
 
 **Origem:** *"o GitHub deve ser privado e compartilhado apenas com o perfil: fiap-tutoria"* ·
-*"não poderá sofrer alterações após a data limite de entrega"* · manifestação na primeira capa caso
-o grupo não deseje concorrer ao prêmio
+*"Caso o grupo decida manter seu repositório público [...] não precisa convidar o seu tutor como
+colaborador, e sim, apenas enviar o link"* · *"não poderá sofrer alterações após a data limite de
+entrega"* · manifestação na primeira capa caso o grupo não deseje concorrer ao prêmio
 
-**Aceite:** repositório privado, com `fiap-tutoria` aceito como colaborador; `main` congelada na
-data limite; decisão sobre concorrer ao prêmio registrada.
+**Decisão (28/09/2026):** o repositório fica **público**, e a entrega vai com o link. O enunciado
+permite essa opção (§5.2), e com ela não há convite ao `fiap-tutoria`.
 
-**Estado:** 🟡 — o repositório é privado. O convite a `fiap-tutoria` da E3 (BRA-297) não tem
-conclusão registrada, e a decisão sobre o prêmio não foi tomada.
+**Aceite:** link do repositório público enviado na entrega; `main` congelada na data limite;
+decisão sobre concorrer ao prêmio registrada.
+
+**Estado:** 🟡 — o repositório é público. Faltam o congelamento da `main`, que depende da data
+limite (ainda desconhecida), e a decisão sobre o prêmio.
 
 **Tasks:** S4-31
 

@@ -97,3 +97,51 @@ class TestLogSemLocalizacaoPrecisa:
         assert "Open-Meteo" in texto
         assert "-12.5453" not in texto and "-55.7115" not in texto
         assert "-12.5" in texto
+
+
+# ---------------------------------------------------------------------------
+# CORS: o navegador precisa ler a resposta e o X-Request-ID, inclusive em erro
+# ---------------------------------------------------------------------------
+
+class TestCorsEmErro:
+    """
+    O dashboard roda em outra origem. Sem Access-Control-Allow-Origin o fetch
+    rejeita a resposta inteira ("Não foi possível falar com a API"); sem
+    Access-Control-Expose-Headers ele não lê o X-Request-ID, e um 503 (que não
+    traz request_id no corpo) chega à tela sem o código para suporte.
+    """
+
+    ORIGEM = config.API_CORS_ORIGINS[0]
+
+    @pytest.fixture
+    def auth_origem(self):
+        from backend.core.security import criar_token
+        token, _ = criar_token("analista", "analista")
+        return {"Authorization": f"Bearer {token}", "Origin": self.ORIGEM}
+
+    def _checa_cors(self, r):
+        assert r.headers.get("access-control-allow-origin") == self.ORIGEM
+        assert "x-request-id" in r.headers.get("access-control-expose-headers", "").lower()
+        assert r.headers.get("x-request-id")
+
+    def test_resposta_normal_expoe_x_request_id(self):
+        r = client.get("/health", headers={"Origin": self.ORIGEM})
+        assert r.status_code == 200
+        self._checa_cors(r)
+
+    def test_503_chega_ao_navegador_com_o_codigo(self, auth_origem):
+        from backend.core.exceptions import BancoIndisponivel
+        from backend.services import consultas
+        with patch.object(consultas, "kpis", side_effect=BancoIndisponivel()):
+            r = client.get("/kpis", headers=auth_origem)
+        assert r.status_code == 503
+        self._checa_cors(r)
+
+    def test_500_nao_tratado_chega_ao_navegador_com_o_codigo(self, auth_origem):
+        """O 500 é montado no middleware de correlação: o CORS tem de envolvê-lo."""
+        from backend.services import consultas
+        with patch.object(consultas, "kpis", side_effect=RuntimeError("falha inesperada")):
+            r = client.get("/kpis", headers=auth_origem)
+        assert r.status_code == 500
+        self._checa_cors(r)
+        assert r.json()["request_id"] == r.headers["x-request-id"]
