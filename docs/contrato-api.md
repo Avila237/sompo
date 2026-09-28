@@ -42,6 +42,8 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 | Operador inexistente (`POST /avaliacoes`) | `404` | `"Operador 'OP-9999' nao encontrado."` |
 | Payload fora de faixa ou de tipo | `422` | lista do Pydantic: campo em `loc`, motivo em `msg` |
 | Campo desconhecido no payload | `422` | lista do Pydantic, `type: "extra_forbidden"` |
+| Campos incoerentes entre si (`parado` com velocidade; clima incompatível com a chuva) | `422` | lista do Pydantic, `type: "value_error"`, com a regra violada em `msg` |
+| Leitura incoerente com o cadastro (`temperatura_motor` sem IoT ou em implemento) | `422` | texto com a regra violada, ex.: `"temperatura_motor enviada para EQ-0042, que nao tem IoT (Regra 1)"` |
 | Open-Meteo fora **e** payload sem clima completo | `502` | mensagem com os campos climáticos ausentes |
 | Qualquer outra falha (modelo ausente, banco fora) | `500` | `"Erro interno. Consulte os logs do servidor."` + campo `request_id` |
 

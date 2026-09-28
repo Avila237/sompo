@@ -428,9 +428,11 @@ tests/
 
 ## 6. Evolução Futura
 
-- As faixas de valor por campo já são validadas na entrada da API por Pydantic
-  (`backend/api/schemas.py`). As regras de consistência entre campos da seção 3 que se aplicam a
-  uma leitura individual (Regras 1, 4 e 5) ainda não são; ver task S4-14
+- A entrada da API valida as faixas de valor por campo e as regras de consistência que se aplicam
+  a uma leitura individual: Regra 1 e Regra 10 (`temperatura_motor` só com IoT e fora de
+  implemento), Regra 4 (`parado` com velocidade zero) e Regra 5 (condição climática compatível com
+  a precipitação). As faixas de velocidade por operação da Regra 4 e as demais regras descrevem a
+  distribuição do dataset simulado e não são impostas a uma leitura
 - Quando dados reais forem coletados (app + IoT), este schema continua a referência para validação
   de entrada; as regras de distribuição (Regras 8–11) deixam de se aplicar a dado real
 - Novas features podem ser adicionadas (ex: dados OBD-II) seguindo o mesmo formato

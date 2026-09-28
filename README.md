@@ -412,7 +412,7 @@ Na Entrega 3 a origem é o simulador de telemetria (`scripts/simulate_telemetry.
 leituras contra a API. O app móvel com ESP32 via BLE permanece como evolução futura — o enunciado
 aceita explicitamente *"por simulação ou por dispositivos reais"*.
 
-#### 2. Validação ✅ (faixas) 🟡 (consistência)
+#### 2. Validação ✅
 
 `backend/api/schemas.py` valida com Pydantic antes de qualquer escrita. Cada campo tem faixa
 declarada — latitude entre −33,75 e −2,50, velocidade entre 0 e 40 km/h, `equipamento_id` no
@@ -424,10 +424,19 @@ Isso vale para os campos que o servidor deriva — `faixa_risco`, `atraso_manute
 `manutencao_atrasada`: enviá-los é erro, não é ignorado. É o que impede um cliente de forjar o
 resultado passando o campo já pronto.
 
-Pendente: as regras de consistência cruzada de [`docs/data schema.md`](docs/data%20schema.md) —
-operação `parado` implica velocidade zero, e `tem_iot=false` implica `temperatura_motor` nula. Não
-há validador cruzado em `schemas.py`; os dois campos de sensor são opcionais, o que cobre
-parcialmente o segundo caso.
+Além das faixas, a leitura precisa ser **consistente entre campos**, pelas regras de
+[`docs/data schema.md`](docs/data%20schema.md), e é recusada com **`422`** sem persistir se não for:
+
+| Regra | Recusa |
+|---|---|
+| 4 | operação `parado` com velocidade maior que zero |
+| 5 | `condicao_clima` incompatível com `precipitacao_mm` (ex.: tempestade sem chuva) |
+| 1 e 10 | `temperatura_motor` para equipamento sem IoT, ou para implemento, que não tem motor próprio |
+
+As duas primeiras dependem só do payload e ficam no schema. A terceira depende do cadastro e é
+checada no serviço, depois de buscar o equipamento. As faixas de velocidade por tipo de operação
+da Regra 4 **não** são impostas: descrevem a distribuição do dataset simulado, e uma colheita a
+9 km/h é plausível no campo.
 
 #### 3. Complemento cadastral ✅
 
@@ -564,7 +573,7 @@ passar por autenticação.
 | Componente | Tecnologia | Estado |
 |---|---|---|
 | Backend / API | FastAPI + Uvicorn (Python 3.13) | ✅ em uso |
-| Validação de entrada | Pydantic | ✅ faixas · 🟡 consistência cruzada |
+| Validação de entrada | Pydantic | ✅ faixas e consistência entre campos |
 | Autenticação | JWT via `python-jose` | ✅ em uso |
 | Modelo de ML | XGBoost | ✅ em uso |
 | Explicabilidade | SHAP | ✅ em uso |
@@ -718,10 +727,8 @@ dado real.
 
 ### O que continua pendente
 
-Uma coisa dentro do escopo: as **regras de consistência cruzada** da validação de entrada —
-operação `parado` implicando velocidade zero e `tem_iot=false` implicando `temperatura_motor` nula.
-As faixas de cada campo são validadas, e campo desconhecido é recusado; o que falta é a validação
-entre campos. Está marcada como 🟡 na seção 5.7, em vez de descrita como pronta.
+As **regras de consistência cruzada** da validação de entrada, pendentes na Entrega 3, foram
+implementadas na Sprint 4 (seção 5.7, salto 2).
 
 Do lado do dashboard, a série temporal do gráfico de evolução do score e o KPI
 `total_operadores`, que ficaram pendentes na revisão da tela, já são expostos por `GET /kpis`.
@@ -750,7 +757,6 @@ documentação do caminho do dado. Estado detalhado na [seção 7](#7-evolução
 
 | Requisito | O que falta |
 |---|---|
-| RF-05 | Regras de consistência cruzada na validação (`parado` ⇒ velocidade 0, `tem_iot=false` ⇒ motor nulo) |
 | RF-14 | Compartilhar o repositório com `fiap-tutoria` |
 
 ### Próximas etapas

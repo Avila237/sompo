@@ -170,6 +170,100 @@ class TestValidacao:
 
 
 # ---------------------------------------------------------------------------
+# 2b. Consistencia entre campos (docs/data schema.md, secao 3)
+# ---------------------------------------------------------------------------
+
+def _post_com_cadastro(auth, leitura, equipamento=EQUIPAMENTO_FALSO):
+    """POST com o cadastro mockado; devolve (resposta, mock do repositorio)."""
+    with patch("backend.services.scoring.repo") as repo_mock,          patch("backend.services.clima.buscar", return_value=CLIMA_FALSO),          patch("backend.services.auditoria.registrar"):
+        repo_mock.buscar_equipamento.return_value = equipamento
+        repo_mock.operador_existe.return_value = True
+        repo_mock.inserir_avaliacao.return_value = 1
+        r = client.post("/avaliacoes", json=leitura, headers=auth)
+    return r, repo_mock
+
+
+class TestConsistenciaCruzada:
+    def test_parado_com_velocidade_e_recusado(self, auth):
+        """Regra 4: operacao parada tem velocidade zero."""
+        leitura = {**LEITURA_VALIDA, "tipo_operacao": "parado", "velocidade_kmh": 12.0}
+        r, repo_mock = _post_com_cadastro(auth, leitura)
+        assert r.status_code == 422
+        assert "parado" in r.text
+        repo_mock.inserir_avaliacao.assert_not_called()
+
+    def test_parado_com_velocidade_zero_e_aceito(self, auth):
+        leitura = {**LEITURA_VALIDA, "tipo_operacao": "parado", "velocidade_kmh": 0.0}
+        r, _ = _post_com_cadastro(auth, leitura)
+        assert r.status_code == 201, r.text
+
+    @pytest.mark.parametrize(
+        "precipitacao,condicao",
+        [
+            (0.0, "tempestade"),    # tempestade sem chuva
+            (0.0, "chuvoso"),
+            (2.1, "ensolarado"),    # logo acima do teto de 2 mm
+            (35.0, "nublado"),      # 20-50 mm so admite chuvoso
+            (35.0, "tempestade"),
+            (80.0, "ensolarado"),
+        ],
+    )
+    def test_clima_incompativel_com_a_chuva_e_recusado(self, auth, precipitacao, condicao):
+        """Regra 5: condicao_clima acompanha a precipitacao acumulada."""
+        leitura = {
+            **LEITURA_VALIDA, **CLIMA_FALSO,
+            "precipitacao_mm": precipitacao, "condicao_clima": condicao,
+        }
+        r, repo_mock = _post_com_cadastro(auth, leitura)
+        assert r.status_code == 422, f"{precipitacao} mm + {condicao} deveria ser recusado"
+        assert "condicao_clima" in r.text
+        repo_mock.inserir_avaliacao.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "precipitacao,condicao",
+        [
+            (0.0, "ensolarado"), (2.0, "nublado"),        # teto inclusivo de cada faixa
+            (2.1, "nublado"), (20.0, "chuvoso"),
+            (20.1, "chuvoso"), (50.0, "chuvoso"),
+            (50.1, "tempestade"), (120.0, "chuvoso"),
+        ],
+    )
+    def test_clima_compativel_com_a_chuva_e_aceito(self, auth, precipitacao, condicao):
+        leitura = {
+            **LEITURA_VALIDA, **CLIMA_FALSO,
+            "precipitacao_mm": precipitacao, "condicao_clima": condicao,
+        }
+        r, _ = _post_com_cadastro(auth, leitura)
+        assert r.status_code == 201, r.text
+
+    def test_so_um_dos_dois_campos_de_clima_nao_e_checado(self, auth):
+        """Sem o par completo nao ha o que cruzar: a Open-Meteo completa o resto."""
+        leitura = {**LEITURA_VALIDA, "condicao_clima": "tempestade"}
+        r, _ = _post_com_cadastro(auth, leitura)
+        assert r.status_code == 201, r.text
+
+    @pytest.mark.parametrize(
+        "cadastro",
+        [
+            {**EQUIPAMENTO_FALSO, "tem_iot": False},
+            {**EQUIPAMENTO_FALSO, "tipo_equipamento": "implemento"},
+        ],
+        ids=["sem_iot", "implemento"],
+    )
+    def test_temperatura_motor_sem_sensor_e_recusada(self, auth, cadastro):
+        """Regras 1 e 10: so equipamento com IoT e motor proprio mede temperatura."""
+        r, repo_mock = _post_com_cadastro(auth, LEITURA_VALIDA, equipamento=cadastro)
+        assert r.status_code == 422
+        assert "temperatura_motor" in r.json()["detail"]
+        repo_mock.inserir_avaliacao.assert_not_called()
+
+    def test_equipamento_sem_iot_sem_temperatura_motor_e_aceito(self, auth):
+        leitura = {k: v for k, v in LEITURA_VALIDA.items() if k != "temperatura_motor"}
+        r, _ = _post_com_cadastro(auth, leitura, equipamento={**EQUIPAMENTO_FALSO, "tem_iot": False})
+        assert r.status_code == 201, r.text
+
+
+# ---------------------------------------------------------------------------
 # 3. Scoring end-to-end (dependencias externas mockadas)
 # ---------------------------------------------------------------------------
 
