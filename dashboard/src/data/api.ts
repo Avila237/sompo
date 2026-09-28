@@ -8,7 +8,7 @@
  */
 
 import { apiGet, apiPostPublico } from '../lib/apiClient'
-import { setSessao, limparSessao } from '../lib/auth'
+import { setSessao, limparSessao, assinarSessao } from '../lib/auth'
 import type { Equipment, Region, ToneKey } from '../types'
 
 /* ── Autenticacao ─────────────────────────────────────────── */
@@ -111,10 +111,26 @@ function toView(e: EquipamentoItemResp): EquipamentoView {
  * Busca os 200 equipamentos de uma vez. Filtro, busca e ordenacao seguem no
  * cliente: a lista e pequena, a interacao fica instantanea e a busca por
  * operador (que o parametro `busca` da API nao cobre) continua funcionando.
+ *
+ * App (contador do menu), Visao geral e Ranking pedem a mesma lista; a promessa
+ * fica guardada por EQUIP_TTL_MS para as tres telas dividirem uma requisicao.
+ * Falha nao fica em cache, e troca de sessao limpa tudo.
  */
-export async function loadEquipamentos(): Promise<EquipamentoView[]> {
-  const r = await apiGet<{ total: number; itens: EquipamentoItemResp[] }>('/equipamentos')
-  return r.itens.map(toView)
+const EQUIP_TTL_MS = 60_000
+let equipCache: { promessa: Promise<EquipamentoView[]>; em: number } | null = null
+
+assinarSessao(() => { equipCache = null })
+
+export function loadEquipamentos(opts: { recarregar?: boolean } = {}): Promise<EquipamentoView[]> {
+  if (!opts.recarregar && equipCache && Date.now() - equipCache.em < EQUIP_TTL_MS) {
+    return equipCache.promessa
+  }
+  const promessa = apiGet<{ total: number; itens: EquipamentoItemResp[] }>('/equipamentos')
+    .then((r) => r.itens.map(toView))
+  const entrada = { promessa, em: Date.now() }
+  equipCache = entrada
+  promessa.catch(() => { if (equipCache === entrada) equipCache = null })
+  return promessa
 }
 
 /* ── GET /kpis + GET /alertas ─────────────────────────────── */
