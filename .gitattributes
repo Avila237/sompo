@@ -1,0 +1,12 @@
+# Fim de linha (S4-09): o repositório roda em macOS, Linux e Windows.
+#
+# Texto entra no Git sempre com LF. No checkout, cada máquina recebe o fim de
+# linha nativo (CRLF no Windows). Com isso, um arquivo versionado regravado no
+# Windows com CRLF (ex.: models/features.json, que o train.py escreve em modo
+# texto) não aparece como modificado, independentemente do core.autocrlf de
+# cada máquina, e o passo "Arvore limpa" da CI não falha por fim de linha.
+* text=auto
+
+# Scripts de shell ficam com LF em todo checkout: com CRLF, o bash do Git Bash
+# quebra na primeira linha ($'\r': command not found).
+*.sh text eol=lf
