@@ -17,8 +17,15 @@ export interface Recomendacao {
 
 export const ROTULO_PUBLICO: Record<Publico, string> = { operador: 'Operador', gestor: 'Gestor', tecnico: 'Técnico' }
 
-/** Regras de fallback: nenhuma regra específica disparou. */
-export const IDS_FALLBACK = new Set(['fator_dominante', 'monitorar'])
+/**
+ * Regras de fallback (nenhuma regra específica disparou), cada uma com a nota
+ * que explica de onde veio a ação. `monitorar` existe justamente porque nenhum
+ * fator elevou o score: não pode reusar a nota do `fator_dominante`.
+ */
+export const NOTA_FALLBACK: Record<string, string> = {
+  fator_dominante: 'Nenhuma regra específica disparou; a ação vem do fator que mais elevou o score.',
+  monitorar: 'Nenhuma regra específica disparou e nenhum fator isolado elevou o score; a recomendação é acompanhar.',
+}
 
 /**
  * Deixa o critério legível para o usuário final: troca o nome técnico da coluna
@@ -32,7 +39,9 @@ export function criterioLegivel(criterio: string): string {
     .replace(/\b([a-z_]+)=([^\s),]+)/g, (tudo, feature: string, valor: string) => {
       const rotulo = featureLabel(feature)
       if (rotulo === feature) return tudo // feature desconhecida: não inventa rótulo
-      const v = valor === 'true' ? 'sim' : valor === 'false' ? 'não' : valor.replace(/(\d)\.(\d)/g, '$1,$2')
+      // sem distinção de caixa: o backend chegou a mandar True/False no fator_dominante
+      const bool = valor.toLowerCase()
+      const v = bool === 'true' ? 'sim' : bool === 'false' ? 'não' : valor.replace(/(\d)\.(\d)/g, '$1,$2')
       return `${rotulo} = ${v}`
     })
     .replace(/(\d)\.(\d)/g, '$1,$2')
