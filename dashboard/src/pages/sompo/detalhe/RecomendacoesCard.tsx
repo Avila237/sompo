@@ -4,7 +4,7 @@ import { WTONE } from '../../../lib/risco'
 import type { ToneKey } from '../../../types'
 import {
   criterioLegivel,
-  IDS_FALLBACK,
+  NOTA_FALLBACK,
   ROTULO_PUBLICO,
   type Publico,
   type Recomendacao,
@@ -70,7 +70,7 @@ export function RecomendacoesCard({ recomendacoes }: { recomendacoes: Recomendac
       {visiveis.map((r, i) => {
         const tom = WTONE[TOM_PUBLICO[r.publico]]
         return (
-          <div key={`${r.id}-${i}`} style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', gap: 16, padding: '14px 18px', borderTop: i > 0 ? '1px solid var(--line)' : 'none' }}>
+          <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', gap: 16, padding: '14px 18px', borderTop: i > 0 ? '1px solid var(--line)' : 'none' }}>
             <div>
               <span style={{
                 display: 'inline-flex', padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
@@ -84,10 +84,8 @@ export function RecomendacoesCard({ recomendacoes }: { recomendacoes: Recomendac
               <div style={{ fontSize: 12, color: 'var(--fg-dim)', lineHeight: 1.5 }}>
                 <span style={{ color: 'var(--fg-mute)', fontWeight: 600 }}>Por quê: </span>{criterioLegivel(r.criterio)}
               </div>
-              {IDS_FALLBACK.has(r.id) && (
-                <div style={{ fontSize: 11, color: 'var(--fg-mute)' }}>
-                  Nenhuma regra específica disparou; a ação vem do fator que mais elevou o score.
-                </div>
+              {NOTA_FALLBACK[r.id] && (
+                <div style={{ fontSize: 11, color: 'var(--fg-mute)' }}>{NOTA_FALLBACK[r.id]}</div>
               )}
               <div className="mono" style={{ fontSize: 10, color: 'var(--fg-mute)', overflowWrap: 'anywhere' }}>
                 regra {r.id} · {r.criterio}
