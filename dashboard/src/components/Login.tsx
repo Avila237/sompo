@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { login } from '../data/api'
 import { ApiError } from '../lib/apiClient'
+import { motivoFimSessao } from '../lib/auth'
 import { SompoMark } from './shared'
 
 /**
@@ -13,7 +14,10 @@ import { SompoMark } from './shared'
 export default function Login({ onEntrar }: { onEntrar: () => void }) {
   const [usuario, setUsuario] = useState('')
   const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState<string | null>(null)
+  // Voltar ao login por token recusado sem dizer nada parecia bug; explica o motivo
+  const [erro, setErro] = useState<string | null>(() =>
+    motivoFimSessao() === 'expirada' ? 'Sua sessão expirou. Entre novamente.' : null,
+  )
   const [enviando, setEnviando] = useState(false)
 
   async function submeter(e: FormEvent) {
