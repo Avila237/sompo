@@ -312,6 +312,57 @@ Cobre as três visões que o enunciado exige: por equipamento (`/equipamentos`),
   há nada entre as duas pontas. Por isso quem exibe a série deve rotular o eixo com `dia`, não com
   "N dias atrás".
 
+## GET /tendencias
+
+Série de score por grupo, num dos três eixos que o enunciado da Sprint 4 pede: *"tendências de
+risco por equipamento, região ou tipo de operação"*. Alimenta a tela Relatórios. Contrato proposto
+pelo front (PR #14) e implementado sem mudança de shape.
+
+| Parâmetro | Tipo | Default | Regra |
+|---|---|---|---|
+| `eixo` | `equipamento` \| `regiao` \| `operacao` | obrigatório | outro valor → `422` |
+| `dias` | int | `30` | 1–365. Janela em **dias com dados**, mesma semântica de `tendencia` em `/kpis` |
+| `limite` | int | `5` | 1–20. Quantos grupos devolver |
+| `chave` | string | — | Opcional. Restringe a um grupo e ignora `limite`. Para `regiao`, é o próprio rótulo da célula (`"24°S 51°O"`) |
+
+```json
+{
+  "eixo": "operacao",
+  "dias": 30,
+  "janela": { "inicio": "2025-11-02", "fim": "2026-09-21", "dias_com_dados": 30 },
+  "series": [
+    {
+      "chave": "transporte",
+      "rotulo": "transporte",
+      "score_medio": 52.78,
+      "avaliacoes": 312,
+      "pontos": [
+        { "dia": "2025-11-02", "score_medio": 49.10, "avaliacoes": 9 },
+        "..."
+      ]
+    },
+    "..."
+  ]
+}
+```
+
+- **Janela:** os últimos `dias` dias com pelo menos uma avaliação **na base inteira**, não por grupo,
+  para todas as séries dividirem o mesmo eixo X. `dias_com_dados` é menor que `dias` quando a base
+  tem menos dias.
+- **Lacuna, não zero:** um grupo só tem ponto nos dias em que ele tem avaliação. Dia sem dado não
+  vira `0` nem é interpolado.
+- **Agrupamento:**
+  - `equipamento`: por `equipamento_id`.
+  - `operacao`: por `tipo_operacao`; avaliação sem o campo entra como `"desconhecida"`.
+  - `regiao`: célula de 3° pela posição **da própria avaliação**. Difere de `por_regiao` do `/kpis`,
+    que usa a última posição do equipamento, mas o rótulo da célula é calculado pela mesma função
+    nas duas rotas. Avaliação sem coordenada fica de fora.
+- **Seleção:** os `limite` grupos de maior `score_medio` na janela (desempate: mais avaliações). Com
+  `chave`, só aquele grupo. `score_medio` e `avaliacoes` do grupo são calculados sobre a janela.
+- **Ordem:** `series` por `score_medio` desc; `pontos` por `dia` asc.
+- **Sem dados:** `series: []` com `200`, inclusive com `chave` inexistente.
+- **Exportação CSV:** sem rota própria; o front monta o arquivo a partir desta resposta.
+
 ## POST /avaliacoes
 
 Ingestão de uma leitura de campo. O cliente envia **apenas o que observa**; o servidor busca o

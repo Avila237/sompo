@@ -15,6 +15,15 @@ LAT_MIN, LAT_MAX = -33.75, -2.50
 LON_MIN, LON_MAX = -73.99, -34.79
 
 
+def _celula(latitude: float, longitude: float, graus: int = 3) -> tuple[int, int]:
+    """Canto da celula geografica de `graus` graus que contem a coordenada."""
+    return round(latitude / graus) * graus, round(longitude / graus) * graus
+
+
+def _rotulo_celula(lat: int, lon: int) -> str:
+    return f"{abs(lat):.0f}°S {abs(lon):.0f}°O"
+
+
 def _faixa(score: float) -> str:
     if score <= 33:
         return "baixo"
@@ -179,10 +188,7 @@ def agregado_por_regiao(celula_graus: int = 3, limite: int = 14) -> list[dict]:
     for e in listar_equipamentos():
         if e["latitude"] is None or e["longitude"] is None:
             continue
-        chave = (
-            round(e["latitude"] / celula_graus) * celula_graus,
-            round(e["longitude"] / celula_graus) * celula_graus,
-        )
+        chave = _celula(e["latitude"], e["longitude"], celula_graus)
         celulas[chave]["soma"] += e["risco_score"]
         celulas[chave]["n"] += 1
 
@@ -190,7 +196,7 @@ def agregado_por_regiao(celula_graus: int = 3, limite: int = 14) -> list[dict]:
     for (lat, lon), v in celulas.items():
         saida.append(
             {
-                "nome": f"{abs(lat):.0f}°S {abs(lon):.0f}°O",
+                "nome": _rotulo_celula(lat, lon),
                 "latitude": lat,
                 "longitude": lon,
                 "x": max(0.04, min(0.96, (lon - LON_MIN) / (LON_MAX - LON_MIN))),
@@ -268,3 +274,80 @@ def tendencia(dias: int = 30) -> list[dict]:
         }
         for dia in ultimos
     ]
+
+
+EIXOS_TENDENCIA = ("equipamento", "regiao", "operacao")
+
+
+def _chave_do_eixo(avaliacao: dict, eixo: str) -> str | None:
+    """Grupo da avaliacao no eixo pedido; None tira a avaliacao da serie."""
+    if eixo == "equipamento":
+        return avaliacao["equipamento_id"]
+    if eixo == "operacao":
+        return avaliacao.get("tipo_operacao") or "desconhecida"
+    # regiao: a posicao da propria avaliacao, nao a ultima do equipamento
+    # (como em agregado_por_regiao): cada ponto e a regiao onde ela aconteceu.
+    if avaliacao.get("latitude") is None or avaliacao.get("longitude") is None:
+        return None
+    return _rotulo_celula(*_celula(float(avaliacao["latitude"]), float(avaliacao["longitude"])))
+
+
+def tendencias(eixo: str, dias: int = 30, limite: int = 5, chave: str | None = None) -> dict:
+    """
+    Serie de score medio diario por grupo, num dos tres eixos.
+
+    Contrato em docs/contrato-api.md (GET /tendencias). A janela sao os ultimos
+    `dias` dias COM DADOS na base inteira, como em tendencia(): todas as series
+    dividem o mesmo eixo X. Dia sem avaliacao do grupo nao vira ponto (lacuna,
+    nao zero). Entram os `limite` grupos de maior score medio na janela, ou so
+    o grupo `chave`.
+    """
+    avals = repo.listar_avaliacoes_resumo()
+    dias_da_base = sorted({a["timestamp"][:10] for a in avals})
+    janela = set(dias_da_base[-dias:])
+
+    # grupo -> dia -> scores
+    por_grupo: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for a in avals:
+        dia = a["timestamp"][:10]
+        if dia not in janela:
+            continue
+        grupo = _chave_do_eixo(a, eixo)
+        if grupo is None or (chave is not None and grupo != chave):
+            continue
+        por_grupo[grupo][dia].append(float(a["risco_score"]))
+
+    series = []
+    for grupo, por_dia in por_grupo.items():
+        todos = [v for scores in por_dia.values() for v in scores]
+        series.append(
+            {
+                "chave": grupo,
+                "rotulo": grupo,
+                "score_medio": round(sum(todos) / len(todos), 2),
+                "avaliacoes": len(todos),
+                "pontos": [
+                    {
+                        "dia": dia,
+                        "score_medio": round(sum(por_dia[dia]) / len(por_dia[dia]), 2),
+                        "avaliacoes": len(por_dia[dia]),
+                    }
+                    for dia in sorted(por_dia)
+                ],
+            }
+        )
+    series.sort(key=lambda s: (s["score_medio"], s["avaliacoes"]), reverse=True)
+    if chave is None:
+        series = series[:limite]
+
+    ordenados = sorted(janela)
+    return {
+        "eixo": eixo,
+        "dias": dias,
+        "janela": {
+            "inicio": ordenados[0] if ordenados else None,
+            "fim": ordenados[-1] if ordenados else None,
+            "dias_com_dados": len(ordenados),
+        },
+        "series": series,
+    }

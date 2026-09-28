@@ -1,5 +1,7 @@
 """Rotas de leitura consumidas pelo dashboard (RF-09)."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 
 from backend.api.deps import usuario_atual
@@ -60,3 +62,14 @@ def obter_kpis(
         "por_regiao": consultas.agregado_por_regiao(),
         "tendencia": consultas.tendencia(dias),
     }
+
+
+@router.get("/tendencias")
+def obter_tendencias(
+    eixo: Literal["equipamento", "regiao", "operacao"],
+    dias: int = Query(30, ge=1, le=365, description="janela em dias com dados"),
+    limite: int = Query(5, ge=1, le=20, description="quantos grupos devolver"),
+    chave: str | None = Query(None, min_length=1, max_length=60),
+    usuario: dict = Depends(usuario_atual),
+) -> dict:
+    return consultas.tendencias(eixo=eixo, dias=dias, limite=limite, chave=chave)
