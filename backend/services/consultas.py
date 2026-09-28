@@ -348,6 +348,8 @@ def tendencias(eixo: str, dias: int = 30, limite: int = 5, chave: str | None = N
             "inicio": ordenados[0] if ordenados else None,
             "fim": ordenados[-1] if ordenados else None,
             "dias_com_dados": len(ordenados),
+            # eixo X comum: nem toda data da janela aparece nos pontos das series devolvidas
+            "datas": ordenados,
         },
         "series": series,
     }

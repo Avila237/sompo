@@ -62,7 +62,12 @@ def _serie(resp, chave):
 class TestJanela:
     def test_janela_e_dos_ultimos_dias_com_dados_da_base_inteira(self, base):
         r = consultas.tendencias("equipamento", dias=2, limite=10)
-        assert r["janela"] == {"inicio": "2026-01-03", "fim": "2026-01-04", "dias_com_dados": 2}
+        assert r["janela"] == {
+            "inicio": "2026-01-03",
+            "fim": "2026-01-04",
+            "dias_com_dados": 2,
+            "datas": ["2026-01-03", "2026-01-04"],
+        }
         # EQ-0001 so tem o dia 4 dentro da janela
         assert [p["dia"] for p in _serie(r, "EQ-0001")["pontos"]] == ["2026-01-04"]
 
@@ -70,6 +75,12 @@ class TestJanela:
         r = consultas.tendencias("equipamento", dias=30, limite=10)
         assert r["janela"]["dias_com_dados"] == 4
         assert r["dias"] == 30
+
+    def test_datas_trazem_a_janela_inteira_mesmo_sem_ponto_das_series(self, base):
+        """O front posiciona o eixo X por `datas`: dias sem ponto do grupo filtrado continuam la."""
+        r = consultas.tendencias("equipamento", dias=30, chave="EQ-0003")
+        assert [p["dia"] for p in r["series"][0]["pontos"]] == ["2026-01-03"]
+        assert r["janela"]["datas"] == ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"]
 
     def test_score_do_grupo_e_calculado_so_na_janela(self, base):
         r = consultas.tendencias("equipamento", dias=2, limite=10)
@@ -142,6 +153,7 @@ class TestSelecao:
             r = consultas.tendencias("equipamento", dias=30, limite=5)
         assert r["series"] == []
         assert r["janela"]["dias_com_dados"] == 0
+        assert r["janela"]["datas"] == []
 
 
 class TestRota:
