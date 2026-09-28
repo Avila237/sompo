@@ -10,8 +10,9 @@
  */
 function celula(v: string | number, separador: string): string {
   // número com vírgula decimal: o Excel pt-BR lê "52.78" como texto
+  // o prefixo anti-injeção vale só para texto: número negativo ("-3,5") seguiria número no Excel
   let s = typeof v === 'number' ? String(v).replace('.', ',') : v
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`
   return s.includes(separador) || /["\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

@@ -88,7 +88,7 @@ export default function SompoOverview({
     <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <SectionHeader
         title="Visão geral da carteira"
-        sub={`Safra 2025 · ${kpis.totalEquip} equipamentos · ${kpis.totalAval.toLocaleString('pt-BR')} avaliações`}
+        sub={`${kpis.totalEquip} equipamentos · ${kpis.totalAval.toLocaleString('pt-BR')} avaliações`}
         actions={
           <>
             <Button kind="ghost" onClick={() => setShowFilters((v) => !v)}>{WIco.filter()} Filtros</Button>
