@@ -48,6 +48,9 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    # Sem isto o navegador esconde o X-Request-ID do front, e um erro sem
+    # request_id no corpo (503, 4xx) chega a tela sem o codigo para suporte.
+    expose_headers=["X-Request-ID"],
 )
 
 
