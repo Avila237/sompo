@@ -268,3 +268,95 @@ def tendencia(dias: int = 30) -> list[dict]:
         }
         for dia in ultimos
     ]
+
+
+EIXOS_TENDENCIA = ("equipamento", "regiao", "operacao")
+
+
+def _grupo_da_avaliacao(a: dict, eixo: str, celula_graus: int = 3) -> tuple[str, str] | None:
+    """(chave, rotulo) do grupo da avaliacao no eixo; None se ela nao entra no eixo."""
+    if eixo == "equipamento":
+        return a["equipamento_id"], a["equipamento_id"]
+    if eixo == "operacao":
+        op = a.get("tipo_operacao") or "desconhecida"
+        return op, op
+    # regiao: posicao DA AVALIACAO, nao a ultima do equipamento (como em
+    # agregado_por_regiao) — numa serie temporal cada ponto precisa do lugar
+    # onde a avaliacao aconteceu.
+    lat, lon = a.get("latitude"), a.get("longitude")
+    if lat is None or lon is None:
+        return None
+    lat_c = round(float(lat) / celula_graus) * celula_graus
+    lon_c = round(float(lon) / celula_graus) * celula_graus
+    rotulo = f"{abs(lat_c):.0f}°S {abs(lon_c):.0f}°O"
+    return rotulo, rotulo
+
+
+def tendencias(eixo: str, dias: int = 30, limite: int = 5, chave: str | None = None) -> dict:
+    """
+    Serie diaria de score por grupo num dos tres eixos (BRA-459 · S4-26).
+
+    - Janela: os ultimos `dias` dias com avaliacao NA BASE INTEIRA, mesma
+      semantica de `tendencia()`, para todas as series dividirem o eixo X.
+    - Grupo sem avaliacao num dia nao ganha ponto: lacuna, nunca zero.
+    - Entram os `limite` grupos de maior score medio na janela (desempate:
+      mais avaliacoes). Com `chave`, so aquele grupo; chave que nao casa
+      devolve series vazias.
+    """
+    if eixo not in EIXOS_TENDENCIA:
+        raise ValueError(f"eixo invalido: {eixo!r}")
+
+    avals = repo.listar_avaliacoes_resumo()
+    janela = sorted({a["timestamp"][:10] for a in avals})[-dias:]
+    resposta = {
+        "eixo": eixo,
+        "dias": dias,
+        "janela": {
+            "inicio": janela[0] if janela else None,
+            "fim": janela[-1] if janela else None,
+            "dias_com_dados": len(janela),
+        },
+        "series": [],
+    }
+    if not janela:
+        return resposta
+
+    inicio = janela[0]
+    # grupo -> dia -> scores
+    grupos: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    rotulos: dict[str, str] = {}
+    for a in avals:
+        dia = a["timestamp"][:10]
+        if dia < inicio:
+            continue
+        g = _grupo_da_avaliacao(a, eixo)
+        if g is None:
+            continue
+        rotulos[g[0]] = g[1]
+        grupos[g[0]][dia].append(float(a["risco_score"]))
+
+    series = []
+    for g, por_dia in grupos.items():
+        if chave is not None and g != chave:
+            continue
+        todos = [s for scores in por_dia.values() for s in scores]
+        series.append(
+            {
+                "chave": g,
+                "rotulo": rotulos[g],
+                "score_medio": round(sum(todos) / len(todos), 2),
+                "avaliacoes": len(todos),
+                "pontos": [
+                    {
+                        "dia": dia,
+                        "score_medio": round(sum(por_dia[dia]) / len(por_dia[dia]), 2),
+                        "avaliacoes": len(por_dia[dia]),
+                    }
+                    for dia in sorted(por_dia)
+                ],
+            }
+        )
+
+    series.sort(key=lambda s: (s["score_medio"], s["avaliacoes"]), reverse=True)
+    resposta["series"] = series if chave is not None else series[:limite]
+    return resposta
