@@ -9,6 +9,7 @@
 
 import { apiGet, apiPostPublico } from '../lib/apiClient'
 import { setSessao, limparSessao, assinarSessao } from '../lib/auth'
+import type { Recomendacao } from './recomendacoes'
 import type { Region, ToneKey } from '../types'
 
 /* ── Autenticacao ─────────────────────────────────────────── */
@@ -359,6 +360,7 @@ export interface EquipamentoDetail {
   equipamento: EquipamentoRow
   ultima: AvaliacaoFull | null
   predicao: PredicaoRow | null
+  recomendacoes: Recomendacao[] // da ultima avaliacao; vazia sem avaliacao
   historico: HistPoint[]
 }
 
@@ -366,6 +368,7 @@ interface DetalheResp {
   equipamento: EquipamentoRow
   ultima_avaliacao: AvaliacaoFull | null
   predicao: PredicaoRow | null
+  recomendacoes?: Recomendacao[]
   historico: Array<{ timestamp: string; risco_score: number }>
 }
 
@@ -375,6 +378,7 @@ export async function loadEquipamentoDetail(id: string): Promise<EquipamentoDeta
     equipamento: r.equipamento,
     ultima: r.ultima_avaliacao,
     predicao: r.predicao,
+    recomendacoes: r.recomendacoes ?? [], // ausente em API anterior ao #26
     historico: (r.historico ?? []).map((h) => ({ ts: h.timestamp, score: h.risco_score })),
   }
 }

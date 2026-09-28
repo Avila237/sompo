@@ -7,6 +7,7 @@ import { useCarga } from '../../lib/useCarga'
 import { fmtData } from '../../lib/formato'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
+import { RecomendacoesCard } from './detalhe/RecomendacoesCard'
 
 /* ── Diverging SHAP bar (positivo = aumenta risco) ────────── */
 
@@ -85,7 +86,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
     )
   }
 
-  const { equipamento, ultima, predicao, historico } = detail
+  const { equipamento, ultima, predicao, recomendacoes, historico } = detail
   // Sem avaliação não há score: exibir 0/"baixo" transformaria ausência de dado em risco baixo
   const score = ultima ? ultima.risco_score : null
   // Faixa gravada pela API, não recalculada do número exibido (contrato, armadilha 4)
@@ -152,6 +153,9 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
           </Button></ComingSoon>
         </div>
       </div>
+
+      {/* O que fazer vem antes da decomposição: sem avaliação, não há o que recomendar */}
+      {ultima && <RecomendacoesCard recomendacoes={recomendacoes} />}
 
       {/* Two-column grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14, alignItems: 'start' }}>
