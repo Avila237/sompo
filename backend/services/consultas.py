@@ -16,6 +16,13 @@ from backend.services.recomendacoes import recomendar
 LAT_MIN, LAT_MAX = -33.75, -2.50
 LON_MIN, LON_MAX = -73.99, -34.79
 
+# Colunas da idempotencia (S4-12): servem ao servidor, nao a quem le.
+CAMPOS_INTERNOS = ("leitura_id", "payload_hash")
+
+# LGPD, minimizacao: da avaliacao de outro operador, o operador nao recebe
+# quem operou nem onde. Ver minimizar_para_operador().
+CAMPOS_DE_OUTRO_OPERADOR = ("operador_id", "latitude", "longitude")
+
 
 def _celula(latitude: float, longitude: float, graus: int = 3) -> tuple[int, int]:
     """Canto da celula geografica de `graus` graus que contem a coordenada."""
@@ -109,6 +116,8 @@ def detalhe_equipamento(equipamento_id: str) -> dict | None:
         return None
 
     ultima = repo.ultima_avaliacao(equipamento_id)
+    if ultima is not None:
+        ultima = {k: v for k, v in ultima.items() if k not in CAMPOS_INTERNOS}
     predicao = repo.predicao_de(ultima["avaliacao_id"]) if ultima else None
     if predicao is not None:
         predicao["top_fatores_shap"] = normalizar_fatores_shap(
@@ -122,23 +131,69 @@ def detalhe_equipamento(equipamento_id: str) -> dict | None:
     ]
     historico.sort(key=lambda h: h["timestamp"])
 
-    recomendacoes = []
-    if ultima is not None:
-        # A avaliacao nao repete o cadastral (idade, historico de sinistros):
-        # as regras leem a leitura somada ao cadastro do equipamento.
-        recomendacoes = recomendar(
-            {**equipamento, **ultima},
-            ultima["faixa_risco"],
-            predicao["top_fatores_shap"] if predicao else [],
-        )
-
     return {
         "equipamento": equipamento,
         "ultima_avaliacao": ultima,
         "predicao": predicao,
-        "recomendacoes": recomendacoes,
+        "recomendacoes": _recomendacoes(equipamento, ultima, predicao),
         "historico": historico,
     }
+
+
+def _recomendacoes(equipamento: dict, ultima: dict | None, predicao: dict | None) -> list[dict]:
+    if ultima is None:
+        return []
+    # A avaliacao nao repete o cadastral (idade, historico de sinistros):
+    # as regras leem a leitura somada ao cadastro do equipamento.
+    return recomendar(
+        {**equipamento, **ultima},
+        ultima["faixa_risco"],
+        predicao["top_fatores_shap"] if predicao else [],
+    )
+
+
+def _sem_quem_nem_onde(registro: dict) -> dict:
+    """Copia com os campos do operador em null. Nao cria campo que o registro nao tem."""
+    return {k: None if k in CAMPOS_DE_OUTRO_OPERADOR else v for k, v in registro.items()}
+
+
+def minimizar_para_operador(resposta: dict, operador_id: str) -> dict:
+    """
+    LGPD, minimizacao (S4-18): o operador ve os equipamentos que ja operou, mas
+    a avaliacao de um deles pode ser de outro operador. Dessa, operador_id,
+    latitude e longitude saem null; as do proprio operador saem intactas.
+
+    Ponto unico da regra, chamado na borda das rotas de leitura so para o
+    perfil operador. Cobre os dois formatos: lista em `itens` (GET
+    /equipamentos, GET /alertas) e o detalhe (GET /equipamentos/{id}).
+    Devolve copia; a resposta recebida nao e alterada.
+    """
+    saida = dict(resposta)
+    if "itens" in saida:
+        saida["itens"] = [
+            _sem_quem_nem_onde(r) if r.get("operador_id") != operador_id else r
+            for r in saida["itens"]
+        ]
+
+    ultima = saida.get("ultima_avaliacao")
+    if ultima is None or ultima.get("operador_id") == operador_id:
+        return saida
+    saida["ultima_avaliacao"] = _sem_quem_nem_onde(ultima)
+    predicao = saida.get("predicao")
+    if predicao is not None:
+        # latitude e longitude sao features: o 'valor' do fator SHAP repetiria a posicao.
+        saida["predicao"] = {
+            **predicao,
+            "top_fatores_shap": [
+                {**f, "valor": None} if f["feature"] in CAMPOS_DE_OUTRO_OPERADOR else f
+                for f in predicao["top_fatores_shap"]
+            ],
+        }
+    # Refeitas sobre a avaliacao mascarada: o criterio do fator dominante citaria a posicao.
+    saida["recomendacoes"] = _recomendacoes(
+        saida["equipamento"], saida["ultima_avaliacao"], saida["predicao"]
+    )
+    return saida
 
 
 def kpis() -> dict:

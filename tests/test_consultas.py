@@ -156,3 +156,24 @@ class TestManutencaoNaLista:
             repository._cache.pop("avaliacoes", None)
         for coluna in ("manutencao_atrasada", "atraso_manutencao_pct", "ultima_manutencao_dias"):
             assert coluna in capturado["colunas"]
+
+
+class TestCamposInternosForaDoDetalhe:
+    """leitura_id e payload_hash sao da idempotencia (S4-12), nao de quem le."""
+
+    def test_detalhe_nao_devolve_leitura_id_nem_payload_hash(self):
+        ultima = {
+            **AVALIACAO_NA_FRONTEIRA,
+            "leitura_id": "11111111-1111-1111-1111-111111111111",
+            "payload_hash": "a" * 64,
+        }
+        with patch.object(consultas.repo, "buscar_equipamento", return_value=EQUIPAMENTO), \
+             patch.object(consultas.repo, "ultima_avaliacao", return_value=ultima), \
+             patch.object(consultas.repo, "predicao_de", return_value=None), \
+             patch.object(consultas.repo, "listar_avaliacoes_resumo", return_value=[ultima]):
+            detalhe = consultas.detalhe_equipamento("EQ-0001")
+        assert "leitura_id" not in detalhe["ultima_avaliacao"]
+        assert "payload_hash" not in detalhe["ultima_avaliacao"]
+        # O resto da linha segue completo.
+        assert detalhe["ultima_avaliacao"] == AVALIACAO_NA_FRONTEIRA
+        assert all(set(h) == {"timestamp", "risco_score"} for h in detalhe["historico"])

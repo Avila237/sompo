@@ -231,7 +231,7 @@ interface KpisResp {
 interface AlertaResp {
   avaliacao_id: number
   equipamento_id: string
-  operador_id: string
+  operador_id: string | null // null para o operador em avaliacao de outro operador (LGPD)
   risco_score: number
   faixa_risco: string
   tipo_operacao: string | null // contrato: null se a avaliacao nao tiver o campo
@@ -343,15 +343,15 @@ export interface PredicaoRow {
 export interface AvaliacaoFull {
   avaliacao_id: number
   equipamento_id: string
-  operador_id: string
+  operador_id: string | null // null para o operador em avaliacao de outro operador (LGPD)
   timestamp: string
   temperatura_ar: number
   precipitacao_mm: number
   umidade_solo: number
   velocidade_vento: number
   condicao_clima: string
-  latitude: number
-  longitude: number
+  latitude: number | null
+  longitude: number | null
   tipo_solo: string
   distancia_agua_m: number
   declividade: number
