@@ -693,23 +693,39 @@ def validate_dataset(df):
 # 8. Main
 # ---------------------------------------------------------------------------
 
-def main():
-    np.random.seed(42)
+COLUNAS_FINAIS = [
+    "equipamento_id", "timestamp",
+    "temperatura_ar", "precipitacao_mm", "umidade_solo", "velocidade_vento", "condicao_clima",
+    "latitude", "longitude", "tipo_solo", "distancia_agua_m", "declividade",
+    "tipo_operacao", "velocidade_kmh", "vibracao_g", "temperatura_motor",
+    "horas_operacao", "horario_operacao",
+    "tipo_equipamento", "idade_equipamento", "historico_sinistros", "tem_iot",
+    "modelo_equipamento", "categoria_manual",
+    "operador_id", "pct_velocidade_acima_recomendada", "freq_eventos_bruscos",
+    "pct_operacoes_noturnas", "score_operador_historico",
+    "ultima_manutencao_dias", "ultima_manutencao_horas_op",
+    "intervalo_manut_recomendado_dias", "intervalo_manut_recomendado_horas",
+    "manutencao_atrasada", "atraso_manutencao_pct",
+    "risco_score", "faixa_risco",
+]
 
-    print("=== SafeField - Geracao do Dataset v2 ===")
-    print()
 
-    print(f"Gerando {N_EQUIPAMENTOS} equipamentos...")
+def build_dataset(seed=42):
+    """
+    Gera o dataset completo em memoria, sem validar nem gravar.
+
+    Unica sequencia de geracao: main() e os testes de reprodutibilidade chamam
+    esta funcao, para que a ordem dos sorteios no RNG seja sempre a mesma.
+    """
+    np.random.seed(seed)
+
     equipamentos = generate_equipamentos(N_EQUIPAMENTOS)
-
-    print(f"Gerando {N_OPERADORES} operadores e mapeamentos (Regras 13, 16)...")
     operadores = generate_operadores(N_OPERADORES)
     equip_op_map = assign_operadores_to_equipamentos(equipamentos, operadores)
 
     equip_idx = np.random.choice(N_EQUIPAMENTOS, size=N_REGISTROS, replace=True)
     equip_records = equipamentos.iloc[equip_idx].reset_index(drop=True)
 
-    print(f"Gerando {N_REGISTROS} registros...")
     ambientais = generate_ambientais(N_REGISTROS)
     geograficos = generate_geograficos(N_REGISTROS)
     operacionais = generate_operacionais(N_REGISTROS, equipamentos, equip_idx)
@@ -727,14 +743,11 @@ def main():
         ]],
     ], axis=1)
 
-    print("Aplicando regras de consistencia...")
     df = apply_consistency_rules(df)
 
-    print("Gerando features de operador (Regras 13, 16)...")
     op_features = generate_operador_features(df, operadores, equip_op_map)
     df = pd.concat([df, op_features], axis=1)
 
-    print("Gerando features de manutencao (Regras 12, 14)...")
     manut_features = generate_manutencao_features(df)
     df = pd.concat([df, manut_features], axis=1)
 
@@ -743,25 +756,18 @@ def main():
     sufixo = np.where(rand_cat < prob_manut, "_manutencao", "_operacao")
     df["categoria_manual"] = df["tipo_equipamento"].values + sufixo
 
-    print("Calculando risk score...")
     df = calculate_risk_score(df)
+    return df[COLUNAS_FINAIS]
 
-    colunas_finais = [
-        "equipamento_id", "timestamp",
-        "temperatura_ar", "precipitacao_mm", "umidade_solo", "velocidade_vento", "condicao_clima",
-        "latitude", "longitude", "tipo_solo", "distancia_agua_m", "declividade",
-        "tipo_operacao", "velocidade_kmh", "vibracao_g", "temperatura_motor",
-        "horas_operacao", "horario_operacao",
-        "tipo_equipamento", "idade_equipamento", "historico_sinistros", "tem_iot",
-        "modelo_equipamento", "categoria_manual",
-        "operador_id", "pct_velocidade_acima_recomendada", "freq_eventos_bruscos",
-        "pct_operacoes_noturnas", "score_operador_historico",
-        "ultima_manutencao_dias", "ultima_manutencao_horas_op",
-        "intervalo_manut_recomendado_dias", "intervalo_manut_recomendado_horas",
-        "manutencao_atrasada", "atraso_manutencao_pct",
-        "risco_score", "faixa_risco",
-    ]
-    df = df[colunas_finais]
+
+def main():
+    print("=== SafeField - Geracao do Dataset v2 ===")
+    print()
+    print(
+        f"Gerando {N_EQUIPAMENTOS} equipamentos, {N_OPERADORES} operadores "
+        f"e {N_REGISTROS} registros (seed 42)..."
+    )
+    df = build_dataset(42)
 
     validate_dataset(df)
 
