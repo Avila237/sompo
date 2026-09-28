@@ -91,6 +91,16 @@ def buscar_avaliacao(avaliacao_id: int) -> dict | None:
     return r.data[0] if r.data else None
 
 
+def buscar_usuario(usuario: str) -> dict | None:
+    r = (
+        get_client().table("usuarios")
+        .select("usuario,senha_hash,perfil,operador_id,ativo")
+        .eq("usuario", usuario)
+        .execute()
+    )
+    return r.data[0] if r.data else None
+
+
 def contar(tabela: str) -> int:
     r = get_client().table(tabela).select("*", count="exact").limit(0).execute()
     return int(r.count or 0)

@@ -18,7 +18,6 @@ jobs:
       # com 'rede' sao excluidos) nem a Open-Meteo (mockada em test_api).
       SUPABASE_URL: http://supabase.invalid
       SUPABASE_SERVICE_ROLE_KEY: ci-fake-key
-      DEMO_USERS: analista:ci:analista
       MLFLOW_DISABLE_AGENT_HINT: "1"
     steps:
       - uses: actions/checkout@v4
