@@ -386,12 +386,12 @@ export interface GrupoShap {
 }
 
 export const SHAP_GROUP_META: Record<string, { label: string; color: string }> = {
-  ambiental:   { label: 'Ambiental',   color: '#6EB9FF' },
-  geografico:  { label: 'Geográfico',  color: '#5AE06B' },
+  ambiental:   { label: 'Ambiental',   color: 'var(--blue)' },
+  geografico:  { label: 'Geográfico',  color: 'var(--green)' },
   operacional: { label: 'Operacional', color: '#A78BFA' },
   equipamento: { label: 'Equipamento', color: '#34D3C0' },
-  operador:    { label: 'Operador',    color: '#FFB526' },
-  manutencao:  { label: 'Manutenção',  color: '#E8372E' },
+  operador:    { label: 'Operador',    color: 'var(--amber)' },
+  manutencao:  { label: 'Manutenção',  color: 'var(--red)' },
 }
 
 export const FEATURE_LABELS: Record<string, string> = {
@@ -446,7 +446,7 @@ export function aggregateShapByGroup(factors: ShapFactor[]): GrupoShap[] {
     .map(([group, value]) => ({
       group,
       label: SHAP_GROUP_META[group]?.label ?? group,
-      color: SHAP_GROUP_META[group]?.color ?? '#A8AEAB',
+      color: SHAP_GROUP_META[group]?.color ?? 'var(--fg-dim)',
       value,
     }))
     .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))

@@ -1,15 +1,16 @@
-﻿import { useState, useEffect, useMemo } from 'react'
+﻿import { useMemo } from 'react'
 import { WTONE, scoreBand, scoreBandLabel, SEM_AVALIACAO } from '../../lib/risco'
 import {
   loadEquipamentoDetail,
   aggregateShapByGroup,
   featureLabel,
   SHAP_GROUP_META,
-  type EquipamentoDetail,
   type GrupoShap,
   type ShapFactor,
 } from '../../data/api'
-import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga } from '../../components/shared'
+import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga, Carregando } from '../../components/shared'
+import { useCarga } from '../../lib/useCarga'
+import { fmtData } from '../../lib/formato'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
 
@@ -55,21 +56,8 @@ const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 /* ── Main ─────────────────────────────────────────────────── */
 
 export default function SompoDetail({ equipId, onBack }: { equipId: string | null; onBack: () => void }) {
-  const [detail, setDetail] = useState<EquipamentoDetail | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [tentativa, setTentativa] = useState(0)
-
-  useEffect(() => {
-    if (!equipId) { setLoading(false); return }
-    let active = true
-    setLoading(true)
-    setError(null)
-    loadEquipamentoDetail(equipId)
-      .then((d) => { if (active) { setDetail(d); setLoading(false) } })
-      .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
-    return () => { active = false }
-  }, [equipId, tentativa])
+  const carga = useCarga(() => (equipId ? loadEquipamentoDetail(equipId) : Promise.resolve(null)), equipId ?? '')
+  const detail = carga.dados
 
   const shapGroups = useMemo<GrupoShap[]>(
     () => (detail?.predicao ? aggregateShapByGroup(detail.predicao.top_fatores_shap) : []),
@@ -91,20 +79,14 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
     )
   }
 
-  if (loading) {
-    return (
-      <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: 'var(--fg-mute)', fontSize: 14 }}>
-        Carregando detalhe de {equipId}…
-      </div>
-    )
-  }
+  if (carga.carregando) return <Carregando msg={`Carregando detalhe de ${equipId}…`} />
 
-  if (error || !detail) {
+  if (carga.erro || !detail) {
     return (
       <ErroCarga
         titulo={`Não foi possível carregar o detalhe de ${equipId}.`}
-        msg={error ?? 'A API não devolveu dados.'}
-        onTentar={() => setTentativa((t) => t + 1)}
+        msg={carga.erro ?? 'A API não devolveu dados.'}
+        onTentar={carga.tentarDeNovo}
       />
     )
   }
@@ -125,7 +107,6 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
   const histScores = historico.map((h) => h.score)
   const histMin = histScores.length ? Math.min(...histScores) : 0
   const histMax = histScores.length ? Math.max(...histScores) : 0
-  const fmtDate = (ts: string) => (ts ? new Date(ts).toLocaleDateString('pt-BR') : '—')
 
   const noturno = ultima ? ultima.horario_operacao >= 20 || ultima.horario_operacao <= 5 : false
 
@@ -160,7 +141,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
             <span>{equipamento.idade_equipamento} anos</span>
             <span>{equipamento.historico_sinistros} sinistro(s)</span>
             {ultima && <span className="mono">{ultima.operador_id}</span>}
-            {ultima && <span>última aval. {fmtDate(ultima.timestamp)}</span>}
+            {ultima && <span>última aval. {fmtData(ultima.timestamp)}</span>}
           </div>
         </div>
         {/* Ações sem endpoint na API: ficam bloqueadas, sem handler e sem mensagem de sucesso */}
@@ -221,7 +202,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {topFactors.map((c, i) => {
                   const meta = SHAP_GROUP_META[c.grupo]
-                  const color = meta?.color ?? '#A8AEAB'
+                  const color = meta?.color ?? 'var(--fg-dim)'
                   return (
                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 110px 90px 56px', alignItems: 'center', gap: 10 }}>
                       <span className="tabular" style={{ fontSize: 13, fontWeight: 800, color: 'var(--fg-mute)', textAlign: 'center' }}>{i + 1}</span>
@@ -271,8 +252,8 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
               <>
                 <Sparkline data={histScores} color={WTONE[band].fg} height={60} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                  <span style={{ fontSize: 10, color: 'var(--fg-mute)' }}>{fmtDate(historico[0].ts)}</span>
-                  <span style={{ fontSize: 10, color: 'var(--fg-mute)' }}>{fmtDate(historico[historico.length - 1].ts)}</span>
+                  <span style={{ fontSize: 10, color: 'var(--fg-mute)' }}>{fmtData(historico[0].ts)}</span>
+                  <span style={{ fontSize: 10, color: 'var(--fg-mute)' }}>{fmtData(historico[historico.length - 1].ts)}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
