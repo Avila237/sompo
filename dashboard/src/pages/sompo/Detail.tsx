@@ -173,7 +173,11 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
                 <div style={{ fontSize: 12, color: 'var(--fg-dim)', marginBottom: 14 }}>
                   Score real <strong style={{ color: WTONE[band].fg }}>{score === null ? '—' : Math.round(score)}</strong>
                   {' · '}predito <strong style={{ color: 'var(--fg)' }}>{Math.round(predicao.risco_score_predito)}</strong>
-                  {'  ·  '}+ aumenta risco / − reduz (soma dos top 5 fatores por grupo)
+                  {'  ·  '}+ aumenta risco / − reduz
+                  {/* Predicoes do seed nao tem a decomposicao completa gravada: ali o grupo e aproximado pelos top 5. */}
+                  {predicao.contribuicoes_por_grupo
+                    ? ' (todos os fatores, somados por grupo)'
+                    : ' (aproximação: soma dos top 5 fatores por grupo)'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {shapGroups.map((g) => (
