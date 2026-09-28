@@ -6,7 +6,7 @@ from scripts.generate_dataset import (
     generate_operacionais, apply_consistency_rules, calculate_risk_score,
     generate_operadores, assign_operadores_to_equipamentos,
     generate_operador_features, generate_manutencao_features,
-    N_EQUIPAMENTOS, N_REGISTROS, N_OPERADORES,
+    N_EQUIPAMENTOS, N_REGISTROS, N_OPERADORES, build_dataset,
 )
 
 _OP_DEFAULTS = {
@@ -19,33 +19,9 @@ _OP_DEFAULTS = {
 
 
 def _gerar_dataset(seed):
-    np.random.seed(seed)
-    equipamentos = generate_equipamentos(N_EQUIPAMENTOS)
-    operadores = generate_operadores(N_OPERADORES)
-    equip_op_map = assign_operadores_to_equipamentos(equipamentos, operadores)
-    equip_idx = np.random.choice(N_EQUIPAMENTOS, size=N_REGISTROS, replace=True)
-    equip_records = equipamentos.iloc[equip_idx].reset_index(drop=True)
-    ambientais = generate_ambientais(N_REGISTROS)
-    geograficos = generate_geograficos(N_REGISTROS)
-    operacionais = generate_operacionais(N_REGISTROS, equipamentos, equip_idx)
-    df = pd.concat([
-        equip_records[['equipamento_id']],
-        operacionais[['timestamp']],
-        ambientais,
-        geograficos,
-        operacionais[['tipo_operacao', 'velocidade_kmh', 'horas_operacao', 'horario_operacao']],
-        equip_records[[
-            'tipo_equipamento', 'idade_equipamento', 'historico_sinistros', 'tem_iot',
-            'modelo_equipamento', 'intervalo_manut_recomendado_dias', 'intervalo_manut_recomendado_horas',
-        ]],
-    ], axis=1)
-    df = apply_consistency_rules(df)
-    op_features = generate_operador_features(df, operadores, equip_op_map)
-    df = pd.concat([df, op_features], axis=1)
-    manut_features = generate_manutencao_features(df)
-    df = pd.concat([df, manut_features], axis=1)
-    df = calculate_risk_score(df)
-    return df
+    # Mesma sequencia de geracao do script, sem copia: uma copia que omitisse
+    # um sorteio do RNG provaria o determinismo do helper, nao o do dataset.
+    return build_dataset(seed)
 
 
 def _make_df(record):
@@ -122,6 +98,15 @@ class TestReprodutibilidade:
         df2 = _gerar_dataset(99)
         with pytest.raises(AssertionError):
             pd.testing.assert_frame_equal(df1[['risco_score']], df2[['risco_score']])
+
+    def test_parquet_em_disco_e_reproduzivel_pelo_codigo(self, df):
+        'O dataset em data/ e exatamente o que build_dataset(42) gera nesta maquina'
+        gerado = _gerar_dataset(42).reset_index(drop=True)
+        # O parquet grava faixa_risco como texto; o gerador devolve categorica.
+        gerado['faixa_risco'] = gerado['faixa_risco'].astype(str)
+        em_disco = df.copy()
+        em_disco['faixa_risco'] = em_disco['faixa_risco'].astype(str)
+        pd.testing.assert_frame_equal(gerado, em_disco, check_dtype=False)
 
 
 class TestGenerateEquipamentos:

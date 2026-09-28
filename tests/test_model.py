@@ -6,7 +6,8 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -202,6 +203,8 @@ class TestPredicoes:
 # ---------------------------------------------------------------------------
 
 class TestMetricas:
+    """Os numeros versionados em models/metrics.json cumprem os criterios."""
+
     def test_mae_below_10(self, metrics):
         assert metrics["mae"] < 10, f"MAE = {metrics['mae']} (threshold: 10)"
 
@@ -213,6 +216,46 @@ class TestMetricas:
 
     def test_accuracy_faixas_above_085(self, metrics):
         assert metrics["accuracy_faixas"] > 0.85, f"Accuracy = {metrics['accuracy_faixas']} (threshold: 0.85)"
+
+
+@pytest.fixture(scope="module")
+def metricas_locais(model, encoder, features, dataset):
+    """
+    Metricas do modelo carregado de models/*.joblib, medidas no mesmo recorte
+    de teste do train.py (20%, random_state=42). Nao compara com metrics.json:
+    o retreino em outra plataforma da numeros ligeiramente diferentes.
+    """
+    X = preprocess_features(dataset[features].copy(), encoder)
+    y = dataset["risco_score"]
+    _, X_test, _, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+    assert len(X_test) > 0, "Recorte de teste vazio"
+    y_pred = model.predict(X_test)
+    return {
+        "mae": float(mean_absolute_error(y_test, y_pred)),
+        "rmse": float(np.sqrt(mean_squared_error(y_test, y_pred))),
+        "r2": float(r2_score(y_test, y_pred)),
+        "accuracy_faixas": float(accuracy_score(
+            [derive_faixa(float(v)) for v in y_test],
+            [derive_faixa(float(v)) for v in y_pred],
+        )),
+    }
+
+
+class TestMetricasModeloLocal:
+    """O modelo que a API vai carregar cumpre os criterios, nao so o arquivo versionado."""
+
+    def test_mae_below_10(self, metricas_locais):
+        assert metricas_locais["mae"] < 10, f"MAE = {metricas_locais['mae']:.4f}"
+
+    def test_rmse_below_15(self, metricas_locais):
+        assert metricas_locais["rmse"] < 15, f"RMSE = {metricas_locais['rmse']:.4f}"
+
+    def test_r2_above_080(self, metricas_locais):
+        assert metricas_locais["r2"] > 0.80, f"R2 = {metricas_locais['r2']:.4f}"
+
+    def test_accuracy_faixas_above_085(self, metricas_locais):
+        acc = metricas_locais["accuracy_faixas"]
+        assert acc > 0.85, f"Accuracy = {acc:.3f}"
 
 
 # ---------------------------------------------------------------------------

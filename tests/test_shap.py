@@ -23,7 +23,6 @@ from backend.ml.train import derive_faixa, preprocess_features
 
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "dataset_safefield.parquet")
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 
 # ---------------------------------------------------------------------------
@@ -60,15 +59,19 @@ def shap_vals(artifacts, X_sample):
     return compute_shap_values(model, X_sample)
 
 
+# Os artefatos vao para diretorio temporario: gravar em models/ e data/
+# sobrescreveria arquivos versionados a cada execucao da suite, e os testes de
+# existencia passariam mesmo sem o save funcionar, porque o arquivo ja estava la.
 @pytest.fixture(scope="module")
-def shap_npy_path(shap_vals):
-    return save_shap_values(shap_vals, MODELS_DIR)
+def shap_npy_path(shap_vals, tmp_path_factory):
+    return save_shap_values(shap_vals, str(tmp_path_factory.mktemp("models")))
 
 
 @pytest.fixture(scope="module")
-def saved_plots_list(artifacts, shap_vals, X_sample, y_pred, features):
+def saved_plots_list(artifacts, shap_vals, X_sample, y_pred, features, tmp_path_factory):
     model, _, _ = artifacts
-    return save_plots(model, shap_vals, X_sample, y_pred, features, DATA_DIR)
+    destino = str(tmp_path_factory.mktemp("data"))
+    return save_plots(model, shap_vals, X_sample, y_pred, features, destino)
 
 
 # ---------------------------------------------------------------------------
@@ -229,10 +232,12 @@ class TestConsistencia:
     def test_score_baixo_tem_shap_sum_menor_que_alto(self, shap_vals, y_pred):
         low_mask = y_pred < 33
         high_mask = y_pred > 66
-        if low_mask.sum() > 0 and high_mask.sum() > 0:
-            low_mean = shap_vals[low_mask].sum(axis=1).mean()
-            high_mean = shap_vals[high_mask].sum(axis=1).mean()
-            assert low_mean < high_mean, "Scores baixos tem SHAP sum media maior que scores altos"
+        # Sem estes asserts, uma amostra sem uma das faixas passaria sem testar nada.
+        assert low_mask.sum() > 0, "Nenhum registro de score baixo na amostra"
+        assert high_mask.sum() > 0, "Nenhum registro de score alto na amostra"
+        low_mean = shap_vals[low_mask].sum(axis=1).mean()
+        high_mean = shap_vals[high_mask].sum(axis=1).mean()
+        assert low_mean < high_mean, "Scores baixos tem SHAP sum media maior que scores altos"
 
 
 # ---------------------------------------------------------------------------

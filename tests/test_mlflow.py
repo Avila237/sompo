@@ -9,7 +9,7 @@ import pytest
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
-from backend.ml.mlflow_tracking import EXPERIMENT_NAME, TRACKING_URI, log_training_run
+from backend.ml.mlflow_tracking import EXPERIMENT_NAME, log_training_run
 from backend.ml.train import derive_faixa, preprocess_features
 
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
@@ -21,8 +21,20 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# Store temporario: os testes nao gravam no mlruns/ real, e cada execucao
+# comeca de um store vazio, sem depender de runs de execucoes anteriores.
 @pytest.fixture(scope="module")
-def tracking_run_id():
+def mlruns_dir(tmp_path_factory):
+    return tmp_path_factory.mktemp("mlruns")
+
+
+@pytest.fixture(scope="module")
+def tracking_uri(mlruns_dir):
+    return mlruns_dir.as_uri()
+
+
+@pytest.fixture(scope="module")
+def tracking_run_id(tracking_uri):
     """Executa um run de tracking e retorna o run_id."""
     model = joblib.load(os.path.join(MODELS_DIR, "xgboost_model.joblib"))
     encoder = joblib.load(os.path.join(MODELS_DIR, "encoder.joblib"))
@@ -45,15 +57,15 @@ def tracking_run_id():
         y_pred_faixa=y_pred_faixa,
         models_dir=MODELS_DIR,
         data_dir=DATA_DIR,
+        tracking_uri=tracking_uri,
     )
 
 
 @pytest.fixture(scope="module")
-def mlflow_client(tracking_run_id):
-    """Retorna MlflowClient apontando para o tracking URI local."""
+def mlflow_client(tracking_run_id, tracking_uri):
+    """Retorna MlflowClient apontando para o store temporario."""
     import mlflow
-    mlflow.set_tracking_uri(TRACKING_URI)
-    return mlflow.tracking.MlflowClient(tracking_uri=TRACKING_URI)
+    return mlflow.tracking.MlflowClient(tracking_uri=tracking_uri)
 
 
 @pytest.fixture(scope="module")
@@ -62,11 +74,12 @@ def experiment(mlflow_client):
 
 
 @pytest.fixture(scope="module")
-def finished_run(mlflow_client, experiment):
-    runs = mlflow_client.search_runs(experiment_ids=[experiment.experiment_id])
-    finished = [r for r in runs if r.info.status == "FINISHED"]
-    assert len(finished) > 0, "Nenhuma run com status FINISHED encontrada"
-    return finished[0]
+def finished_run(mlflow_client, tracking_run_id):
+    """A run criada por este teste, nao uma qualquer do experimento."""
+    assert tracking_run_id, "log_training_run caiu no fallback e nao registrou a run"
+    run = mlflow_client.get_run(tracking_run_id)
+    assert run.info.status == "FINISHED", f"Run {tracking_run_id} terminou como {run.info.status}"
+    return run
 
 
 # ---------------------------------------------------------------------------
@@ -74,8 +87,8 @@ def finished_run(mlflow_client, experiment):
 # ---------------------------------------------------------------------------
 
 class TestRegistro:
-    def test_mlruns_dir_criado(self):
-        assert os.path.isdir(os.path.join(PROJECT_ROOT, "mlruns"))
+    def test_store_recebe_o_experimento(self, tracking_run_id, mlruns_dir):
+        assert any(mlruns_dir.iterdir()), "Nada foi gravado no store de tracking"
 
     def test_run_id_retornado(self, tracking_run_id):
         assert tracking_run_id is not None
@@ -188,17 +201,18 @@ class TestArtefatos:
 # ---------------------------------------------------------------------------
 
 class TestGracefulFallback:
-    def test_fallback_retorna_none_quando_erro(self):
+    def test_fallback_retorna_none_quando_erro(self, tracking_uri):
         result = log_training_run(
             model=None,
             metrics={"mae": 1.0, "rmse": 1.5, "r2": 0.9, "accuracy_faixas": 0.9},
             feature_cols=["f1"],
             y_test_faixa=["baixo"],
             y_pred_faixa=["baixo"],
+            tracking_uri=tracking_uri,
         )
         assert result is None
 
-    def test_nao_propaga_excecao(self):
+    def test_nao_propaga_excecao(self, tracking_uri):
         raised = False
         try:
             log_training_run(
@@ -207,6 +221,7 @@ class TestGracefulFallback:
                 feature_cols=["f1"],
                 y_test_faixa=["baixo"],
                 y_pred_faixa=["baixo"],
+                tracking_uri=tracking_uri,
             )
         except Exception:
             raised = True

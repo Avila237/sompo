@@ -48,10 +48,14 @@ def log_training_run(
     models_dir: str = "models",
     data_dir: str = "data",
     dataset_version: str = DATASET_VERSION,
+    tracking_uri: str = TRACKING_URI,
 ) -> Optional[str]:
     """
     Registra um run de treinamento no MLflow.
     Retorna o run_id ou None se o MLflow nao estiver disponivel ou ocorrer erro.
+
+    tracking_uri existe para os testes gravarem num store temporario, sem
+    poluir o mlruns/ real com runs de teste.
     """
     try:
         import mlflow
@@ -61,7 +65,7 @@ def log_training_run(
         return None
 
     try:
-        mlflow.set_tracking_uri(TRACKING_URI)
+        mlflow.set_tracking_uri(tracking_uri)
         mlflow.set_experiment(EXPERIMENT_NAME)
 
         with mlflow.start_run() as run:
@@ -110,7 +114,7 @@ def log_training_run(
 
         print(f"\n[MLflow] Run registrada: {run_id}")
         print(f"[MLflow] Experimento: {EXPERIMENT_NAME}")
-        print(f"[MLflow] Tracking URI: {TRACKING_URI}")
+        print(f"[MLflow] Tracking URI: {tracking_uri}")
         print("[MLflow] Para visualizar: mlflow ui --backend-store-uri file:./mlruns")
         return run_id
 
