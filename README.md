@@ -479,10 +479,9 @@ vetor; unificá-los está previsto no ajuste final do modelo.
 
 O modelo é carregado **uma vez no startup**, não a cada requisição, e devolve um score contínuo de
 0 a 100. A faixa vem de `derive_faixa()`: `≤33` baixo, `≤66` médio, acima disso alto, derivada do
-score cru e gravada junto com ele, já arredondado a duas casas. As rotas de consulta e o dashboard
-usam os mesmos limiares, mas reclassificam: a API sobre o score gravado, a tela sobre o inteiro
-mais próximo. Logo acima de um limiar (entre 33 e 33,5, ou entre 66 e 66,5) a faixa exibida pode
-diferir da gravada. A correção é o servidor ser a única fonte da faixa.
+score cru e gravada junto com ele, já arredondado a duas casas. O servidor é a única fonte da
+faixa: as rotas de consulta devolvem a faixa gravada, sem recalcular a partir do score
+arredondado, o que divergiria logo acima de 33 e de 66.
 
 #### 7. SHAP → explicação ✅
 
