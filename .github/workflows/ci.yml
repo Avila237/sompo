@@ -70,5 +70,8 @@ jobs:
       - run: npm run lint
       - name: Build (inclui tsc)
         run: npm run build
+        env:
+          # O build exige a variavel: e dela que sai o connect-src da CSP.
+          VITE_API_BASE_URL: http://localhost:8000
       - name: Auditoria de dependencias
         run: npm audit --audit-level=high
