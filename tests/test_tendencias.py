@@ -19,6 +19,7 @@ if PROJECT_ROOT not in sys.path:
 
 from backend.api.main import app  # noqa: E402
 from backend.core.security import criar_token  # noqa: E402
+from backend.ml.preprocess import derive_faixa  # noqa: E402
 from backend.services import consultas  # noqa: E402
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -30,7 +31,7 @@ def _aval(dia, eq, score, op="colheita", lat=-24.1, lon=-51.2):
         "equipamento_id": eq,
         "operador_id": "OP-0001",
         "risco_score": score,
-        "faixa_risco": consultas._faixa(score),
+        "faixa_risco": derive_faixa(score),
         "timestamp": f"{dia}T10:00:00+00:00",
         "latitude": lat,
         "longitude": lon,

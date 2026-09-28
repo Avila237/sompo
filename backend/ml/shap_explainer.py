@@ -23,7 +23,7 @@ DATA_PATH = "data/dataset_safefield.parquet"
 
 # Definidos em preprocess.py para que a API os use sem carregar matplotlib.
 # Reexportados aqui porque tests/ e o restante do modulo importam daqui.
-from backend.ml.preprocess import FEATURE_GROUPS, FEATURE_TO_GROUP  # noqa: E402
+from backend.ml.preprocess import FEATURE_GROUPS, FEATURE_TO_GROUP, derive_faixa  # noqa: E402
 
 _FEATURE_TO_GROUP = FEATURE_TO_GROUP
 
@@ -134,15 +134,7 @@ def save_plots(
     explainer = shap.TreeExplainer(model)
     explanation = explainer(X)
 
-    bands = []
-    for p in y_pred:
-        score = float(p)
-        if score <= 33:
-            bands.append("baixo")
-        elif score <= 66:
-            bands.append("medio")
-        else:
-            bands.append("alto")
+    bands = [derive_faixa(float(p)) for p in y_pred]
 
     for faixa in ("baixo", "medio", "alto"):
         try:

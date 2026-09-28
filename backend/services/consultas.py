@@ -9,6 +9,7 @@ avaliacoes mais recentes primeiro, descartando faixa 'baixo'.
 from collections import defaultdict
 
 from backend.db import repository as repo
+from backend.ml.preprocess import derive_faixa
 
 # Limites do territorio brasileiro, usados para projetar lat/long em 0..1.
 LAT_MIN, LAT_MAX = -33.75, -2.50
@@ -22,14 +23,6 @@ def _celula(latitude: float, longitude: float, graus: int = 3) -> tuple[int, int
 
 def _rotulo_celula(lat: int, lon: int) -> str:
     return f"{abs(lat):.0f}°S {abs(lon):.0f}°O"
-
-
-def _faixa(score: float) -> str:
-    if score <= 33:
-        return "baixo"
-    if score <= 66:
-        return "medio"
-    return "alto"
 
 
 def normalizar_fatores_shap(fatores: list | None) -> list[dict]:
@@ -88,7 +81,9 @@ def listar_equipamentos() -> list[dict]:
                 "tem_iot": eq["tem_iot"],
                 "risco_score": round(score, 2),
                 "score_medio": round(media, 2),
-                "faixa_risco": _faixa(score),
+                # A faixa gravada veio do score cru; recalcular sobre o score
+                # gravado (2 casas) divergiria logo acima de 33 e de 66.
+                "faixa_risco": ultima["faixa_risco"] if ultima else derive_faixa(score),
                 "tendencia": round(score - float(anterior["risco_score"]), 2) if anterior else 0.0,
                 "total_avaliacoes": len(avals),
                 "operador_id": ultima["operador_id"] if ultima else None,
@@ -140,7 +135,7 @@ def kpis() -> dict:
 
     por_faixa: dict[str, int] = {"baixo": 0, "medio": 0, "alto": 0}
     for a in avals:
-        por_faixa[_faixa(float(a["risco_score"]))] += 1
+        por_faixa[a["faixa_risco"]] += 1
 
     operadores = {a["operador_id"] for a in avals if a.get("operador_id")}
 
@@ -166,7 +161,7 @@ def agregado_por_operacao() -> list[dict]:
         score = float(a["risco_score"])
         acumulado[op]["soma"] += score
         acumulado[op]["n"] += 1
-        if _faixa(score) == "alto":
+        if a["faixa_risco"] == "alto":
             acumulado[op]["alto"] += 1
 
     saida = [
@@ -226,7 +221,7 @@ def alertas(limite: int = 7, faixa_minima: str = "medio") -> list[dict]:
     saida = []
     for a in recentes:
         score = float(a["risco_score"])
-        faixa = _faixa(score)
+        faixa = a["faixa_risco"]
         if ordem[faixa] < corte:
             continue
         saida.append(

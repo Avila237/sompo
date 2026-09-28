@@ -109,7 +109,8 @@ Ordenado por `risco_score` desc. Uma linha por equipamento, com o score da avali
 ```
 
 - `tendencia` é a diferença entre o score da última avaliação e o da penúltima; `0.0` com uma só.
-- `faixa_risco` é recalculada a partir do score gravado, não lida da coluna `faixa_risco`.
+- `faixa_risco` é a faixa gravada na última avaliação, derivada do score cru no momento da
+  predição. Não é recalculada a partir do `risco_score` devolvido, que tem duas casas.
 
 **Equipamento sem nenhuma avaliação** também aparece na lista, com:
 - `operador_id`, `ultima_avaliacao`, `latitude` e `longitude` iguais a `null`;
@@ -225,7 +226,7 @@ Query params: `limite` (1–100, default 7), `faixa_minima` (`baixo|medio|alto`,
 **Regra de alerta** (portada de `buildAlertas`, que rodava no cliente): avaliações ordenadas da
 mais recente para a mais antiga, descartando as de faixa abaixo de `faixa_minima`, limitadas a
 `limite`. O default `faixa_minima=medio` reproduz o `faixa_risco !== 'baixo'` anterior. Como em
-`/equipamentos`, a faixa é recalculada a partir do score gravado.
+`/equipamentos`, a faixa é a gravada na avaliação.
 
 ```json
 {
@@ -446,6 +447,6 @@ próprio número. Para categórica (`tipo_solo`, `tipo_operacao`, `condicao_clim
 de `shap_explainer.group_contributions()`, que soma `|SHAP|` para medir magnitude. A semântica com
 sinal é a correta para exibir "+ aumenta / − reduz".
 
-**4. A faixa pode divergir logo acima de um limiar.** A faixa gravada é derivada do score cru; as
-rotas de leitura a recalculam sobre o score gravado com duas casas. Entre 33 e 33,005 (e entre 66 e
-66,005) a faixa de `/equipamentos` e `/alertas` pode diferir da de `ultima_avaliacao.faixa_risco`.
+**4. Não reclassifique o score no cliente.** A faixa é derivada do score cru e gravada; o
+`risco_score` devolvido tem duas casas. Um score cru de 33,004 é devolvido como `33.0` com faixa
+`medio`. Recalcular a faixa a partir do número exibido daria `baixo`. Use sempre `faixa_risco`.

@@ -180,7 +180,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 | macOS: `libxgboost.dylib could not be loaded` | `brew install libomp` |
 | Reexecutar `populate_predictions.py` | Duplica predições (sem unique em `avaliacao_id`). Não rodar até a S4-13 |
 | `top_fatores_shap` com `group` vs `grupo` | O seed gravou `group`, a API grava `grupo`; `services/consultas.py` normaliza na leitura |
-| Faixa perto de 33 ou 66 | Backend e front reclassificam sobre o valor arredondado e podem divergir da faixa gravada (S4-16) |
+| Classificar faixa a partir de um score exibido | Não. A faixa vem do score cru e é gravada; use `faixa_risco` da API. Recalcular sobre o score arredondado diverge logo acima de 33 e de 66 |
 
 ## Convenções
 
