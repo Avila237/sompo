@@ -449,14 +449,12 @@ Equipamento ou operador inexistente interrompe o fluxo com **`404`**, antes de q
 #### 4. Enriquecimento climático ✅
 
 Os cinco campos climáticos (`temperatura_ar`, `precipitacao_mm`, `umidade_solo`,
-`velocidade_vento`, `condicao_clima`) são **opcionais**. Ausentes, o servidor busca na Open-Meteo
-pela coordenada da leitura, com timeout curto (`OPENMETEO_TIMEOUT_S`). Presentes, servem de
-fallback caso a API externa falhe.
-
-**Quando a Open-Meteo não responde** — timeout, rede fora, resposta malformada — a requisição
-**não falha**, desde que o payload traga o clima. O sistema usa os valores enviados, marca
-`clima_origem='payload'` e registra o incidente no log. A decisão é deliberada: uma leitura de
-campo com clima menos preciso vale mais que nenhuma leitura.
+`velocidade_vento`, `condicao_clima`) são **opcionais**, e **o clima medido em campo prevalece**:
+com os cinco no payload, a Open-Meteo nem é consultada (`clima_origem='payload'`). Sem nenhum, o
+servidor busca na Open-Meteo pela coordenada, com timeout curto (`OPENMETEO_TIMEOUT_S`), e marca
+`open-meteo`. Com parte deles, a Open-Meteo completa o que falta e a origem fica `misto`. A chuva
+da Open-Meteo é a soma das últimas 24 horas; umidade do solo e condição são derivadas dela pelas
+mesmas regras do dataset de treino.
 
 **Quando falham os dois** — Open-Meteo fora *e* payload sem clima completo — a requisição é
 recusada com **`502`**, listando os campos ausentes. O servidor não inventa clima para alimentar o

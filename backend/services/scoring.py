@@ -141,30 +141,33 @@ def resolver_clima(leitura: dict) -> tuple[dict, str]:
     """
     Decide a procedencia do bloco climatico e devolve (leitura, clima_origem).
 
-    Open-Meteo e preferencial. Se ela falhar, cai para o que veio no payload.
-    Se nem isso existir, a leitura e recusada — nao se inventa clima para
-    alimentar o modelo.
+    Clima medido em campo prevalece: com o payload completo, a Open-Meteo nem
+    e consultada. Incompleto, a Open-Meteo preenche o que falta, e umidade e
+    condicao ausentes sao derivadas da chuva final (Regras 3 e 5), para nao
+    misturar a chuva medida com a condicao que a API derivou de outra chuva.
+    Sem payload completo e sem API, a leitura e recusada: nao se inventa clima.
     """
     leitura = dict(leitura)
-    do_payload = {c: leitura.get(c) for c in CAMPOS_CLIMA}
-    payload_completo = all(v is not None for v in do_payload.values())
+    medidos = {c for c in CAMPOS_CLIMA if leitura.get(c) is not None}
+    if medidos == set(CAMPOS_CLIMA):
+        return leitura, "payload"
 
     externo = clima.buscar(
         leitura["latitude"], leitura["longitude"], leitura["tipo_solo"]
     )
-    if externo is not None:
-        leitura.update(externo)
-        return leitura, "open-meteo"
+    if externo is None:
+        raise ClimaIndisponivel([c for c in CAMPOS_CLIMA if c not in medidos])
 
-    if payload_completo:
-        logger.warning(
-            "clima da Open-Meteo indisponivel; usando os valores do payload para %s",
-            leitura["equipamento_id"],
+    for campo in ("temperatura_ar", "precipitacao_mm", "velocidade_vento"):
+        if campo not in medidos:
+            leitura[campo] = externo[campo]
+    if "umidade_solo" not in medidos:
+        leitura["umidade_solo"] = clima.derivar_umidade_solo(
+            leitura["precipitacao_mm"], leitura["tipo_solo"]
         )
-        return leitura, "payload"
-
-    faltando = [c for c, v in do_payload.items() if v is None]
-    raise ClimaIndisponivel(faltando)
+    if "condicao_clima" not in medidos:
+        leitura["condicao_clima"] = clima.derivar_condicao_clima(leitura["precipitacao_mm"])
+    return leitura, ("misto" if medidos else "open-meteo")
 
 
 def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:

@@ -25,6 +25,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from backend.core import config  # noqa: E402
 from backend.db import repository as repo  # noqa: E402
+from backend.services.clima import derivar_condicao_clima, derivar_umidade_solo  # noqa: E402
 
 # Regioes agricolas reais, para as coordenadas caírem em terra e a Open-Meteo
 # devolver clima plausivel.
@@ -174,13 +175,10 @@ def main() -> None:
             leitura.update({
                 "temperatura_ar": round(random.uniform(12, 38), 1),
                 "precipitacao_mm": chuva,
-                "umidade_solo": round(min(95, max(5, chuva * 0.6 + 12)), 1),
+                # Mesmas Regras 3 e 5 do servico e do dataset de treino.
+                "umidade_solo": derivar_umidade_solo(chuva, leitura["tipo_solo"]),
                 "velocidade_vento": round(random.uniform(0, 45), 1),
-                "condicao_clima": (
-                    "ensolarado" if chuva <= 2 else
-                    "nublado" if chuva <= 20 else
-                    "chuvoso" if chuva <= 50 else "tempestade"
-                ),
+                "condicao_clima": derivar_condicao_clima(chuva),
             })
 
         try:
