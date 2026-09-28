@@ -36,6 +36,11 @@ models/shap_values.npy
 .claude/*
 # Excecao: o handoff precisa atravessar entre as maquinas
 !.claude/handoff.md
+# Excecao: a configuracao do projeto (sem coautoria de IA) vale nas duas maquinas
+!.claude/settings.json
+
+# Cache local do Supabase CLI (pooler-url, project-ref); o repo e publico
+supabase/.temp/
 
 # Material de terceiros (decks e artigos de referência) — citar, não versionar
 docs/references/*.pdf

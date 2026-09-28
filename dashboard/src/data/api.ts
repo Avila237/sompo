@@ -27,6 +27,7 @@ export async function login(usuario: string, senha: string): Promise<void> {
   setSessao({
     token: r.access_token,
     perfil: r.perfil,
+    usuario,
     expiraEm: Date.now() + r.expira_em_minutos * 60_000,
   })
 }

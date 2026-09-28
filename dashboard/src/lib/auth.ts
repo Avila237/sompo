@@ -12,6 +12,8 @@ const STORAGE_KEY = 'safefield.sessao'
 export interface Sessao {
   token: string
   perfil: string
+  /** usuário digitado no login; opcional porque sessões gravadas antes não o têm */
+  usuario?: string
   /** epoch em ms; derivado de `expira_em_minutos` no momento da emissao */
   expiraEm: number
 }
