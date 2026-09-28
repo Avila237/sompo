@@ -40,8 +40,12 @@ export function logout(): void {
  * A API e a unica fonte da faixa de uma avaliacao (`derive_faixa` no backend,
  * sobre o score cru). O cliente converte em tom, nunca reclassifica.
  */
-export function faixaToTone(faixa: string): ToneKey {
-  return faixa === 'baixo' ? 'safe' : faixa === 'medio' ? 'warn' : 'crit'
+export function faixaToTone(faixa: string | null | undefined): ToneKey {
+  if (faixa === 'baixo') return 'safe'
+  if (faixa === 'medio') return 'warn'
+  if (faixa === 'alto') return 'crit'
+  // Faixa nula ou desconhecida é ausência de dado: neutro ("SEM AVALIAÇÃO"), nunca ALTO
+  return 'neut'
 }
 
 /* ── GET /equipamentos ────────────────────────────────────── */

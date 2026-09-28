@@ -28,9 +28,12 @@ export function rotuloDaMedia(s: number): string {
   return s <= 33 ? 'BAIXO' : s <= 66 ? 'MÉDIO' : 'ALTO'
 }
 
-/** Rótulo da faixa que a API devolveu (já convertida em tom). */
+/**
+ * Rótulo da faixa que a API devolveu (já convertida em tom). Tom neutro = faixa
+ * ausente numa avaliação que existe; equipamento SEM avaliação usa SEM_AVALIACAO.
+ */
 export function rotuloDaFaixa(tone: ToneKey): string {
-  return tone === 'safe' ? 'BAIXO' : tone === 'warn' ? 'MÉDIO' : tone === 'crit' ? 'ALTO' : SEM_AVALIACAO
+  return tone === 'safe' ? 'BAIXO' : tone === 'warn' ? 'MÉDIO' : tone === 'crit' ? 'ALTO' : 'SEM FAIXA'
 }
 
 /** Rótulo de equipamento sem nenhuma avaliação — nunca exibir como score 0 / "baixo". */

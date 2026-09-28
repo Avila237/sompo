@@ -1,5 +1,5 @@
 ﻿import { useMemo } from 'react'
-import { WTONE, rotuloDaFaixa } from '../../lib/risco'
+import { WTONE, rotuloDaFaixa, SEM_AVALIACAO } from '../../lib/risco'
 import { loadEquipamentoDetail, faixaToTone, type ShapFactor } from '../../data/api'
 import { aggregateShapByGroup, featureLabel, SHAP_GROUP_META, type GrupoShap } from '../../data/shap'
 import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga, Carregando } from '../../components/shared'
@@ -90,7 +90,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
   const score = ultima ? ultima.risco_score : null
   // Faixa gravada pela API, não recalculada do número exibido (contrato, armadilha 4)
   const band = ultima ? faixaToTone(ultima.faixa_risco) : 'neut'
-  const bandLabel = rotuloDaFaixa(band)
+  const bandLabel = ultima ? rotuloDaFaixa(band) : SEM_AVALIACAO
   const trend =
     historico.length >= 2
       ? Math.round(historico[historico.length - 1].score - historico[historico.length - 2].score)
