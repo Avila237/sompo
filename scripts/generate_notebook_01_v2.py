@@ -512,7 +512,6 @@ nb = {
     "cells": cells
 }
 
-import os
 out = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'notebooks', '01_eda.ipynb'))
 with open(out, 'w', encoding='utf-8') as f:
     import json

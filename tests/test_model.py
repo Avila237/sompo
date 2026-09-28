@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
-from backend.ml.train import BOOL_COLS, CAT_COLS, EXCLUDE_COLS, derive_faixa, preprocess_features
+from backend.ml.train import CAT_COLS, EXCLUDE_COLS, derive_faixa, preprocess_features
 
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "dataset_safefield.parquet")
