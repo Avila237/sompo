@@ -21,7 +21,10 @@ def has_credentials():
     )
 
 
-pytestmark = pytest.mark.skipif(not has_credentials(), reason=SKIP_MSG)
+pytestmark = [
+    pytest.mark.rede,
+    pytest.mark.skipif(not has_credentials(), reason=SKIP_MSG),
+]
 
 
 @pytest.fixture(scope="module")
