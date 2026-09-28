@@ -9,7 +9,7 @@
 
 import { apiGet, apiPostPublico } from '../lib/apiClient'
 import { setSessao, limparSessao, assinarSessao } from '../lib/auth'
-import type { Equipment, Region, ToneKey } from '../types'
+import type { Region, ToneKey } from '../types'
 
 /* ── Autenticacao ─────────────────────────────────────────── */
 
@@ -373,26 +373,6 @@ export async function loadEquipamentoDetail(id: string): Promise<EquipamentoDeta
     ultima: r.ultima_avaliacao,
     predicao: r.predicao,
     historico: (r.historico ?? []).map((h) => ({ ts: h.timestamp, score: h.risco_score })),
-  }
-}
-
-/* ── Adapta EquipamentoView ao tipo Equipment (tela Detalhe) ─ */
-
-export function toEquipment(v: EquipamentoView): Equipment {
-  return {
-    id: v.id,
-    model: v.modelo,
-    type: v.tipo,
-    op: v.operador,
-    opName: v.operador,
-    client: '—',
-    region: v.lat !== null && v.lon !== null ? `${Math.abs(v.lat).toFixed(1)}°S ${Math.abs(v.lon).toFixed(1)}°O` : '—',
-    score: v.score,
-    trend: v.trend,
-    lastAlert: v.ultimaTs ? new Date(v.ultimaTs).toLocaleDateString('pt-BR') : '—',
-    hours: 0,
-    maint: 'em dia',
-    maintPct: 0,
   }
 }
 

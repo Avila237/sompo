@@ -5,7 +5,6 @@ import { WIco } from './components/Icons'
 import { loadEquipamentos, logout } from './data/api'
 import { getSessao, assinarSessao, type Sessao } from './lib/auth'
 import Login from './components/Login'
-import type { Equipment } from './types'
 import { ComingSoon } from './components/ComingSoon'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
@@ -41,7 +40,7 @@ export default function App() {
 function Shell({ perfil }: { perfil: string }) {
   const [persona, setPersona] = useState<'sompo' | 'broker' | 'tech'>('sompo')
   const [screen, setScreen] = useState('overview')
-  const [pickEquip, setPickEquip] = useState<Equipment | null>(null)
+  const [pickEquip, setPickEquip] = useState<string | null>(null) // equipamento_id
   const [equipCount, setEquipCount] = useState<number | undefined>(undefined)
 
   useEffect(() => {
@@ -72,8 +71,8 @@ function Shell({ perfil }: { perfil: string }) {
     setPickEquip(null)
   }
 
-  function goDetail(e: Equipment) {
-    setPickEquip(e)
+  function goDetail(id: string) {
+    setPickEquip(id)
     setScreen('detail')
   }
 
@@ -83,7 +82,7 @@ function Shell({ perfil }: { perfil: string }) {
     switch (screen) {
       case 'overview':  return <SompoOverview onPickEquip={goDetail} onNav={setScreen} />
       case 'ranking':   return <SompoRanking onPickEquip={goDetail} />
-      case 'detail':    return <SompoDetail equip={pickEquip} onBack={() => setScreen('ranking')} />
+      case 'detail':    return <SompoDetail equipId={pickEquip} onBack={() => setScreen('ranking')} />
       case 'simulator': return <ComingSoon><SompoSimulator /></ComingSoon>
       case 'ubi':       return <ComingSoon><SompoUBI /></ComingSoon>
       case 'reports':   return <ComingSoon><SompoReports /></ComingSoon>
@@ -100,7 +99,7 @@ function Shell({ perfil }: { perfil: string }) {
         )}
         <main style={{ flex: 1, overflow: 'auto' }}>
           {/* key: trocar de tela ou equipamento zera o erro; a navegação segue viva */}
-          <ErrorBoundary key={`${persona}:${screen}:${pickEquip?.id ?? ''}`}>
+          <ErrorBoundary key={`${persona}:${screen}:${pickEquip ?? ''}`}>
             {renderPage()}
           </ErrorBoundary>
         </main>

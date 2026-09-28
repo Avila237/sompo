@@ -9,7 +9,6 @@ import {
   type GrupoShap,
   type ShapFactor,
 } from '../../data/api'
-import type { Equipment } from '../../types'
 import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
@@ -55,22 +54,22 @@ const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 
 /* ── Main ─────────────────────────────────────────────────── */
 
-export default function SompoDetail({ equip, onBack }: { equip: Equipment | null; onBack: () => void }) {
+export default function SompoDetail({ equipId, onBack }: { equipId: string | null; onBack: () => void }) {
   const [detail, setDetail] = useState<EquipamentoDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
-    if (!equip) { setLoading(false); return }
+    if (!equipId) { setLoading(false); return }
     let active = true
     setLoading(true)
     setError(null)
-    loadEquipamentoDetail(equip.id)
+    loadEquipamentoDetail(equipId)
       .then((d) => { if (active) { setDetail(d); setLoading(false) } })
       .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
     return () => { active = false }
-  }, [equip, tentativa])
+  }, [equipId, tentativa])
 
   const shapGroups = useMemo<GrupoShap[]>(
     () => (detail?.predicao ? aggregateShapByGroup(detail.predicao.top_fatores_shap) : []),
@@ -84,7 +83,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
     [detail],
   )
 
-  if (!equip) {
+  if (!equipId) {
     return (
       <div style={{ padding: '40px 28px', textAlign: 'center', color: 'var(--fg-mute)', fontSize: 14 }}>
         Selecione um equipamento no Ranking para ver o detalhe.
@@ -95,7 +94,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
   if (loading) {
     return (
       <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: 'var(--fg-mute)', fontSize: 14 }}>
-        Carregando detalhe de {equip.id}…
+        Carregando detalhe de {equipId}…
       </div>
     )
   }
@@ -103,7 +102,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
   if (error || !detail) {
     return (
       <ErroCarga
-        titulo={`Não foi possível carregar o detalhe de ${equip.id}.`}
+        titulo={`Não foi possível carregar o detalhe de ${equipId}.`}
         msg={error ?? 'A API não devolveu dados.'}
         onTentar={() => setTentativa((t) => t + 1)}
       />
