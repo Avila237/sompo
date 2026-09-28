@@ -5,5 +5,13 @@
   "accuracy_faixas": 0.891,
   "n_train": 4000,
   "n_test": 1000,
-  "n_features": 30
+  "n_features": 30,
+  "referencia": {
+    "gerado_em": "2026-08-24",
+    "plataforma": "Darwin (arquitetura nao registrada)",
+    "python": "3.13",
+    "xgboost": "3.4.1",
+    "numpy": "2.5.2",
+    "commit": "455ae5c"
+  }
 }

@@ -51,7 +51,7 @@ git clone https://github.com/Avila237/sompo.git
 cd sompo
 
 # 2. Criar ambiente virtual (Python 3.13)
-python3.13 -m venv .venv
+python3.13 -m venv .venv          # Windows: py -3.13 -m venv .venv
 
 # 3. Ativar ambiente virtual
 # Windows:
@@ -608,6 +608,12 @@ O XGBoost foi escolhido por três razões principais. Primeiro, lida bem com var
 | Acurácia por faixa | 89.1% | Acerto na classificação baixo / médio / alto |
 
 Treino: 4.000 registros · 30 features de entrada.
+
+Esses são os números de **referência**, gerados no retreino da Entrega 3; o arquivo registra a
+plataforma e as versões. Retreinar em outra plataforma, com o mesmo código, a mesma semente e as
+mesmas versões, dá números ligeiramente diferentes (no Windows x86: MAE 4.72, acurácia 88.7%),
+sempre dentro dos critérios de aceite. Por isso `train.py` grava por padrão em
+`models/metrics.local.json`, ignorado pelo Git, e só atualiza a referência com `--referencia`.
 
 ### 6.4 Explicabilidade com SHAP
 

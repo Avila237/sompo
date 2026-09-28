@@ -1,6 +1,10 @@
+import argparse
 import json
 import os
+import platform
 import sys
+from datetime import date
+from importlib.metadata import version
 
 import joblib
 import numpy as np
@@ -20,6 +24,23 @@ from sklearn.preprocessing import OrdinalEncoder
 DATA_PATH = "data/dataset_safefield.parquet"
 MODELS_DIR = "models"
 
+# O retreino em outra plataforma da metricas ligeiramente diferentes (mesmo
+# codigo, mesma semente, mesmas versoes). Por isso o treino grava por padrao
+# num arquivo local, ignorado pelo Git, e so sobrescreve a referencia
+# versionada, que o README cita, quando pedido com --referencia.
+METRICAS_REFERENCIA = "metrics.json"
+METRICAS_LOCAIS = "metrics.local.json"
+
+
+def _proveniencia() -> dict:
+    """Onde e com o que as metricas de referencia foram geradas."""
+    return {
+        "gerado_em": date.today().isoformat(),
+        "plataforma": f"{platform.system()} {platform.machine()}",
+        "python": platform.python_version(),
+        **{pkg: version(pkg) for pkg in ("xgboost", "numpy", "pandas", "scikit-learn")},
+    }
+
 # Este modulo tambem roda como script (python backend/ml/train.py), caso em que a
 # raiz do projeto nao esta no sys.path e o import absoluto abaixo falharia.
 _PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,7 +59,7 @@ from backend.ml.preprocess import (  # noqa: E402,F401
 )
 
 
-def main():
+def main(referencia: bool = False):
     os.makedirs(MODELS_DIR, exist_ok=True)
 
     df = pd.read_parquet(DATA_PATH)
@@ -138,12 +159,14 @@ def main():
     with open(os.path.join(MODELS_DIR, "features.json"), "w") as f:
         json.dump(feature_cols, f, indent=2)
 
-    with open(os.path.join(MODELS_DIR, "metrics.json"), "w") as f:
-        json.dump(metrics, f, indent=2)
+    nome_metricas = METRICAS_REFERENCIA if referencia else METRICAS_LOCAIS
+    conteudo = {**metrics, "referencia": _proveniencia()} if referencia else metrics
+    with open(os.path.join(MODELS_DIR, nome_metricas), "w") as f:
+        json.dump(conteudo, f, indent=2)
 
     print()
     print(f"Artefatos salvos em '{MODELS_DIR}/':")
-    for fname in ["xgboost_model.joblib", "encoder.joblib", "features.json", "metrics.json"]:
+    for fname in ["xgboost_model.joblib", "encoder.joblib", "features.json", nome_metricas]:
         fpath = os.path.join(MODELS_DIR, fname)
         size_kb = os.path.getsize(fpath) / 1024
         print(f"  - {fname} ({size_kb:.1f} KB)")
@@ -162,4 +185,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Treina o XGBoost do SafeField")
+    parser.add_argument(
+        "--referencia",
+        action="store_true",
+        help=f"grava as metricas em models/{METRICAS_REFERENCIA} (versionado), "
+        f"com plataforma e versoes; sem a flag, grava em models/{METRICAS_LOCAIS}",
+    )
+    main(referencia=parser.parse_args().referencia)
