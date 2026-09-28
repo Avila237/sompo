@@ -42,7 +42,7 @@ function notificar(): void {
 
 /** Sessao corrente, ou `null` se ausente/expirada. */
 export function getSessao(): Sessao | null {
-  if (sessao && sessao.expiraEm <= Date.now()) limparSessao()
+  if (sessao && sessao.expiraEm <= Date.now()) limparSessao('expirada')
   return sessao
 }
 
@@ -52,6 +52,7 @@ export function getToken(): string | null {
 }
 
 export function setSessao(nova: Sessao): void {
+  motivoFim = null
   sessao = nova
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(nova))
@@ -62,7 +63,22 @@ export function setSessao(nova: Sessao): void {
   notificar()
 }
 
-export function limparSessao(): void {
+/**
+ * Por que a ultima sessao terminou. `expirada` = a API recusou o token (401)
+ * ou o prazo venceu; a tela de login usa isso para dizer "sessao expirada" em
+ * vez de voltar muda. Logout voluntario limpa o motivo.
+ */
+export type MotivoFim = 'expirada' | null
+
+let motivoFim: MotivoFim = null
+
+/** Motivo do fim da ultima sessao; zerado no proximo login ou logout voluntario. */
+export function motivoFimSessao(): MotivoFim {
+  return motivoFim
+}
+
+export function limparSessao(motivo: MotivoFim = null): void {
+  motivoFim = motivo
   sessao = null
   try {
     sessionStorage.removeItem(STORAGE_KEY)

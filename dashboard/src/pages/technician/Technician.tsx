@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react'
-import { MAINT_QUEUE, WTONE, EQUIPMENT } from '../../data/mock'
+import { MAINT_QUEUE, EQUIPMENT } from '../../data/mock'
+import { WTONE } from '../../lib/risco'
 import { Card, Chip, SectionHeader } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import SideNav from '../../components/SideNav'

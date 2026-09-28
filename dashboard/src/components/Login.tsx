@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { login } from '../data/api'
 import { ApiError } from '../lib/apiClient'
+import { motivoFimSessao } from '../lib/auth'
 import { SompoMark } from './shared'
 
 /**
@@ -13,7 +14,10 @@ import { SompoMark } from './shared'
 export default function Login({ onEntrar }: { onEntrar: () => void }) {
   const [usuario, setUsuario] = useState('')
   const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState<string | null>(null)
+  // Voltar ao login por token recusado sem dizer nada parecia bug; explica o motivo
+  const [erro, setErro] = useState<string | null>(() =>
+    motivoFimSessao() === 'expirada' ? 'Sua sessão expirou. Entre novamente.' : null,
+  )
   const [enviando, setEnviando] = useState(false)
 
   async function submeter(e: FormEvent) {
@@ -102,9 +106,9 @@ export default function Login({ onEntrar }: { onEntrar: () => void }) {
           disabled={enviando}
           style={{
             marginTop: 4, padding: '10px 14px', borderRadius: 6, fontWeight: 700, fontSize: 13,
-            cursor: enviando ? 'default' : 'pointer', border: '1px solid #5AE06B',
-            background: enviando ? 'var(--bg-elev-2)' : '#5AE06B',
-            color: enviando ? 'var(--fg-mute)' : '#0A0C0B',
+            cursor: enviando ? 'default' : 'pointer', border: '1px solid var(--green)',
+            background: enviando ? 'var(--bg-elev-2)' : 'var(--green)',
+            color: enviando ? 'var(--fg-mute)' : 'var(--bg)',
           }}
         >
           {enviando ? 'Entrando…' : 'Entrar'}
