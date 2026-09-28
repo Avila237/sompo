@@ -8,7 +8,7 @@ score saiu e qual versao do modelo decidiu. E a evidencia consultavel de
 
 import logging
 
-from backend.db.repository import get_client
+from backend.db import repository as repo
 
 logger = logging.getLogger("safefield.auditoria")
 
@@ -41,7 +41,7 @@ def registrar(
         "detalhe": detalhe,
     }
     try:
-        get_client().table("auditoria").insert(registro).execute()
+        repo.inserir_auditoria(registro)
     except Exception as e:
         logger.error(
             "falha ao gravar auditoria (acao=%s usuario=%s): %s", acao, usuario, e
