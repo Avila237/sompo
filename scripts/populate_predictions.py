@@ -73,7 +73,11 @@ def insert_batch(client, records: list[dict]):
     total = len(records)
     for i in range(0, total, BATCH_SIZE):
         batch = records[i : i + BATCH_SIZE]
-        client.table("predicoes").insert(batch).execute()
+        # Reexecutar nao duplica: o par (avaliacao_id, modelo_versao) e unico
+        # desde a migration da Sprint 4, e o que ja existe fica como esta.
+        client.table("predicoes").upsert(
+            batch, on_conflict="avaliacao_id,modelo_versao", ignore_duplicates=True
+        ).execute()
         inserted = min(i + BATCH_SIZE, total)
         print(f"  predicoes: {inserted}/{total}")
 
@@ -160,7 +164,7 @@ def main():
     print(f"  modelo_versao: {example['modelo_versao']}")
     print("  top_fatores_shap:")
     for fator in example["top_fatores_shap"]:
-        print(f"    {fator['feature']:<40} shap={fator['shap_value']:+.3f}  grupo={fator['group']}")
+        print(f"    {fator['feature']:<40} shap={fator['shap_value']:+.3f}  grupo={fator['grupo']}")
     print("=" * 60)
     print("Predicoes populadas com sucesso!")
 

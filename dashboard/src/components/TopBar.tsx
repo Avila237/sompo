@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect, type JSX } from 'react'
+﻿import { useState, useRef, useEffect } from 'react'
 import { WTONE } from '../lib/risco'
 import { loadAlertas, type Alerta } from '../data/api'
 import { WIco } from './Icons'
@@ -10,19 +10,12 @@ type AlertasState =
   | { status: 'ok'; itens: Alerta[] }
   | { status: 'error'; msg: string }
 
-/* ── persona config ── */
-const PERSONAS: { key: string; label: string; icon: () => JSX.Element }[] = [
-  { key: 'sompo',  label: 'Sompo · Seguradora',  icon: WIco.briefcase },
-  { key: 'broker', label: 'Corretor',             icon: WIco.people },
-  { key: 'tech',   label: 'Técnico manutenção',   icon: WIco.wrench },
-]
-
 /* ── TopBar ── */
-export default function TopBar({ persona, setPersona, perfil, onSair }: {
-  persona: string
-  setPersona: (p: string) => void
-  /** Perfil da sessao autenticada (operador | gestor | analista). */
+export default function TopBar({ perfil, usuario, onSair }: {
+  /** Rótulo do perfil da sessão (ex.: "Técnico de manutenção"). */
   perfil?: string
+  /** Usuário que entrou (vem do login). */
+  usuario?: string
   onSair?: () => void
 }) {
   const [showNotifs, setShowNotifs] = useState(false)
@@ -70,34 +63,6 @@ export default function TopBar({ persona, setPersona, perfil, onSair }: {
           fontWeight: 800, fontSize: 13, letterSpacing: 1.4,
           color: 'var(--fg)',
         }}>SAFEFIELD</span>
-        <span style={{
-          fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-mute)',
-          background: 'var(--bg-elev-3)', borderRadius: 4, padding: '2px 6px',
-        }}>v2.4.1</span>
-      </div>
-
-      {/* ── CENTER: persona switcher ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 2,
-        background: 'var(--bg-elev-2)', borderRadius: 8, padding: 3,
-        border: '1px solid var(--line)',
-      }}>
-        {PERSONAS.map(p => {
-          const active = persona === p.key
-          const Icon = p.icon
-          return (
-            <button key={p.key} onClick={() => setPersona(p.key)} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '6px 14px', borderRadius: 6, border: 'none',
-              cursor: 'pointer', fontSize: 12, fontWeight: active ? 600 : 500,
-              color: active ? 'var(--fg)' : 'var(--fg-dim)',
-              background: active ? 'var(--bg-elev-3)' : 'transparent',
-              transition: 'all .15s',
-            }}>
-              <Icon />{p.label}
-            </button>
-          )
-        })}
       </div>
 
       {/* ── RIGHT: bell + avatar ── */}
@@ -179,19 +144,23 @@ export default function TopBar({ persona, setPersona, perfil, onSair }: {
             background: 'var(--bg-elev-3)', border: '1px solid var(--line-2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 700, color: 'var(--fg-dim)',
-          }}>LA</div>
+          }}>{(usuario ?? perfil ?? '?').slice(0, 2).toUpperCase()}</div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', lineHeight: 1.2 }}>
-              Luisa Andrade
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--fg-mute)' }}>
-              {perfil ? `Perfil: ${perfil}` : 'Analista de riscos'}
-            </div>
+            {usuario && (
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', lineHeight: 1.2 }}>
+                {usuario}
+              </div>
+            )}
+            {perfil && (
+              <div style={{ fontSize: usuario ? 10 : 12, color: usuario ? 'var(--fg-mute)' : 'var(--fg)' }}>
+                Perfil: {perfil}
+              </div>
+            )}
           </div>
           {onSair && (
             <button
               onClick={onSair}
-              title="Encerrar sessao"
+              title="Encerrar sessão"
               style={{
                 marginLeft: 6, padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', background: 'transparent', color: 'var(--fg-dim)',

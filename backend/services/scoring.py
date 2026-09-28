@@ -7,21 +7,25 @@ Orquestracao do fluxo de ponta a ponta (RF-01).
 Regra de camada: services importa de ml e db; nunca o contrario.
 """
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
 
 from backend.core import config
 from backend.core.exceptions import (
+    AcessoNegado,
     ClimaIndisponivel,
     EquipamentoNaoEncontrado,
     LeituraInconsistente,
+    LeituraReutilizada,
     ModeloIndisponivel,
     OperadorNaoEncontrado,
     SafeFieldError,
 )
 from backend.db import repository as repo
 from backend.ml.predictor import get_predictor
-from backend.services import auditoria, clima
+from backend.services import auditoria, clima, consultas
 from backend.services.recomendacoes import recomendar
 
 logger = logging.getLogger("safefield.scoring")
@@ -42,6 +46,44 @@ def status_modelo() -> dict:
         return {"carregado": True, "n_features": len(carregar_modelo().features)}
     except ModeloIndisponivel:
         return {"carregado": False}
+
+
+def hash_do_payload(leitura: dict) -> str:
+    """
+    Impressao digital do que o cliente enviou, sem a propria chave. Calculada
+    antes do enriquecimento climatico: um retry nao pode mudar de hash so
+    porque a Open-Meteo respondeu outro valor na segunda vez.
+    """
+    # Opcional nulo e opcional ausente sao o mesmo payload: sem isto, um campo
+    # opcional novo no schema mudaria o hash de um retry que atravessa o deploy.
+    sem_chave = {k: v for k, v in leitura.items() if k != "leitura_id" and v is not None}
+    canonico = json.dumps(sem_chave, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha256(canonico.encode("utf-8")).hexdigest()
+
+
+def autorizar_envio(quem: dict, leitura: dict) -> AcessoNegado | None:
+    """
+    Matriz perfil x rota (S4-18): o analista envia por qualquer operador
+    (integracao, simulador); o operador so em nome proprio; gestor e tecnico
+    so leem.
+    """
+    if quem["perfil"] == "analista":
+        return None
+    if quem["perfil"] == "operador":
+        if leitura["operador_id"] != quem.get("operador_id"):
+            return AcessoNegado(
+                f"Operador {quem.get('operador_id')} so envia leituras em nome proprio, "
+                f"nao de {leitura['operador_id']}."
+            )
+        # So para equipamento que ja esta no recorte: senao, uma leitura num
+        # equipamento alheio o poria no recorte. Vem antes de buscar o
+        # equipamento, para inexistente e alheio responderem igual.
+        # ponytail: o primeiro vinculo de um operador novo entra pelo analista
+        #   (integracao); tabela de alocacao operador x equipamento se isso pesar.
+        if leitura["equipamento_id"] not in consultas.equipamentos_do_operador(quem["operador_id"]):
+            return AcessoNegado(f"Equipamento '{leitura['equipamento_id']}' fora do seu recorte.")
+        return None
+    return AcessoNegado(f"Perfil '{quem['perfil']}' nao envia leituras.")
 
 
 def _recusar(quem: dict, leitura: dict, erro: SafeFieldError) -> SafeFieldError:
@@ -170,14 +212,32 @@ def resolver_clima(leitura: dict) -> tuple[dict, str]:
     return leitura, ("misto" if medidos else "open-meteo")
 
 
-def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
+def processar_leitura(leitura: dict, usuario: dict) -> tuple[dict, bool]:
     """
-    Executa o fluxo completo e devolve o payload da resposta.
+    Executa o fluxo completo e devolve (payload da resposta, reenvio).
 
-    Se a predicao falhar depois de a avaliacao ter sido gravada, a avaliacao e
-    removida: o registro nao pode ficar orfao, sem predicao, em silencio (RF-03).
+    Avaliacao e predicao sao gravadas numa transacao so (RF-03). reenvio=True
+    quando o leitura_id ja estava gravado com o mesmo payload: nada e gravado
+    e a resposta e a original.
     """
-    quem = usuario or {"usuario": "-", "perfil": "-"}
+    quem = usuario
+    # Autorizacao antes do reenvio: sem isto, gestor e tecnico receberiam 200
+    # com o resultado gravado, e um operador leria a leitura de outro.
+    negado = autorizar_envio(quem, leitura)
+    if negado:
+        raise _recusar(quem, leitura, negado)
+
+    payload_hash = hash_do_payload(leitura)
+
+    # Reenvio decidido antes de qualquer trabalho: o retry chega justamente
+    # quando algo falhou, e nao pode depender de a Open-Meteo ou o modelo
+    # estarem de pe. A funcao SQL segue como garantia na corrida.
+    if leitura.get("leitura_id"):
+        anterior = repo.buscar_por_leitura(leitura["leitura_id"])
+        if anterior is not None:
+            if anterior["payload_hash"] != payload_hash:
+                raise _recusar(quem, leitura, LeituraReutilizada(leitura["leitura_id"]))
+            return _resposta_do_reenvio(anterior["avaliacao_id"], quem), True
 
     equipamento = repo.buscar_equipamento(leitura["equipamento_id"])
     if equipamento is None:
@@ -204,6 +264,7 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
     # Procedencia: distingue o dado de ingestao do populado pelo seed em lote.
     linha_avaliacao["fonte"] = "telemetria"
     linha_avaliacao["clima_origem"] = clima_origem
+    linha_avaliacao["payload_hash"] = payload_hash
 
     explicacao = predictor.prever(registro)
 
@@ -211,30 +272,29 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
     linha_avaliacao["risco_score"] = explicacao.risco_score
     linha_avaliacao["faixa_risco"] = explicacao.faixa_risco
 
-    avaliacao_id = repo.inserir_avaliacao(linha_avaliacao)
-
+    predicao = {
+        "risco_score_predito": explicacao.risco_score,
+        "faixa_predita": explicacao.faixa_risco,
+        "top_fatores_shap": explicacao.top_fatores,
+        "contribuicoes_por_grupo": explicacao.contribuicoes_por_grupo,
+        "modelo_versao": config.MODELO_VERSAO,
+    }
     try:
-        repo.inserir_predicao(
-            {
-                "avaliacao_id": avaliacao_id,
-                "risco_score_predito": explicacao.risco_score,
-                "faixa_predita": explicacao.faixa_risco,
-                "top_fatores_shap": explicacao.top_fatores,
-                "modelo_versao": config.MODELO_VERSAO,
-            }
-        )
+        # Uma transacao so no banco: sem avaliacao orfa se a predicao falhar.
+        avaliacao_id, reenvio = repo.registrar_avaliacao(linha_avaliacao, predicao)
+    except LeituraReutilizada as e:
+        raise _recusar(quem, leitura, e) from e
     except Exception as e:
-        repo.remover_avaliacao(avaliacao_id)
-        logger.error(
-            "predicao falhou para %s; avaliacao %s removida: %s",
-            leitura["equipamento_id"], avaliacao_id, e,
-        )
+        logger.error("gravacao falhou para %s: %s", leitura["equipamento_id"], e)
         auditoria.registrar(
             quem["usuario"], quem["perfil"], "avaliacao", "erro",
             equipamento_id=leitura["equipamento_id"],
-            detalhe=f"predicao falhou, avaliacao {avaliacao_id} revertida",
+            detalhe=f"gravacao falhou: {type(e).__name__}",
         )
         raise
+
+    if reenvio:
+        return _resposta_do_reenvio(avaliacao_id, quem), True
 
     # A leitura agregada passa a enxergar a linha nova imediatamente.
     repo.invalidar_cache()
@@ -263,4 +323,36 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
         "recomendacoes": recomendar(registro, explicacao.faixa_risco, explicacao.top_fatores),
         "modelo_versao": config.MODELO_VERSAO,
         "timestamp": agora.isoformat(),
+    }, False
+
+
+def _resposta_do_reenvio(avaliacao_id: int, quem: dict) -> dict:
+    """
+    O cliente reenviou uma leitura ja gravada: devolve o resultado original,
+    lido do banco, em vez de gravar de novo.
+    """
+    avaliacao = repo.buscar_avaliacao(avaliacao_id)
+    equipamento = repo.buscar_equipamento(avaliacao["equipamento_id"]) or {}
+    predicao = repo.predicao_de(avaliacao_id) or {}
+    top = predicao.get("top_fatores_shap") or []
+    faixa = avaliacao["faixa_risco"]
+    auditoria.registrar(
+        quem["usuario"], quem["perfil"], "avaliacao", "reenvio",
+        equipamento_id=avaliacao["equipamento_id"],
+        avaliacao_id=avaliacao_id,
+        score_gerado=float(avaliacao["risco_score"]),
+        modelo_versao=predicao.get("modelo_versao"),
+        detalhe=f"reenvio da leitura_id {avaliacao.get('leitura_id')}",
+    )
+    return {
+        "avaliacao_id": avaliacao_id,
+        "equipamento_id": avaliacao["equipamento_id"],
+        "risco_score": float(avaliacao["risco_score"]),
+        "faixa_risco": faixa,
+        "clima_origem": avaliacao["clima_origem"],
+        "contribuicoes_por_grupo": predicao.get("contribuicoes_por_grupo") or {},
+        "top_fatores": top,
+        "recomendacoes": recomendar({**equipamento, **avaliacao}, faixa, top),
+        "modelo_versao": predicao.get("modelo_versao") or config.MODELO_VERSAO,
+        "timestamp": avaliacao["timestamp"],
     }

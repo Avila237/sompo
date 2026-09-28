@@ -169,7 +169,13 @@ class TestExplicacaoIndividual:
 
     def test_chaves_obrigatorias(self, shap_vals, features):
         for factor in explain_record(shap_vals, features, idx=0):
-            assert {"feature", "shap_value", "group"} <= factor.keys()
+            assert {"feature", "shap_value", "grupo"} <= factor.keys()
+
+    def test_sem_chave_legada_group(self, shap_vals, features):
+        # Mesma chave que backend/ml/predictor.py grava. O seed saiu daqui com
+        # 'group' e a leitura teve de normalizar (services/consultas.py).
+        for factor in explain_record(shap_vals, features, idx=0):
+            assert "group" not in factor, "Chave legada 'group' ainda emitida"
 
     def test_feature_e_string(self, shap_vals, features):
         for factor in explain_record(shap_vals, features, idx=0):
@@ -179,10 +185,10 @@ class TestExplicacaoIndividual:
         for factor in explain_record(shap_vals, features, idx=0):
             assert isinstance(factor["shap_value"], float)
 
-    def test_group_e_valido(self, shap_vals, features):
+    def test_grupo_e_valido(self, shap_vals, features):
         valid = set(FEATURE_GROUPS.keys())
         for factor in explain_record(shap_vals, features, idx=0):
-            assert factor["group"] in valid, f"Grupo invalido: {factor['group']}"
+            assert factor["grupo"] in valid, f"Grupo invalido: {factor['grupo']}"
 
     def test_ordenado_por_importancia_decrescente(self, shap_vals, features):
         result = explain_record(shap_vals, features, idx=0, top_n=8)

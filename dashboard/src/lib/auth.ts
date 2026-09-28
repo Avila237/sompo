@@ -12,6 +12,10 @@ const STORAGE_KEY = 'safefield.sessao'
 export interface Sessao {
   token: string
   perfil: string
+  /** usuário digitado no login; opcional porque sessões gravadas antes não o têm */
+  usuario?: string
+  /** preenchido só para o perfil operador: é o que liga o login ao recorte da API (BRA-451) */
+  operadorId?: string | null
   /** epoch em ms; derivado de `expira_em_minutos` no momento da emissao */
   expiraEm: number
 }

@@ -68,5 +68,5 @@ class TestEnvExample:
                 for l in f
                 if "=" in l and not l.lstrip().startswith("#")
             }
-        obrigatorias = {"SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "JWT_SECRET_KEY", "DEMO_USERS"}
+        obrigatorias = {"SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "JWT_SECRET_KEY"}
         assert obrigatorias <= declaradas, f"faltando: {obrigatorias - declaradas}"

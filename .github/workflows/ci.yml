@@ -12,13 +12,23 @@ concurrency:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    # Os tres SOs (S4-09): o setup tem de funcionar fora da maquina de quem
+    # desenvolveu. fail-fast desligado: uma falha so no Windows nao pode
+    # esconder o resultado dos outros dois.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # bash tambem no Windows (Git Bash do runner): os passos usam export e $(...).
+        shell: bash
     env:
       # Valores de teste: nenhum teste desta job toca o Supabase (os marcados
       # com 'rede' sao excluidos) nem a Open-Meteo (mockada em test_api).
       SUPABASE_URL: http://supabase.invalid
       SUPABASE_SERVICE_ROLE_KEY: ci-fake-key
-      DEMO_USERS: analista:ci:analista
       MLFLOW_DISABLE_AGENT_HINT: "1"
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +39,12 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - name: OpenMP (macOS)
+        # O wheel do xgboost para macOS liga em @rpath/libomp.dylib mas nao a
+        # traz junto; sem a libomp o import do xgboost falha.
+        if: runner.os == 'macOS'
+        run: brew install libomp
+
       - name: Instalar dependencias
         run: pip install -r backend/requirements.txt ruff==0.16.9 pip-audit==2.10.1
 
@@ -36,6 +52,8 @@ jobs:
         run: ruff check backend scripts tests
 
       - name: Auditoria de dependencias
+        # A auditoria olha as versoes fixadas no requirements, nao o SO: basta um.
+        if: runner.os == 'Linux'
         run: pip-audit -r backend/requirements.txt
 
       - name: Gerar dataset e treinar
@@ -50,7 +68,9 @@ jobs:
           pytest -m "not seed and not rede"
 
       - name: Arvore limpa depois dos testes
-        # A suite nao pode sobrescrever arquivos versionados.
+        # A suite nao pode sobrescrever arquivos versionados. No Windows o
+        # train.py regrava models/features.json com CRLF; o '* text=auto' do
+        # .gitattributes faz o diff comparar o conteudo normalizado.
         run: git diff --exit-code
 
   dashboard:
@@ -71,5 +91,8 @@ jobs:
       - run: npm run lint
       - name: Build (inclui tsc)
         run: npm run build
+        env:
+          # O build exige a variavel: e dela que sai o connect-src da CSP.
+          VITE_API_BASE_URL: http://localhost:8000
       - name: Auditoria de dependencias
         run: npm audit --audit-level=high

@@ -38,6 +38,16 @@ class LeituraInconsistente(SafeFieldError):
         super().__init__(self.mensagem)
 
 
+class LeituraReutilizada(SafeFieldError):
+    """Mesmo leitura_id reenviado com outro payload: nao e retry, e conflito."""
+
+    status_code = 409
+
+    def __init__(self, leitura_id: str | None):
+        self.mensagem = f"leitura_id {leitura_id} ja foi usado com outro payload."
+        super().__init__(self.mensagem)
+
+
 class ModeloIndisponivel(SafeFieldError):
     status_code = 503
     mensagem = "Modelo preditivo indisponivel. Verifique os artefatos em models/."
@@ -51,6 +61,16 @@ class BancoIndisponivel(SafeFieldError):
 class CredenciaisInvalidas(SafeFieldError):
     status_code = 401
     mensagem = "Usuario ou senha invalidos."
+
+
+class AcessoNegado(SafeFieldError):
+    """Autenticado, mas o perfil nao alcanca o recurso (matriz perfil x rota)."""
+
+    status_code = 403
+
+    def __init__(self, mensagem: str):
+        self.mensagem = mensagem
+        super().__init__(self.mensagem)
 
 
 class ClimaIndisponivel(SafeFieldError):

@@ -1,8 +1,8 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, type JSX } from 'react'
 import TopBar from './components/TopBar'
 import SideNav from './components/SideNav'
 import { WIco } from './components/Icons'
-import { loadEquipamentos, logout } from './data/api'
+import { assinarEquipamentos, loadEquipamentos, logout } from './data/api'
 import { getSessao, assinarSessao, type Sessao } from './lib/auth'
 import Login from './components/Login'
 import { ComingSoon } from './components/ComingSoon'
@@ -14,14 +14,9 @@ import SompoDetail from './pages/sompo/Detail'
 import SompoSimulator from './pages/sompo/Simulator'
 import SompoUBI from './pages/sompo/UBI'
 import SompoReports from './pages/sompo/Reports'
-import BrokerView from './pages/broker/Broker'
-import TechnicianView from './pages/technician/Technician'
-
-const FIRST_SCREEN: Record<string, string> = {
-  sompo: 'overview',
-  broker: 'broker',
-  tech: 'tech',
-}
+import MeusEquipamentos from './pages/operador/MeusEquipamentos'
+import Manutencao from './pages/tecnico/Manutencao'
+import { PERFIS, perfilConhecido, type Perfil, type Tela } from './lib/perfis'
 
 export default function App() {
   const [sessao, setSessaoState] = useState<Sessao | null>(() => getSessao())
@@ -32,77 +27,92 @@ export default function App() {
 
   if (!sessao) return <Login onEntrar={() => setSessaoState(getSessao())} />
 
+  // Perfil fora da matriz (BRA-451) não ganha menu por palpite
+  if (!perfilConhecido(sessao.perfil)) return <PerfilDesconhecido perfil={sessao.perfil} usuario={sessao.usuario} />
+
   // key = token: cada login monta o Shell do zero, entao o proximo usuario nao
-  // herda tela, persona nem equipamento selecionado do anterior.
-  return <Shell key={sessao.token} perfil={sessao.perfil} />
+  // herda tela nem equipamento selecionado do anterior.
+  return <Shell key={sessao.token} perfil={sessao.perfil} usuario={sessao.usuario} />
 }
 
-function Shell({ perfil }: { perfil: string }) {
-  const [persona, setPersona] = useState<'sompo' | 'broker' | 'tech'>('sompo')
-  const [screen, setScreen] = useState('overview')
+const ITENS_MENU: Record<Tela, { label: string; icon: JSX.Element }> = {
+  meus:       { label: 'Meus equipamentos',    icon: <WIco.grid /> },
+  manutencao: { label: 'Manutenção da frota',  icon: <WIco.wrench /> },
+  overview:   { label: 'Visão geral',          icon: <WIco.map /> },
+  ranking:    { label: 'Equipamentos',         icon: <WIco.grid /> },
+  detail:     { label: 'Detalhe equipamento',  icon: <WIco.info /> },
+  reports:    { label: 'Relatórios',           icon: <WIco.doc /> },
+  simulator:  { label: 'Simulador',            icon: <WIco.beaker /> },
+  ubi:        { label: 'UBI · Prêmios',        icon: <WIco.chart /> },
+}
+
+function Shell({ perfil, usuario }: { perfil: Perfil; usuario?: string }) {
+  const cfg = PERFIS[perfil]
+  const [screen, setScreen] = useState<Tela>(cfg.inicio)
   const [pickEquip, setPickEquip] = useState<string | null>(null) // equipamento_id
   const [equipCount, setEquipCount] = useState<number | undefined>(undefined)
 
   useEffect(() => {
-    let ativo = true
-    loadEquipamentos()
-      .then((eqs) => { if (ativo) setEquipCount(eqs.length) })
-      .catch((e) => {
-        // O contador do menu fica vazio; a mensagem para o usuario sai na
-        // propria tela (Visao geral / Ranking), que faz a mesma chamada.
-        console.error('Falha ao carregar contagem de equipamentos:', e)
-      })
-    return () => { ativo = false }
+    // Qualquer carga bem-sucedida da lista atualiza o contador, inclusive a de um
+    // "Tentar de novo" depois de a API voltar
+    const cancelar = assinarEquipamentos((eqs) => setEquipCount(eqs.length))
+    loadEquipamentos().catch((e) => {
+      // O contador fica vazio até a próxima carga; a mensagem para o usuário
+      // sai na própria tela, que faz a mesma chamada.
+      console.error('Falha ao carregar contagem de equipamentos:', e)
+    })
+    return cancelar
   }, [])
 
-  const sompoNav = [
-    { k: 'overview',  label: 'Visao geral',          icon: <WIco.map /> },
-    { k: 'ranking',   label: 'Equipamentos',         icon: <WIco.grid />,   count: equipCount },
-    { k: 'detail',    label: 'Detalhe equipamento',  icon: <WIco.info /> },
-    { k: 'simulator', label: 'Simulador',            icon: <WIco.beaker /> },
-    { k: 'ubi',       label: 'UBI · Premios',        icon: <WIco.chart /> },
-    { k: 'reports',   label: 'Relatorios',           icon: <WIco.doc /> },
-  ]
-
-  function handlePersona(p: string) {
-    const key = p as 'sompo' | 'broker' | 'tech'
-    setPersona(key)
-    setScreen(FIRST_SCREEN[key])
-    setPickEquip(null)
-  }
+  const menu = cfg.menu.map((k) => ({
+    k, ...ITENS_MENU[k],
+    // o contador acompanha a lista de equipamentos do perfil (a do operador já vem recortada)
+    count: k === 'ranking' || k === 'meus' ? equipCount : undefined,
+  }))
 
   function goDetail(id: string) {
     setPickEquip(id)
     setScreen('detail')
   }
 
+  // Só renderiza tela do menu do perfil: nada de cair numa tela que a API vai recusar (403)
   function renderPage() {
-    if (persona === 'broker') return <ComingSoon><BrokerView /></ComingSoon>
-    if (persona === 'tech') return <ComingSoon><TechnicianView /></ComingSoon>
-    switch (screen) {
-      case 'overview':  return <SompoOverview onPickEquip={goDetail} onNav={setScreen} />
-      case 'ranking':   return <SompoRanking onPickEquip={goDetail} />
-      case 'detail':    return <SompoDetail equipId={pickEquip} onBack={() => setScreen('ranking')} />
-      case 'simulator': return <ComingSoon><SompoSimulator /></ComingSoon>
-      case 'ubi':       return <ComingSoon><SompoUBI /></ComingSoon>
-      case 'reports':   return <SompoReports />
-      default:          return <SompoOverview onPickEquip={goDetail} onNav={setScreen} />
+    const tela = cfg.menu.includes(screen) ? screen : cfg.inicio
+    switch (tela) {
+      case 'meus':       return <MeusEquipamentos onPickEquip={goDetail} />
+      case 'manutencao': return <Manutencao onPickEquip={goDetail} />
+      case 'overview':   return <SompoOverview onPickEquip={goDetail} onNav={(t) => setScreen(t as Tela)} />
+      case 'ranking':    return <SompoRanking onPickEquip={goDetail} />
+      case 'detail':     return <SompoDetail equipId={pickEquip} publico={cfg.publico} onBack={() => setScreen(cfg.lista)} />
+      case 'reports':    return <SompoReports />
+      case 'simulator':  return <ComingSoon><SompoSimulator /></ComingSoon>
+      case 'ubi':        return <ComingSoon><SompoUBI /></ComingSoon>
     }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
-      <TopBar persona={persona} setPersona={handlePersona} perfil={perfil} onSair={logout} />
+      <TopBar perfil={cfg.rotulo} usuario={usuario} onSair={logout} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {persona === 'sompo' && (
-          <SideNav items={sompoNav} active={screen} onPick={setScreen} />
-        )}
+        <SideNav items={menu} active={screen} onPick={(k) => setScreen(k as Tela)} />
         <main style={{ flex: 1, overflow: 'auto' }}>
           {/* key: trocar de tela ou equipamento zera o erro; a navegação segue viva */}
-          <ErrorBoundary key={`${persona}:${screen}:${pickEquip ?? ''}`}>
+          <ErrorBoundary key={`${screen}:${pickEquip ?? ''}`}>
             {renderPage()}
           </ErrorBoundary>
         </main>
+      </div>
+    </div>
+  )
+}
+
+function PerfilDesconhecido({ perfil, usuario }: { perfil: string; usuario?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)' }}>
+      <TopBar perfil={perfil} usuario={usuario} onSair={logout} />
+      <div role="alert" style={{ padding: '32px 28px', fontSize: 14, color: 'var(--fg-dim)' }}>
+        O perfil <strong className="mono" style={{ color: 'var(--fg)' }}>{perfil}</strong> não é reconhecido por este dashboard.
+        Saia e entre com um usuário de perfil analista, gestor, técnico ou operador.
       </div>
     </div>
   )

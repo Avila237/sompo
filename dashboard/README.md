@@ -5,7 +5,7 @@ com o banco: toda leitura passa pela API do backend (FastAPI), autenticada por J
 
 ## Pré-requisitos
 
-- **Node.js** `20.19+` ou `22.12+` (exigência do Vite 8)
+- **Node.js** `20.19+`, `22.13+` ou `24+` (a faixa mais estreita entre o Vite 8 e o ESLint 10)
 - **API no ar.** Sem ela o dashboard abre só a tela de login e acusa que não consegue falar com a
   API. Para subir a API, veja "Como rodar o projeto" no [README da raiz](../README.md).
 
@@ -45,17 +45,24 @@ estava ocupada, acrescente a nova origem lá ou libere a porta.
 
 ## Telas
 
-| Tela | Fonte dos dados | Estado |
-|---|---|---|
-| Visão geral | `GET /kpis`, `GET /alertas`, `GET /equipamentos` | ✅ API |
-| Equipamentos (ranking) | `GET /equipamentos` | ✅ API |
-| Detalhe do equipamento (com recomendações preventivas) | `GET /equipamentos/{id}` | ✅ API |
-| Sino de alertas (topo) | `GET /alertas` | ✅ API |
-| Simulador | dados fixos no componente | 🔒 "Em breve" |
-| UBI · Prêmios | `data/mock.ts` | 🔒 "Em breve" |
-| Relatórios (tendência por eixo) | `GET /tendencias` | ✅ API |
-| Persona Corretor | `data/mock.ts` | 🔒 "Em breve" |
-| Persona Técnico | `data/mock.ts` | 🔒 "Em breve" |
+O perfil vem do login (`perfil` e `operador_id` de `POST /auth/token`) e define o menu e a tela
+inicial (`src/lib/perfis.ts`). O **recorte dos dados é da API** (matriz perfil × rota da BRA-451):
+o front só evita abrir tela que a API recusaria. Perfil fora da matriz vê uma mensagem, sem menu.
+
+| Tela | Fonte dos dados | Analista | Gestor | Técnico | Operador |
+|---|---|---|---|---|---|
+| Meus equipamentos | `GET /equipamentos`, `GET /alertas` (recortados pela API) | | | | ✅ início |
+| Manutenção da frota | `GET /equipamentos` (campos de manutenção) | | | ✅ início | |
+| Visão geral | `GET /kpis`, `GET /alertas`, `GET /equipamentos` | ✅ início | ✅ início | ✅ | |
+| Equipamentos (ranking) | `GET /equipamentos` | ✅ | ✅ | ✅ | |
+| Detalhe do equipamento (com recomendações) | `GET /equipamentos/{id}` | ✅ | ✅ | ✅ | ✅ só os dele |
+| Relatórios (tendência por eixo) | `GET /tendencias` | ✅ | ✅ | ✅ | |
+| Sino de alertas (topo) | `GET /alertas` | ✅ | ✅ | ✅ | ✅ só os dele |
+| Simulador · UBI · Prêmios | dados fixos / `data/mock.ts` | 🔒 "Em breve" | | | |
+
+No Detalhe, o card de recomendações abre filtrado no público do perfil (gestor → Gestor, técnico
+→ Técnico, operador → Operador; analista → Todos). Um `403` da API (fora do recorte) mostra o
+motivo e "Voltar", no lugar de "Tentar de novo".
 
 As telas "Em breve" ficam atrás de um overlay com `inert`: não recebem clique nem foco por
 teclado, e nenhuma delas confirma ação que não aconteceu. Os botões de ação sem endpoint
@@ -80,7 +87,7 @@ teclado, e nenhuma delas confirma ação que não aconteceu. Os botões de açã
 
 ```
 src/
-├── App.tsx              portão de sessão + shell (navegação, persona)
+├── App.tsx              portão de sessão + shell (menu e tela inicial por perfil)
 ├── components/          TopBar, SideNav, Login, ComingSoon, ErrorBoundary, shared (Card, Chip, …)
 ├── data/
 │   ├── api.ts           chamadas à API e adaptação das respostas
@@ -91,8 +98,9 @@ src/
 │   ├── auth.ts          sessão (sessionStorage)
 │   ├── useCarga.ts      hook de busca com erro e "tentar de novo"
 │   ├── risco.ts         faixas e tons de risco
+│   ├── perfis.ts        menu, tela inicial e público de recomendação por perfil
 │   └── formato.ts       formatação de datas
-└── pages/               sompo/ (telas reais + mock), broker/, technician/
+└── pages/               sompo/ (telas da carteira), operador/, tecnico/
 ```
 
 Contrato da API: [`docs/contrato-api.md`](../docs/contrato-api.md). Com a API no ar, o Swagger

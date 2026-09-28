@@ -8,6 +8,7 @@ nunca aceito do cliente.
 """
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -34,6 +35,9 @@ class LeituraTelemetria(BaseModel):
     # derivados no servidor — receberia 201 achando que definiu o valor.
     model_config = ConfigDict(extra="forbid")
 
+    # Chave de idempotencia (S4-12): UUID gerado pelo cliente antes do primeiro
+    # envio e reusado no retry. Sem ela, reenviar grava de novo.
+    leitura_id: UUID | None = None
     equipamento_id: str = Field(..., pattern=r"^EQ-\d{4}$")
     operador_id: str = Field(..., pattern=r"^OP-\d{4}$")
 
@@ -125,12 +129,15 @@ class RespostaScore(BaseModel):
 
 
 class TokenRequest(BaseModel):
-    usuario: str
-    senha: str
+    # Sem caractere de controle: NUL chegaria ao Postgres e viraria 500.
+    usuario: str = Field(..., min_length=1, max_length=60, pattern=r"^[^\x00-\x1f\x7f]+$")
+    senha: str = Field(..., min_length=1, max_length=256)
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     perfil: str
+    # Preenchido so para o perfil operador: e o que recorta o que ele ve.
+    operador_id: str | None = None
     expira_em_minutos: int

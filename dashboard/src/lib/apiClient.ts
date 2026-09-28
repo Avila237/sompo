@@ -30,7 +30,7 @@ function exigirBase(): string {
   if (!BASE) {
     throw new ApiError(
       0,
-      'VITE_API_BASE_URL nao definida. Crie dashboard/.env.local com ' +
+      'VITE_API_BASE_URL não definida. Crie dashboard/.env.local com ' +
         'VITE_API_BASE_URL=http://localhost:8000 e reinicie o servidor do Vite.',
     )
   }
@@ -65,7 +65,7 @@ async function mensagemDeErro(res: Response, sinal: AbortSignal): Promise<string
 }
 
 function erroTimeout(): ApiError {
-  return new ApiError(0, `Nao foi possivel falar com a API em ${BASE}: a API nao respondeu em ${TIMEOUT_MS / 1000} s.`)
+  return new ApiError(0, `Não foi possível falar com a API em ${BASE}: a API não respondeu em ${TIMEOUT_MS / 1000} s.`)
 }
 
 async function requisitar<T>(caminho: string, init: RequestInit, autenticado: boolean): Promise<T> {
@@ -75,7 +75,7 @@ async function requisitar<T>(caminho: string, init: RequestInit, autenticado: bo
 
   if (autenticado) {
     const token = getToken()
-    if (!token) throw new ApiError(401, 'Sessao ausente ou expirada. Faca login novamente.')
+    if (!token) throw new ApiError(401, 'Sessão ausente ou expirada. Faça login novamente.')
     headers.set('Authorization', `Bearer ${token}`)
   }
 
@@ -91,7 +91,7 @@ async function requisitar<T>(caminho: string, init: RequestInit, autenticado: bo
       // Falha de rede, CORS, backend fora do ar ou timeout. Nao e engolida: vira
       // erro com status 0 para a interface distinguir de erro HTTP.
       if (ctrl.signal.aborted) throw erroTimeout()
-      throw new ApiError(0, `Nao foi possivel falar com a API em ${base}: ${(e as Error).message}`)
+      throw new ApiError(0, `Não foi possível falar com a API em ${base}: ${(e as Error).message}`)
     }
 
     if (res.status === 401) {
@@ -124,7 +124,7 @@ async function lerJson<T>(res: Response, sinal: AbortSignal): Promise<T> {
     return (await res.json()) as T
   } catch {
     if (sinal.aborted) throw erroTimeout()
-    throw new ApiError(res.status, 'A API devolveu um JSON invalido.')
+    throw new ApiError(res.status, 'A API devolveu um JSON inválido.')
   }
 }
 

@@ -13,8 +13,48 @@ Todas as rotas exigem `Authorization: Bearer <token>`, exceto `POST /auth/token`
 O Swagger (`/docs`, `/redoc`, `/openapi.json`) também é público, por decisão: descreve o contrato,
 não expõe dado, e é por ele que o avaliador explora a API.
 
-Token expira em `JWT_EXPIRE_MINUTES` (default 480). Perfis: `operador`, `gestor`, `analista`. Nesta
-versão os três enxergam os mesmos dados; o perfil vai no token, mas nenhuma rota o usa para filtrar.
+Token expira em `JWT_EXPIRE_MINUTES` (default 480). Usuários vivem na tabela `usuarios`, com senha
+em hash scrypt; o cadastro é feito por `scripts/criar_usuario.py`, que pede a senha sem eco.
+
+### Perfis e o que cada um acessa
+
+Há uma frota só. Os perfis diferem no **recorte**: `analista` (Sompo), `gestor` (gestor de frota) e
+`tecnico` veem a frota inteira; `operador` vê só os equipamentos que já operou (tem ao menos uma
+avaliação com o seu `operador_id`).
+
+| Rota | analista | gestor | tecnico | operador |
+|---|---|---|---|---|
+| `POST /avaliacoes` | qualquer `operador_id` | `403` | `403` | só o próprio `operador_id` e só equipamento que já operou, senão `403` |
+| `GET /equipamentos` | todos | todos | todos | só os que operou |
+| `GET /equipamentos/{id}` | todos | todos | todos | só os que operou, senão `403` |
+| `GET /alertas` | todos | todos | todos | só dos equipamentos que operou |
+| `GET /kpis`, `GET /tendencias` | sim | sim | sim | `403` (agregação da frota) |
+
+O `403` do operador no detalhe vem **antes** da busca: equipamento alheio e equipamento
+inexistente respondem igual, e o operador não descobre o que existe fora do seu recorte. Recusas
+de `POST /avaliacoes` por perfil entram na auditoria com `status='erro'`.
+
+O operador não envia para equipamento fora do recorte: senão, uma leitura em nome próprio num
+equipamento alheio o colocaria no recorte. A primeira leitura de um operador novo num
+equipamento entra pelo `analista` (integração).
+
+**Minimização (LGPD).** O operador vê os equipamentos que já operou, mas uma avaliação desses
+equipamentos pode ser de outro operador. Em `GET /equipamentos`, `GET /equipamentos/{id}` e
+`GET /alertas`, toda avaliação de **outro** operador chega a ele com `operador_id`, `latitude` e
+`longitude` iguais a `null`; as dele chegam intactas. Campo que a rota não devolve (a posição, em
+`/alertas`) continua ausente, não vira `null`. A posição é feature do modelo, então no detalhe o
+`valor` dos fatores `latitude` e `longitude` em `predicao.top_fatores_shap` também vem `null`, e,
+se a posição for o fator dominante, o `criterio` da recomendação cita a feature sem o valor. O
+resto da avaliação (score, faixa, telemetria, clima) não muda. `analista`, `gestor` e `tecnico`
+recebem tudo.
+
+**Limitação conhecida:** o token vale até expirar. Desativar um usuário ou trocar o perfil dele
+só tem efeito no próximo login, até `JWT_EXPIRE_MINUTES` depois.
+
+Recomendações: todos os perfis recebem todas no detalhe, e cada uma traz o seu `publico`
+(`operador`, `gestor` ou `tecnico`). A API não filtra nem reordena por perfil. O destaque das
+recomendações do perfil logado no dashboard é escopo da BRA-460; hoje o card só filtra por
+`publico` quando o usuário escolhe.
 
 ### POST /auth/token
 
@@ -26,9 +66,14 @@ versão os três enxergam os mesmos dados; o perfil vai no token, mas nenhuma ro
   "access_token": "<jwt>",
   "token_type": "bearer",
   "perfil": "analista",
+  "operador_id": null,
   "expira_em_minutos": 480
 }
 ```
+
+`operador_id` vem preenchido só para o perfil `operador`. Usuário desativado, inexistente ou
+senha errada respondem o mesmo `401`, no mesmo tempo. `usuario` com mais de 60 caracteres ou
+`senha` com mais de 256 é `422`.
 
 ## Erros
 
@@ -38,6 +83,7 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 |---|---|---|
 | Sem token | `401` | `"Token ausente."` |
 | Token inválido ou expirado | `401` | `"Token invalido ou expirado."` |
+| Perfil sem acesso à rota ou fora do recorte (matriz acima) | `403` | motivo, ex.: `"Perfil 'operador' nao acessa este recurso."` |
 | Credencial errada em `/auth/token` | `401` | `"Usuario ou senha invalidos."` |
 | 5 credenciais erradas do mesmo IP em 60 s (`/auth/token`) | `429` | `"Muitas tentativas de login. Tente novamente mais tarde."` + header `Retry-After` em segundos |
 | Equipamento inexistente | `404` | `"Equipamento 'EQ-9999' nao encontrado."` |
@@ -46,6 +92,7 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 | Campo desconhecido no payload | `422` | lista do Pydantic, `type: "extra_forbidden"` |
 | Campos incoerentes entre si (`parado` com velocidade; clima incompatível com a chuva) | `422` | lista do Pydantic, `type: "value_error"`, com a regra violada em `msg` |
 | Leitura incoerente com o cadastro (`temperatura_motor` sem IoT ou em implemento) | `422` | texto com a regra violada, ex.: `"temperatura_motor enviada para EQ-0042, que nao tem IoT (Regra 1)"` |
+| `leitura_id` já gravado com outro payload (`POST /avaliacoes`) | `409` | `"leitura_id <uuid> ja foi usado com outro payload."` |
 | Open-Meteo fora **e** payload sem clima completo | `502` | mensagem com os campos climáticos ausentes |
 | Artefatos do modelo ausentes ou ilegíveis (`POST /avaliacoes`) | `503` | `"Modelo preditivo indisponivel. Verifique os artefatos em models/."` |
 | Supabase inacessível: conexão recusada, sem rota ou timeout (qualquer rota de dado) | `503` | `"Banco de dados indisponivel."` |
@@ -59,10 +106,10 @@ cliente de forjar o resultado.
 identificador das linhas de log daquela requisição. No `500` ele vem também no corpo, em
 `request_id`.
 
-**Auditoria das recusas.** Em `POST /avaliacoes`, toda recusa depois da autenticação (`404`,
-`422` de cadastro, `502` e `503` do modelo) grava uma linha em `auditoria` com `status='erro'` e
-o motivo em `detalhe`. Com o banco fora (`503` do Supabase), a própria auditoria não tem onde
-gravar; a falha fica no log.
+**Auditoria das recusas.** Em `POST /avaliacoes`, toda recusa depois da autenticação (`403` por
+perfil ou fora do recorte, `404`, `409`, `422` de cadastro, `502` e `503` do modelo) grava uma
+linha em `auditoria` com `status='erro'` e o motivo em `detalhe`. Com o banco fora (`503` do
+Supabase), a própria auditoria não tem onde gravar; a falha fica no log.
 
 ## GET /health
 
@@ -103,7 +150,10 @@ Ordenado por `risco_score` desc. Uma linha por equipamento, com o score da avali
       "operador_id": "OP-0017",
       "ultima_avaliacao": "2025-11-18T10:49:45+00:00",
       "latitude": -23.882754,
-      "longitude": -44.369725
+      "longitude": -44.369725,
+      "manutencao_atrasada": true,
+      "atraso_manutencao_pct": 1.38,
+      "ultima_manutencao_dias": 208
     },
     "..."
   ]
@@ -113,15 +163,24 @@ Ordenado por `risco_score` desc. Uma linha por equipamento, com o score da avali
 - `tendencia` é a diferença entre o score da última avaliação e o da penúltima; `0.0` com uma só.
 - `faixa_risco` é a faixa gravada na última avaliação, derivada do score cru no momento da
   predição. Não é recalculada a partir do `risco_score` devolvido, que tem duas casas.
+- `manutencao_atrasada`, `atraso_manutencao_pct` (múltiplo do intervalo recomendado; `> 1` é
+  atraso) e `ultima_manutencao_dias` vêm da última avaliação. Os dois primeiros o servidor deriva na
+  ingestão (Regra 14); o último é o que a leitura informou. Alimentam a tela de manutenção do
+  técnico. Podem vir `null` se a linha não os tiver.
 
 **Equipamento sem nenhuma avaliação** também aparece na lista, com:
-- `operador_id`, `ultima_avaliacao`, `latitude` e `longitude` iguais a `null`;
+- `operador_id`, `ultima_avaliacao`, `latitude`, `longitude`, `manutencao_atrasada`,
+  `atraso_manutencao_pct` e `ultima_manutencao_dias` iguais a `null`;
 - `total_avaliacoes` igual a `0`;
 - `risco_score`, `score_medio` e `tendencia` iguais a `0.0`;
 - `faixa_risco` igual a `"baixo"`.
 
 Quem consome deve checar `total_avaliacoes` antes de exibir o score: sem avaliação, `0` não
 significa risco baixo.
+
+**Perfil `operador`:** num equipamento cuja última avaliação é de outro operador, `operador_id`,
+`latitude` e `longitude` vêm `null` (minimização, em Perfis), com `total_avaliacoes` maior que
+`0`. É `total_avaliacoes` que distingue esse caso do equipamento sem avaliação.
 
 ## GET /equipamentos/{id}
 
@@ -130,14 +189,21 @@ Detalhe de um equipamento. `404` se o id não existe no cadastro.
 | Campo | Conteúdo | Pode ser `null`? |
 |---|---|---|
 | `equipamento` | linha completa do cadastro | não |
-| `ultima_avaliacao` | linha completa da avaliação mais recente em `avaliacoes` | sim, se não há avaliação |
+| `ultima_avaliacao` | avaliação mais recente em `avaliacoes`, sem as colunas internas | sim, se não há avaliação |
 | `predicao` | predição ligada a essa avaliação | sim, se não há avaliação ou predição |
 | `recomendacoes` | ações preventivas para a última avaliação (ver `POST /avaliacoes`) | lista vazia sem avaliação |
 | `historico` | `{timestamp, risco_score}` de todas as avaliações, da mais antiga à mais recente | lista vazia |
 
-`ultima_avaliacao` é a linha completa de `avaliacoes`. Além dos campos de telemetria, operação,
-clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_id`, `operador_id`),
-`timestamp`, `risco_score`, `faixa_risco` e a procedência (`fonte`, `clima_origem`).
+`ultima_avaliacao` traz todas as colunas de `avaliacoes`, menos `leitura_id` e `payload_hash`:
+são internas da idempotência de `POST /avaliacoes` e não saem em nenhuma rota de leitura, para
+nenhum perfil. Além dos campos de telemetria, operação, clima e manutenção, ela traz os
+identificadores (`avaliacao_id`, `equipamento_id`, `operador_id`), `timestamp`, `risco_score`,
+`faixa_risco` e a procedência (`fonte`, `clima_origem`).
+
+Para o perfil `operador`, se a última avaliação é de outro operador, `ultima_avaliacao` vem com
+`operador_id`, `latitude` e `longitude` iguais a `null`, o `valor` dos fatores `latitude` e
+`longitude` em `predicao.top_fatores_shap` vem `null` e as `recomendacoes` são montadas sem a
+posição (minimização, em Perfis).
 
 ```json
 {
@@ -181,7 +247,7 @@ clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_
     "faixa_risco": "alto",
     "fonte": "telemetria",
     "clima_origem": "open-meteo",
-    "__nota": "+ latitude, longitude, temperatura_ar, velocidade_vento"
+    "__nota": "omitidos no exemplo, mas presentes na resposta: temperatura_ar, velocidade_vento, latitude, longitude"
   },
   "predicao": {
     "avaliacao_id": 5001,
@@ -202,7 +268,15 @@ clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_
       },
       "..."
     ],
-    "modelo_versao": "xgboost-v1-baseline"
+    "modelo_versao": "xgboost-v1-baseline",
+    "contribuicoes_por_grupo": {
+      "ambiental": 17.7577,
+      "geografico": 12.0574,
+      "operacional": -2.0559,
+      "equipamento": -4.9901,
+      "operador": -0.9026,
+      "manutencao": -0.0194
+    }
   },
   "historico": [
     {
@@ -218,9 +292,10 @@ clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_
 }
 ```
 
-`predicao.top_fatores_shap` traz os **5** fatores de maior `|shap_value|`. A decomposição completa
-por grupo (`contribuicoes_por_grupo`) só existe na resposta de `POST /avaliacoes` e não é gravada;
-somar os 5 fatores por grupo dá uma aproximação, não o mesmo número.
+`predicao.top_fatores_shap` traz os **5** fatores de maior `|shap_value|`.
+`predicao.contribuicoes_por_grupo` traz a decomposição completa por grupo, a mesma da resposta
+de `POST /avaliacoes`; vem `null` nas predições do seed, gravadas antes dessa coluna existir.
+Somar os 5 fatores por grupo dá só uma aproximação dela.
 
 ## GET /alertas
 
@@ -259,7 +334,8 @@ mais recente para a mais antiga, descartando as de faixa abaixo de `faixa_minima
 }
 ```
 
-`tipo_operacao` pode vir `null` se a avaliação não tiver o campo.
+`tipo_operacao` pode vir `null` se a avaliação não tiver o campo. Para o perfil `operador`,
+`operador_id` vem `null` nos alertas de avaliação de outro operador (minimização, em Perfis).
 
 ## GET /kpis
 
@@ -382,7 +458,7 @@ pelo front (PR #14) e implementado sem mudança de shape.
 Ingestão de uma leitura de campo. O cliente envia **apenas o que observa**; o servidor busca o
 cadastral no banco (tipo, idade, histórico de sinistros, `tem_iot`, intervalos de manutenção) e
 **deriva** o que não pode ser forjado: `atraso_manutencao_pct`, `manutencao_atrasada` (Regra 14 de
-`docs/data schema.md`) e `faixa_risco`. Responde `201`.
+`docs/data schema.md`) e `faixa_risco`. Responde `201`, ou `200` num reenvio (abaixo).
 
 **Os cinco campos climáticos são opcionais, e o clima medido em campo prevalece.** Com os cinco
 no payload, a Open-Meteo nem é consultada. Com parte deles, a Open-Meteo preenche só o que falta
@@ -402,11 +478,29 @@ A resposta traz `clima_origem` dizendo de onde veio o dado:
 Se a Open-Meteo falhar **e** o payload não trouxer o clima completo, a requisição é recusada com
 `502`: o servidor não inventa clima para alimentar o modelo.
 
-O modelo roda **antes** de gravar. Em seguida o servidor grava a avaliação e a predição. Se a
-gravação da predição falhar, a avaliação é removida e a requisição responde `500`.
+O modelo roda **antes** de gravar. Avaliação e predição são gravadas numa **transação só**: se
+qualquer uma falhar, nenhuma fica, e a requisição responde `500`.
 
-**Reenvio duplica.** A rota não tem chave de idempotência: reenviar o mesmo payload grava uma
-segunda avaliação.
+**Idempotência por `leitura_id`.** Campo opcional do payload: um UUID que o cliente gera
+**antes** do primeiro envio e reusa no retry. O servidor guarda junto um hash do payload
+recebido (sem o próprio `leitura_id`, antes do enriquecimento climático). Os dois
+(`leitura_id` e `payload_hash`) ficam no banco: nenhuma rota de leitura os devolve.
+
+| situação | resposta |
+|---|---|
+| `leitura_id` novo | `201`, grava |
+| `leitura_id` já gravado, mesmo payload | `200` com o resultado **original**, nada gravado; auditoria `status='reenvio'` |
+| `leitura_id` já gravado, payload diferente | `409`, nada gravado |
+| sem `leitura_id` | `201`, grava; reenviar o mesmo payload grava de novo |
+
+`leitura_id` que não é UUID é `422`.
+
+A autorização por perfil vem **primeiro**. Um reenvio de quem não pode enviar aquela leitura
+(gestor, técnico, operador em nome de outro ou fora do recorte) é `403`, igual a um envio novo,
+e nunca devolve o resultado gravado. Autorizado, o reenvio é decidido **antes** de validar o
+cadastro, consultar a Open-Meteo ou rodar o modelo: um retry recebe o resultado original mesmo
+que a Open-Meteo esteja fora naquele momento. O hash trata campo opcional ausente e campo
+opcional `null` como o mesmo payload.
 
 ```json
 // resposta 201

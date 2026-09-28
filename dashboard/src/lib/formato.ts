@@ -11,11 +11,6 @@ export function fmtData(ts: string): string {
   return parse(ts)?.toLocaleDateString('pt-BR') ?? '—'
 }
 
-/** "18 de nov." — compacto, para colunas de tabela */
-export function fmtDiaMes(ts: string): string {
-  return parse(ts)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) ?? '—'
-}
-
 /** "18/11/2025, 10:49" */
 export function fmtDataHora(ts: string): string {
   return parse(ts)?.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) ?? '—'

@@ -36,3 +36,42 @@ O roteiro do vídeo, com narração e comandos por bloco, está na **BRA-463** e
 - **Ausência de violação de CSP no console** do build de produção: o login renderiza com a CSP ativa (headless), mas o log headless não mostra o console.
 - **Os comandos `curl` do roteiro da BRA-463** contra a API real: os payloads foram validados contra o schema, não contra o banco (`EQ-0042`/`OP-0015` podem não existir no seed).
 - **README da `main` e `docs/spec-sprint-04.md`** ainda citam `DEMO_USERS`; ficam errados quando o #38 entrar. README é da BRA-462 (Kainan).
+
+---
+
+# Handoff — frente do Kainan (dashboard e docs) · 28/09/2026, fim do dia
+
+**Onde parou:** `f92d425` na `main` · todo o trabalho do front está em PR · **Supabase não medido: não há `.env` real no Mac** (só um `.env` de teste, com `supabase.invalid`, no clone de validação)
+
+## O que estava em voo
+
+Nada pela metade. Os PRs abertos e as dependências de cada um:
+
+| PR | Issue | Depende de |
+|---|---|---|
+| #30 | BRA-468 (ressalvas) | — |
+| #33 | BRA-298 (textos fictícios) | — |
+| #34 | BRA-466 (evidências de falha) | entrar **depois do #33** (os prints foram tirados com ele) |
+| #36 | BRA-467 (README "Como rodar", macOS) | — ; ⚠️ cita `DEMO_USERS`, que o #38 aposenta |
+| #37 | CORS expõe `X-Request-ID` | — |
+| #39 | BRA-469 (manutenção em `/equipamentos`) | — |
+| #40 (rascunho) | BRA-460 (leitura por perfil) | #38, #39, #33, #30 (os dois últimos entraram na branch **por merge**; depois do squash deles, `git merge origin/main` resolve) |
+| #41 (rascunho) | BRA-462 (README final) | #38, #35, #40, #37 + link do vídeo (BRA-463) + validação no Windows (BRA-442) |
+
+## Esperando decisão
+
+- **LGPD no recorte do operador** (listada acima pelo Guilherme): afeta direto a tela "Meus equipamentos" do #40, que mostra o que a API devolver. Se a decisão for omitir localização e identidade alheias, o front não muda; só a API.
+- **Promover ou não as ferramentas de teste do front** para o repo (hoje guardadas fora dele, ver "O que NÃO foi verificado"): são scripts com Playwright e duas APIs simuladas. Promover exige documentar o `playwright-core` como ferramenta avulsa, fora do `package.json`.
+
+## O que eu faria a seguir
+
+1. Depois do merge do #38: **ajustar o #36** (tirar `DEMO_USERS`, apontar para `scripts/criar_usuario.py`) e a §0 do #41, na mesma linha.
+2. Com o `.env` real e a migration do #38: rodar o #40 contra a API real com um usuário de cada perfil e fazer as **telas com dados da BRA-466**.
+3. Tirar o #41 do rascunho quando existirem o link do vídeo e a validação no Windows.
+
+## O que NÃO foi verificado
+
+- **Nada do front contra a API real** (sem `.env` real): o #34 e o #40 usaram o dashboard real contra APIs simuladas que seguem o contrato. O #40 afirma funcionar contra o contrato, não contra o banco.
+- **As ferramentas desses testes ficam fora do repo**, em `~/Desktop/sompo-setup-limpo/ferramentas-teste-front/` (Mac do Kainan): `captura.mjs` (prints da BRA-466), `api-perfis.mjs` + `perfis-check.mjs` (os 4 perfis do #40) e `mermaid-check.mjs` (render do diagrama). Os caminhos dentro delas apontam para o scratchpad da sessão e precisam de ajuste para rodar de novo; `npm i playwright-core` na pasta, com o Chrome instalado. A `api-simulada.mjs` já está no #34.
+- **Windows:** o "Como rodar" foi validado só no macOS (clone limpo em `~/Desktop/sompo-setup-limpo`, mantido).
+- **Máquina:** `python@3.13` e `libomp` foram instalados via Homebrew para a BRA-467; já havia um Python 3.13 do python.org no PATH.

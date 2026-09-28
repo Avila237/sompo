@@ -26,7 +26,12 @@
 ### Pré-requisitos
 
 **Python 3.13.** Não use 3.14 — `xgboost`, `shap` e `numpy` ainda não publicam wheels para
-essa versão e a instalação falha ou tenta compilar do zero.
+essa versão e a instalação falha ou tenta compilar do zero. Confira com `python3.13 --version`; sem
+ele, instale pelo [python.org](https://www.python.org/downloads/) ou, no macOS,
+`brew install python@3.13`.
+
+**Node.js 20.19+, 22.13+ ou 24+** (a faixa mais estreita entre o Vite 8 e o ESLint 10, que a CI
+roda no `npm run lint`), para o dashboard. Confira com `node -v`.
 
 **macOS — `libomp` (OpenMP).** O XGBoost depende do runtime OpenMP, que **não** vem pelo
 `pip`. Sem ele, `import xgboost` falha com `libxgboost.dylib could not be loaded`:
@@ -59,8 +64,12 @@ python3.13 -m venv .venv          # Windows: py -3.13 -m venv .venv
 # Mac/Linux:
 source .venv/bin/activate
 
-# 4. Instalar dependências
+# 4. Instalar dependências (≈2 min no macOS; ≈12 min no Windows)
 pip install -r backend/requirements.txt
+
+# 4b. Criar o .env ANTES dos testes: a API e os testes leem a configuração ao importar
+cp .env.example .env              # Windows: copy .env.example .env
+#     e troque os placeholders — ver "Configuração do backend (.env na raiz)" abaixo
 
 # 5. Gerar o dataset
 python scripts/generate_dataset.py
@@ -68,8 +77,8 @@ python scripts/generate_dataset.py
 # 6. Treinar o modelo (gera models/*.joblib, exigidos pelos testes e pela API)
 python backend/ml/train.py
 
-# 7. Rodar os testes
-pytest tests/ -v
+# 7. Rodar os testes (a mesma seleção da CI)
+pytest -m "not seed and not rede"
 
 # 8. Subir a API
 uvicorn backend.api.main:app --reload --port 8000
@@ -85,7 +94,7 @@ cd dashboard
 cp .env.example .env.local     # VITE_API_BASE_URL=http://localhost:8000
 npm install
 npm run dev
-# Abrir http://localhost:5175
+# Abrir o endereço que o Vite imprimir (por padrão http://localhost:5173)
 ```
 
 O dashboard pede usuário e senha na abertura. As credenciais são trocadas por um JWT em
@@ -103,10 +112,22 @@ com `python -c "import secrets; print(secrets.token_hex(32))"`.
 
 > ⚠️ A `service_role` é superusuário do banco: só server-side, nunca no frontend, nunca versionada.
 
+**Sem as credenciais reais do Supabase ainda?** Dá para validar parte do setup com valores de
+teste (a CI usa `SUPABASE_URL=http://supabase.invalid`) e o segredo gerado acima. Sem banco
+funcionam: a suíte do passo 7, a API subindo com `/health` respondendo e o dashboard abrindo na
+tela de login. **Login e rotas de dado dependem do banco** e respondem `503 Banco de dados
+indisponível`; o teste de ponta a ponta exige as credenciais reais.
+
 #### Notas de ambiente
 
 Se `pytest` falhar reclamando de artefato de modelo ausente, o passo 6 não rodou — os `.joblib`
 são git-ignored e precisam ser gerados localmente.
+
+`pytest tests/` sem o `-m` também roda os testes marcados `rede`, que conectam no Supabase de
+verdade: com credenciais de teste no `.env` eles falham (erro de conexão), e isso não é bug. Rode-os
+só com o banco real configurado: `pytest -m "rede and not seed"`. O `-m` da linha de comando
+substitui o `-m "not seed"` do `pytest.ini`; sem o `and not seed`, entram também os testes `seed`,
+que assumem as 5.000 avaliações exatas do seed e falham assim que houver ingestão pela API.
 
 Se a tela de login acusar que não consegue falar com a API, confira se o Terminal 1 está de pé e
 se a porta em `VITE_API_BASE_URL` bate com a do `uvicorn`.
@@ -117,7 +138,7 @@ se a porta em `VITE_API_BASE_URL` bate com a do `uvicorn`.
 git pull
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r backend/requirements.txt
-pytest tests/ -v
+pytest -m "not seed and not rede"
 cd dashboard && npm install      # se package.json mudou
 ```
 

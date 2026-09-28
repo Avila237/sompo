@@ -1,4 +1,8 @@
-"""Testes do Supabase — conexao, contagens, integridade, distribuicao, tipos e indexes."""
+"""
+Testes do Supabase — conexao, contagens, integridade, distribuicao e tipos.
+
+Os indices sao conferidos sem rede, no SQL versionado: tests/test_estrutura_banco.py.
+"""
 import os
 import sys
 
@@ -101,12 +105,15 @@ class TestIntegridade:
     def test_avaliacoes_equipamento_ids_existem(self, client):
         equip_ids = set(fetch_all_column(client, "equipamentos", "equipamento_id"))
         aval_equip_ids = set(fetch_all_column(client, "avaliacoes", "equipamento_id"))
+        # Sem avaliacoes, a diferenca e vazia e o teste passaria sem verificar nada.
+        assert aval_equip_ids, "avaliacoes vazia: integridade referencial nao verificada"
         orphans = aval_equip_ids - equip_ids
         assert len(orphans) == 0, f"Equipamento IDs orfaos: {orphans}"
 
     def test_avaliacoes_operador_ids_existem(self, client):
         ops_ids = set(fetch_all_column(client, "operadores", "operador_id"))
         aval_ops_ids = set(fetch_all_column(client, "avaliacoes", "operador_id"))
+        assert aval_ops_ids, "avaliacoes vazia: integridade referencial nao verificada"
         orphans = aval_ops_ids - ops_ids
         assert len(orphans) == 0, f"Operador IDs orfaos: {orphans}"
 
@@ -117,37 +124,71 @@ class TestIntegridade:
 
 
 class TestDistribuicao:
+    # So fonte='seed', no numerador e no denominador: a distribuicao esperada e
+    # a do gerador do seed, e cada POST na API acrescenta uma avaliacao com a
+    # faixa que o modelo deu. O denominador segue sendo a contagem real, nao
+    # 5000 fixo.
     def test_faixa_risco_baixo(self, client):
+        total = (
+            client.table("avaliacoes")
+            .select("*", count="exact")
+            .eq("fonte", "seed")
+            .limit(0)
+            .execute()
+            .count
+        )
+        assert total > 0, "avaliacoes sem fonte='seed': distribuicao indefinida"
         result = (
             client.table("avaliacoes")
             .select("*", count="exact")
+            .eq("fonte", "seed")
             .eq("faixa_risco", "baixo")
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 32 <= pct <= 48, f"baixo: {pct:.1f}% (esperado ~40%)"
 
     def test_faixa_risco_medio(self, client):
+        total = (
+            client.table("avaliacoes")
+            .select("*", count="exact")
+            .eq("fonte", "seed")
+            .limit(0)
+            .execute()
+            .count
+        )
+        assert total > 0, "avaliacoes sem fonte='seed': distribuicao indefinida"
         result = (
             client.table("avaliacoes")
             .select("*", count="exact")
+            .eq("fonte", "seed")
             .eq("faixa_risco", "medio")
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 27 <= pct <= 43, f"medio: {pct:.1f}% (esperado ~35%)"
 
     def test_faixa_risco_alto(self, client):
+        total = (
+            client.table("avaliacoes")
+            .select("*", count="exact")
+            .eq("fonte", "seed")
+            .limit(0)
+            .execute()
+            .count
+        )
+        assert total > 0, "avaliacoes sem fonte='seed': distribuicao indefinida"
         result = (
             client.table("avaliacoes")
             .select("*", count="exact")
+            .eq("fonte", "seed")
             .eq("faixa_risco", "alto")
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 17 <= pct <= 33, f"alto: {pct:.1f}% (esperado ~25%)"
 
 
@@ -200,50 +241,3 @@ class TestTipos:
             .count
         )
         assert total - nulls > 0, "temperatura_motor deveria ter valores nao-null tambem"
-
-
-# ---------------------------------------------------------------------------
-# Indexes (verifica que consultas indexadas retornam sem erro)
-# ---------------------------------------------------------------------------
-
-
-class TestIndexes:
-    def test_consulta_por_equipamento_id(self, client):
-        result = (
-            client.table("avaliacoes")
-            .select("avaliacao_id")
-            .eq("equipamento_id", "EQ-0001")
-            .limit(1)
-            .execute()
-        )
-        assert isinstance(result.data, list)
-
-    def test_consulta_por_operador_id(self, client):
-        result = (
-            client.table("avaliacoes")
-            .select("avaliacao_id")
-            .eq("operador_id", "OP-0001")
-            .limit(1)
-            .execute()
-        )
-        assert isinstance(result.data, list)
-
-    def test_consulta_por_timestamp(self, client):
-        result = (
-            client.table("avaliacoes")
-            .select("avaliacao_id")
-            .gte("timestamp", "2025-01-01")
-            .limit(1)
-            .execute()
-        )
-        assert isinstance(result.data, list)
-
-    def test_consulta_por_faixa_risco(self, client):
-        result = (
-            client.table("avaliacoes")
-            .select("avaliacao_id")
-            .eq("faixa_risco", "alto")
-            .limit(1)
-            .execute()
-        )
-        assert isinstance(result.data, list)

@@ -7,9 +7,11 @@ caminho de leitura e escrita. Nenhum cliente toca o banco diretamente.
 
 from functools import lru_cache
 
+from postgrest.exceptions import APIError
 from supabase import Client, create_client
 
 from backend.core import config
+from backend.core.exceptions import LeituraReutilizada
 
 PAGINA = 1000
 
@@ -43,28 +45,60 @@ def operador_existe(operador_id: str) -> bool:
     return bool(r.data)
 
 
-def inserir_avaliacao(registro: dict) -> int:
-    """Grava a leitura recebida e devolve o avaliacao_id gerado."""
-    r = get_client().table("avaliacoes").insert(registro).execute()
+def _chamar_registrar(avaliacao: dict, predicao: dict) -> tuple[int, bool]:
+    try:
+        r = get_client().rpc(
+            "registrar_avaliacao", {"p_avaliacao": avaliacao, "p_predicao": predicao}
+        ).execute()
+    except APIError as e:
+        if e.code == "PT409":
+            raise LeituraReutilizada(avaliacao.get("leitura_id")) from e
+        raise
     if not r.data:
-        raise RuntimeError("Insercao em 'avaliacoes' nao retornou o registro criado.")
-    return int(r.data[0]["avaliacao_id"])
+        raise RuntimeError("registrar_avaliacao nao devolveu o registro criado.")
+    return int(r.data[0]["avaliacao_id"]), bool(r.data[0]["reenvio"])
 
 
-def inserir_predicao(registro: dict) -> int:
-    """Grava a predicao. Append-only: nunca sobrescreve historico (RF-04)."""
-    r = get_client().table("predicoes").insert(registro).execute()
-    if not r.data:
-        raise RuntimeError("Insercao em 'predicoes' nao retornou o registro criado.")
-    return int(r.data[0]["predicao_id"])
-
-
-def remover_avaliacao(avaliacao_id: int) -> None:
+def registrar_avaliacao(avaliacao: dict, predicao: dict) -> tuple[int, bool]:
     """
-    Compensacao: se a predicao falhar depois da avaliacao gravada, o registro
-    nao pode ficar em limbo (RF-03). Chamado apenas no caminho de erro.
+    Grava avaliacao e predicao numa transacao so, pela funcao SQL de mesmo
+    nome (supabase/migrations/20260928120000_sprint04_integridade.sql).
+    Devolve (avaliacao_id, reenvio); reenvio=True quando o leitura_id ja
+    existia com o mesmo payload e nada foi gravado.
     """
-    get_client().table("avaliacoes").delete().eq("avaliacao_id", avaliacao_id).execute()
+    try:
+        return _chamar_registrar(avaliacao, predicao)
+    except APIError as e:
+        # Dois envios simultaneos da mesma leitura: o segundo bate no UNIQUE
+        # de leitura_id. Na nova chamada a linha ja existe e vira reenvio.
+        if e.code == "23505" and avaliacao.get("leitura_id"):
+            return _chamar_registrar(avaliacao, predicao)
+        raise
+
+
+def buscar_por_leitura(leitura_id: str) -> dict | None:
+    r = (
+        get_client().table("avaliacoes")
+        .select("avaliacao_id,payload_hash")
+        .eq("leitura_id", leitura_id)
+        .execute()
+    )
+    return r.data[0] if r.data else None
+
+
+def buscar_avaliacao(avaliacao_id: int) -> dict | None:
+    r = get_client().table("avaliacoes").select("*").eq("avaliacao_id", avaliacao_id).execute()
+    return r.data[0] if r.data else None
+
+
+def buscar_usuario(usuario: str) -> dict | None:
+    r = (
+        get_client().table("usuarios")
+        .select("usuario,senha_hash,perfil,operador_id,ativo")
+        .eq("usuario", usuario)
+        .execute()
+    )
+    return r.data[0] if r.data else None
 
 
 def contar(tabela: str) -> int:
@@ -115,7 +149,9 @@ def listar_avaliacoes_resumo() -> list[dict]:
     if "avaliacoes" not in _cache:
         colunas = (
             "avaliacao_id,equipamento_id,operador_id,risco_score,faixa_risco,"
-            "timestamp,latitude,longitude,tipo_operacao"
+            "timestamp,latitude,longitude,tipo_operacao,"
+            # estado de manutencao da leitura: a lista da frota ordena por ele (S4-36)
+            "manutencao_atrasada,atraso_manutencao_pct,ultima_manutencao_dias"
         )
         _cache["avaliacoes"] = _paginado("avaliacoes", colunas, "avaliacao_id")
     return _cache["avaliacoes"]
@@ -140,8 +176,13 @@ def inserir_auditoria(registro: dict) -> None:
 def predicao_de(avaliacao_id: int) -> dict | None:
     r = (
         get_client().table("predicoes")
-        .select("avaliacao_id,risco_score_predito,faixa_predita,top_fatores_shap,modelo_versao")
+        .select(
+            "avaliacao_id,risco_score_predito,faixa_predita,top_fatores_shap,"
+            "modelo_versao,contribuicoes_por_grupo"
+        )
         .eq("avaliacao_id", avaliacao_id)
+        # Com mais de uma versao de modelo, a predicao mais recente.
+        .order("timestamp_predicao", desc=True)
         .limit(1)
         .execute()
     )

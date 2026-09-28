@@ -48,7 +48,7 @@ class TestModeloIndisponivel:
         assert r.status_code == 503
         assert r.json()["detail"] == ModeloIndisponivel.mensagem
         assert r.headers.get("X-Request-ID")
-        repo_mock.inserir_avaliacao.assert_not_called()
+        repo_mock.registrar_avaliacao.assert_not_called()
         assert _status_das_auditorias(auditoria) == ["erro"]
 
 

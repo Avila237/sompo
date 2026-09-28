@@ -6,7 +6,7 @@ import {
 } from '../../data/api'
 import { Card, Chip, ScoreBadge, SectionHeader, Button, ErroCarga, FilterSeg, Carregando } from '../../components/shared'
 import { useCarga } from '../../lib/useCarga'
-import { fmtDiaMes } from '../../lib/formato'
+import { fmtData } from '../../lib/formato'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
 
@@ -234,7 +234,7 @@ export default function SompoRanking({
               <div className="tabular" style={{ fontSize: 12, color: 'var(--fg-dim)' }}>{eq.avaliacoes}</div>
 
               {/* Last eval date */}
-              <div style={{ fontSize: 11, color: 'var(--fg-mute)', fontWeight: 500 }}>{fmtDiaMes(eq.ultimaTs)}</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-mute)', fontWeight: 500 }}>{fmtData(eq.ultimaTs)}</div>
 
               {/* Arrow */}
               <span style={{ color: 'var(--fg-mute)', display: 'flex', justifyContent: 'center' }}>
