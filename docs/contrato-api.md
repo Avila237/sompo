@@ -1,29 +1,22 @@
-# Contrato da API — congelado
+# Contrato da API
 
-> Gerado a partir da API **em execução**, não de proposta. Espelho legível de
-> `docs/openapi.json` (exportado do FastAPI). Com a API no ar, o Swagger vive em
-> `http://localhost:8000/docs`.
+> Gerado a partir da API **em execução**, não de proposta, e conferido contra o código em
+> 28/09/2026. Espelho legível de `docs/openapi.json` (exportado do FastAPI). Com a API no ar, o
+> Swagger fica em `http://localhost:8000/docs`.
 >
-> **Regra do contrato:** qualquer mudança de shape aqui precisa ser avisada às duas
-> frentes antes de entrar. É o único ponto onde backend e frontend quebram em silêncio.
+> **Regra do contrato:** qualquer mudança de shape aqui precisa ser avisada às duas frentes antes
+> de entrar. É o único ponto onde backend e frontend quebram em silêncio.
 
 ## Autenticação
 
 Todas as rotas exigem `Authorization: Bearer <token>`, exceto `POST /auth/token` e `GET /health`.
+O Swagger (`/docs`, `/redoc`, `/openapi.json`) também é público.
 
-- Sem token → `401 {"detail": "Token ausente."}`
-- Token inválido/expirado → `401 {"detail": "Token invalido ou expirado."}`
-- Credencial errada → `401 {"detail": "Usuario ou senha invalidos."}`
-- Equipamento inexistente → `404 {"detail": "Equipamento 'EQ-9999' nao encontrado."}`
-- Payload inválido → `422` com `detail[]` do Pydantic (campo em `loc`, motivo em `msg`)
-- **Campo desconhecido → `422` `extra_forbidden`.** O schema recusa o que não conhece em vez de
-  descartar em silêncio. Vale para os campos derivados no servidor (`faixa_risco`,
-  `atraso_manutencao_pct`, `manutencao_atrasada`): enviá-los é erro, não é ignorado.
-- Open-Meteo fora **e** payload sem clima → `502` com os campos ausentes no `detail`
-
-Token expira em 480 min. Perfis: `operador`, `gestor`, `analista` (sem escopo de dados distinto nesta entrega).
+Token expira em `JWT_EXPIRE_MINUTES` (default 480). Perfis: `operador`, `gestor`, `analista`. Nesta
+versão os três enxergam os mesmos dados; o perfil vai no token, mas nenhuma rota o usa para filtrar.
 
 ### POST /auth/token
+
 ```json
 // requisição
 {"usuario": "analista", "senha": "..."}
@@ -36,9 +29,52 @@ Token expira em 480 min. Perfis: `operador`, `gestor`, `analista` (sem escopo de
 }
 ```
 
+## Erros
+
+Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
+
+| Situação | Status | `detail` |
+|---|---|---|
+| Sem token | `401` | `"Token ausente."` |
+| Token inválido ou expirado | `401` | `"Token invalido ou expirado."` |
+| Credencial errada em `/auth/token` | `401` | `"Usuario ou senha invalidos."` |
+| Equipamento inexistente | `404` | `"Equipamento 'EQ-9999' nao encontrado."` |
+| Operador inexistente (`POST /avaliacoes`) | `404` | `"Operador 'OP-9999' nao encontrado."` |
+| Payload fora de faixa ou de tipo | `422` | lista do Pydantic: campo em `loc`, motivo em `msg` |
+| Campo desconhecido no payload | `422` | lista do Pydantic, `type: "extra_forbidden"` |
+| Open-Meteo fora **e** payload sem clima completo | `502` | mensagem com os campos climáticos ausentes |
+| Qualquer outra falha (modelo ausente, banco fora) | `500` | `"Erro interno. Consulte os logs do servidor."` + campo `request_id` |
+
+**Campo desconhecido é recusado, não ignorado.** Vale para os campos que o servidor deriva
+(`faixa_risco`, `atraso_manutencao_pct`, `manutencao_atrasada`): enviá-los é erro. É o que impede o
+cliente de forjar o resultado.
+
+**Correlação.** Respostas bem-sucedidas e erros tratados trazem o header `X-Request-ID`, o mesmo
+identificador das linhas de log daquela requisição. No `500` o header não é enviado; o
+`request_id` vem no corpo.
+
+**Não há `503`.** Modelo ausente e banco indisponível chegam hoje como `500` genérico. As exceções
+de domínio para esses dois casos existem em `backend/core/exceptions.py`, mas nenhum ponto do código
+as levanta.
+
+## GET /health
+
+Público. Diz se a API subiu e se o modelo carregou.
+
+```json
+// resposta 200, modelo carregado
+{"status": "ok", "modelo": {"carregado": true, "n_features": 30}, "modelo_versao": "xgboost-v1-baseline"}
+// resposta 200, modelo ausente
+{"status": "degradado", "modelo": {"carregado": false, "erro": "<mensagem da exceção>"}, "modelo_versao": "xgboost-v1-baseline"}
+```
+
+Responde `200` mesmo degradado; quem monitora deve ler `status`. Com o modelo ausente, cada chamada
+tenta carregá-lo de novo.
+
 ## GET /equipamentos
 
-Query params: `faixa` (`baixo|medio|alto`), `busca` (id ou modelo). Ordenado por `risco_score` desc.
+Query params: `faixa` (`baixo|medio|alto`), `busca` (1–60 caracteres, casa com id ou modelo).
+Ordenado por `risco_score` desc. Uma linha por equipamento, com o score da avaliação mais recente.
 
 ```json
 {
@@ -66,9 +102,32 @@ Query params: `faixa` (`baixo|medio|alto`), `busca` (id ou modelo). Ordenado por
 }
 ```
 
+- `tendencia` é a diferença entre o score da última avaliação e o da penúltima; `0.0` com uma só.
+- `faixa_risco` é recalculada a partir do score gravado, não lida da coluna `faixa_risco`.
+
+**Equipamento sem nenhuma avaliação** também aparece na lista, com:
+- `operador_id`, `ultima_avaliacao`, `latitude` e `longitude` iguais a `null`;
+- `total_avaliacoes` igual a `0`;
+- `risco_score`, `score_medio` e `tendencia` iguais a `0.0`;
+- `faixa_risco` igual a `"baixo"`.
+
+Quem consome deve checar `total_avaliacoes` antes de exibir o score: sem avaliação, `0` não
+significa risco baixo.
+
 ## GET /equipamentos/{id}
 
-`ultima_avaliacao` traz as 30 colunas da linha em `avaliacoes`. `historico` é ordenado do mais antigo ao mais recente.
+Detalhe de um equipamento. `404` se o id não existe no cadastro.
+
+| Campo | Conteúdo | Pode ser `null`? |
+|---|---|---|
+| `equipamento` | linha completa do cadastro | não |
+| `ultima_avaliacao` | linha completa da avaliação mais recente em `avaliacoes` | sim, se não há avaliação |
+| `predicao` | predição ligada a essa avaliação | sim, se não há avaliação ou predição |
+| `historico` | `{timestamp, risco_score}` de todas as avaliações, da mais antiga à mais recente | lista vazia |
+
+`ultima_avaliacao` é a linha completa de `avaliacoes`. Além dos campos de telemetria, operação,
+clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_id`, `operador_id`),
+`timestamp`, `risco_score`, `faixa_risco` e a procedência (`fonte`, `clima_origem`).
 
 ```json
 {
@@ -110,6 +169,8 @@ Query params: `faixa` (`baixo|medio|alto`), `busca` (id ou modelo). Ordenado por
     "atraso_manutencao_pct": 1.441,
     "risco_score": 69.47,
     "faixa_risco": "alto",
+    "fonte": "telemetria",
+    "clima_origem": "open-meteo",
     "__nota": "+ latitude, longitude, temperatura_ar, velocidade_vento"
   },
   "predicao": {
@@ -147,50 +208,59 @@ Query params: `faixa` (`baixo|medio|alto`), `busca` (id ou modelo). Ordenado por
 }
 ```
 
+`predicao.top_fatores_shap` traz os **5** fatores de maior `|shap_value|`. A decomposição completa
+por grupo (`contribuicoes_por_grupo`) só existe na resposta de `POST /avaliacoes` e não é gravada;
+somar os 5 fatores por grupo dá uma aproximação, não o mesmo número.
+
 ## GET /alertas
 
 Query params: `limite` (1–100, default 7), `faixa_minima` (`baixo|medio|alto`, default `medio`).
 
-**Regra de alerta** (portada de `buildAlertas`, que rodava no cliente): avaliações ordenadas
-da mais recente para a mais antiga, descartando as de faixa abaixo de `faixa_minima`,
-limitadas a `limite`. O default `faixa_minima=medio` reproduz o `faixa_risco !== 'baixo'` anterior.
+**Regra de alerta** (portada de `buildAlertas`, que rodava no cliente): avaliações ordenadas da
+mais recente para a mais antiga, descartando as de faixa abaixo de `faixa_minima`, limitadas a
+`limite`. O default `faixa_minima=medio` reproduz o `faixa_risco !== 'baixo'` anterior. Como em
+`/equipamentos`, a faixa é recalculada a partir do score gravado.
 
 ```json
 {
-    "total": 2,
-    "itens": [
-        {
-            "avaliacao_id": 5001,
-            "equipamento_id": "EQ-0042",
-            "operador_id": "OP-0015",
-            "risco_score": 69.47,
-            "faixa_risco": "alto",
-            "tipo_operacao": "colheita",
-            "timestamp": "2026-08-24T13:02:53.465989+00:00",
-            "mensagem": "EQ-0042 \u00b7 score 69 \u00b7 risco alto"
-        },
-        {
-            "avaliacao_id": 870,
-            "equipamento_id": "EQ-0173",
-            "operador_id": "OP-0010",
-            "risco_score": 100.0,
-            "faixa_risco": "alto",
-            "tipo_operacao": "transporte",
-            "timestamp": "2025-12-31T14:19:16+00:00",
-            "mensagem": "EQ-0173 \u00b7 score 100 \u00b7 risco alto"
-        }
-    ]
+  "total": 2,
+  "itens": [
+    {
+      "avaliacao_id": 5001,
+      "equipamento_id": "EQ-0042",
+      "operador_id": "OP-0015",
+      "risco_score": 69.47,
+      "faixa_risco": "alto",
+      "tipo_operacao": "colheita",
+      "timestamp": "2026-08-24T13:02:53.465989+00:00",
+      "mensagem": "EQ-0042 · score 69 · risco alto"
+    },
+    {
+      "avaliacao_id": 870,
+      "equipamento_id": "EQ-0173",
+      "operador_id": "OP-0010",
+      "risco_score": 100.0,
+      "faixa_risco": "alto",
+      "tipo_operacao": "transporte",
+      "timestamp": "2025-12-31T14:19:16+00:00",
+      "mensagem": "EQ-0173 · score 100 · risco alto"
+    }
+  ]
 }
 ```
 
+`tipo_operacao` pode vir `null` se a avaliação não tiver o campo.
+
 ## GET /kpis
 
-Cobre as três visões que o enunciado exige: por equipamento (rota acima), **por operação** e **por região**.
+Cobre as três visões que o enunciado exige: por equipamento (`/equipamentos`), **por operação** e
+**por região**. Query param: `dias` (1–365, default 30), janela da série `tendencia`.
 
 ```json
 {
   "kpis": {
     "total_equipamentos": 200,
+    "total_operadores": 80,
     "total_avaliacoes": 5001,
     "score_medio": 47.09,
     "equipamentos_risco_alto": 52,
@@ -208,12 +278,6 @@ Cobre as três visões que o enunciado exige: por equipamento (rota acima), **po
       "score_medio": 52.78,
       "avaliacoes_risco_alto": 374
     },
-    {
-      "tipo_operacao": "colheita",
-      "total_avaliacoes": 1479,
-      "score_medio": 51.18,
-      "avaliacoes_risco_alto": 433
-    },
     "..."
   ],
   "por_regiao": [
@@ -227,16 +291,31 @@ Cobre as três visões que o enunciado exige: por equipamento (rota acima), **po
       "score_medio": 31.8
     },
     "..."
+  ],
+  "tendencia": [
+    { "dia": "2025-12-28", "score_medio": 46.35, "avaliacoes": 11 },
+    "..."
   ]
 }
 ```
+
+- `total_operadores` conta operadores distintos nas avaliações.
+- `por_operacao` vem ordenado por `score_medio` desc. Avaliação sem `tipo_operacao` entra como
+  `"desconhecida"`.
+- `por_regiao` agrupa equipamentos em células de 3° pela posição da última avaliação. Devolve no
+  máximo 14 células, as de mais equipamentos. `x` e `y` são a posição projetada em 0–1 para o mapa.
+  Equipamento sem avaliação fica de fora.
+- `tendencia` é a média diária de score nos últimos `dias` **com dados**, não dias corridos. O seed
+  cobre 2025 e a ingestão grava em 2026: uma janela de calendário devolveria um ponto só, porque não
+  há nada entre as duas pontas. Por isso quem exibe a série deve rotular o eixo com `dia`, não com
+  "N dias atrás".
 
 ## POST /avaliacoes
 
 Ingestão de uma leitura de campo. O cliente envia **apenas o que observa**; o servidor busca o
 cadastral no banco (tipo, idade, histórico de sinistros, `tem_iot`, intervalos de manutenção) e
 **deriva** o que não pode ser forjado: `atraso_manutencao_pct`, `manutencao_atrasada` (Regra 14 de
-`docs/data schema.md`) e `faixa_risco`.
+`docs/data schema.md`) e `faixa_risco`. Responde `201`.
 
 **Os cinco campos climáticos são opcionais.** Se ausentes, o servidor busca na Open-Meteo pela
 coordenada. Se presentes, servem de fallback caso a API externa falhe.
@@ -247,10 +326,16 @@ A resposta traz `clima_origem` dizendo de onde veio o dado:
 |---|---|
 | `open-meteo` | enriquecido pela API externa |
 | `payload` | Open-Meteo falhou; usados os valores enviados pelo cliente |
-| `seed` | linha histórica, populada pelo seed em lote |
+| `seed` | linha histórica, populada pelo seed em lote (só aparece nas consultas, nunca nesta resposta) |
 
 Se a Open-Meteo falhar **e** o payload não trouxer o clima completo, a requisição é recusada com
-`502` — o servidor não inventa clima para alimentar o modelo.
+`502`: o servidor não inventa clima para alimentar o modelo.
+
+O modelo roda **antes** de gravar. Em seguida o servidor grava a avaliação e a predição. Se a
+gravação da predição falhar, a avaliação é removida e a requisição responde `500`.
+
+**Reenvio duplica.** A rota não tem chave de idempotência: reenviar o mesmo payload grava uma
+segunda avaliação.
 
 ```json
 // resposta 201
@@ -259,6 +344,7 @@ Se a Open-Meteo falhar **e** o payload não trouxer o clima completo, a requisi�
   "equipamento_id": "EQ-0042",
   "risco_score": 69.47,
   "faixa_risco": "alto",
+  "clima_origem": "open-meteo",
   "contribuicoes_por_grupo": {
     "ambiental": 17.7577,
     "geografico": 12.0574,
@@ -287,30 +373,22 @@ Se a Open-Meteo falhar **e** o payload não trouxer o clima completo, a requisi�
 }
 ```
 
-## Duas armadilhas conhecidas
+## Armadilhas conhecidas
 
-**1. `top_fatores_shap` tinha dois formatos.** As 5.000 predições do seed foram gravadas com
-`{feature, group, shap_value}`; as geradas pela API usam `{feature, grupo, shap_value, valor}`.
-A API **normaliza na leitura** e sempre devolve o formato em português. `valor` vem `null` quando
-a predição é do seed, que não o gravou — trate como opcional.
+**1. `top_fatores_shap` tem dois formatos gravados.** As 5.000 predições do seed foram gravadas
+com `{feature, group, shap_value}`; as geradas pela API usam `{feature, grupo, shap_value, valor}`.
+A API **normaliza na leitura** e sempre devolve o formato em português. `valor` vem `null` quando a
+predição é do seed, que não o gravou; trate como opcional.
 
-**2. `contribuicoes_por_grupo` soma COM SINAL.** Positivo aumenta o risco, negativo reduz. Difere
+**2. `valor` é o valor que entrou no modelo, não o que o usuário vê.** Para feature numérica é o
+próprio número. Para categórica (`tipo_solo`, `tipo_operacao`, `condicao_clima`,
+`tipo_equipamento`) é o código ordinal do encoder, e para booleana (`tem_iot`,
+`manutencao_atrasada`) é `0` ou `1`. Para exibir, leia o rótulo em `ultima_avaliacao`.
+
+**3. `contribuicoes_por_grupo` soma COM SINAL.** Positivo aumenta o risco, negativo reduz. Difere
 de `shap_explainer.group_contributions()`, que soma `|SHAP|` para medir magnitude. A semântica com
 sinal é a correta para exibir "+ aumenta / − reduz".
 
-## Campos acrescentados após a revisão do dashboard
-
-Duas lacunas apontadas na revisão do PR #1, ambas aditivas:
-
-**`kpis.total_operadores`** — contagem de operadores distintos. Alimenta o KPI que antes era
-calculado no cliente sobre as 5.000 avaliações baixadas.
-
-**`tendencia`** em `GET /kpis?dias=N` — série de média diária de score:
-
-```json
-"tendencia": [ { "dia": "2025-12-28", "score_medio": 46.35, "avaliacoes": 11 } ]
-```
-
-`dias` (1–365, default 30) conta **dias com dados**, não dias corridos. O seed cobre 2025 e a
-ingestão grava em 2026: uma janela de calendário devolveria um ponto só, porque não há nada entre
-as duas pontas.
+**4. A faixa pode divergir logo acima de um limiar.** A faixa gravada é derivada do score cru; as
+rotas de leitura a recalculam sobre o score gravado com duas casas. Entre 33 e 33,005 (e entre 66 e
+66,005) a faixa de `/equipamentos` e `/alertas` pode diferir da de `ultima_avaliacao.faixa_risco`.
