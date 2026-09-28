@@ -1,27 +1,42 @@
+# Versões exatas: trocar de versão já mudou as métricas do modelo (commit 455ae5c).
+# Atualizar uma dependência é uma mudança deliberada, feita em commit próprio.
+# ponytail: só as dependências diretas são fixadas; as transitivas ainda flutuam.
+#   Se isso causar divergência entre máquinas, gerar lock universal
+#   (uv pip compile --universal) e instalar por ele.
+# Python suportado: 3.13 (ver .python-version). 3.14 não tem wheel de xgboost/shap.
+
 # API
-fastapi==0.115.*
-uvicorn==0.34.*
-pydantic==2.*
-python-jose[cryptography]==3.3.*
-python-multipart==0.0.*
+fastapi==0.141.1
+# Fixada à parte: o fastapi aceita starlette>=0.46, e a 0.46 tem 8 CVEs
+# corrigidas até a 1.3.1. Sem esta linha o pip mantém a versão antiga instalada.
+starlette==1.7.0
+uvicorn==0.34.3
+pydantic==2.13.5
+# PyJWT no lugar de python-jose: o python-jose puxa o ecdsa, que tem
+# CVE-2024-23342 sem correcao. Usamos HS256, que nao passa pelo ecdsa.
+PyJWT==2.15.0
 
 # ML
-xgboost==3.*
-shap==0.51.*
-mlflow==3.*
-scikit-learn==1.*
+xgboost==3.4.1
+shap==0.51.0
+mlflow==3.16.1
+scikit-learn==1.9.1
+joblib==1.6.0
+matplotlib==3.11.2
 
 # Dados
-pandas==2.*
-numpy==2.*
-pyarrow==18.*
-requests==2.*
+pandas==2.3.3
+numpy==2.5.2
+pyarrow==25.0.1
+requests==2.34.2
 
 # Database
-supabase==2.*
+supabase==2.31.0
 
-# Utilitarios
-python-dotenv==1.*
+# Utilitários
+python-dotenv==1.2.3
 
 # Testes
-pytest==9.*
+pytest==9.1.1
+# exigido pelo fastapi.testclient.TestClient; a starlette 1.x trocou o httpx pelo httpx2
+httpx2==2.13.1
