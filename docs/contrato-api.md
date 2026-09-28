@@ -310,6 +310,55 @@ Cobre as três visões que o enunciado exige: por equipamento (`/equipamentos`),
   há nada entre as duas pontas. Por isso quem exibe a série deve rotular o eixo com `dia`, não com
   "N dias atrás".
 
+## GET /tendencias
+
+Série diária de score **por grupo** num dos três eixos. Alimenta a tela Relatórios. O `/kpis` traz
+só a série global.
+
+| Parâmetro | Tipo | Default | Regra |
+|---|---|---|---|
+| `eixo` | `equipamento` \| `regiao` \| `operacao` | obrigatório | outro valor ou ausente → `422` |
+| `dias` | int | `30` | 1–365. Janela em **dias com dados**, como `tendencia` em `/kpis` |
+| `limite` | int | `5` | 1–20. Quantos grupos devolver |
+| `chave` | string | — | Opcional. Restringe a um grupo (ex.: `EQ-0042`) e ignora `limite` |
+
+```json
+{
+  "eixo": "operacao",
+  "dias": 30,
+  "janela": { "inicio": "2025-11-02", "fim": "2026-09-21", "dias_com_dados": 30 },
+  "series": [
+    {
+      "chave": "transporte",
+      "rotulo": "transporte",
+      "score_medio": 52.78,
+      "avaliacoes": 312,
+      "pontos": [
+        { "dia": "2025-11-02", "score_medio": 49.1, "avaliacoes": 9 },
+        "..."
+      ]
+    },
+    "..."
+  ]
+}
+```
+
+- **Janela:** os últimos `dias` dias com avaliação **na base inteira**, não por grupo. Todas as
+  séries dividem o mesmo eixo X. `dias_com_dados` < `dias` quando a base tem menos dias. Base vazia:
+  `inicio` e `fim` `null`, `dias_com_dados` `0`.
+- **Lacuna, não zero:** um grupo só tem ponto nos dias em que **ele** tem avaliação. Quem desenha
+  a série não deve interpolar nem zerar.
+- **Agrupamento:**
+  - `equipamento` agrupa por `equipamento_id`.
+  - `operacao` agrupa por `tipo_operacao`; sem o campo, entra como `"desconhecida"`.
+  - `regiao` usa uma célula de 3° pela **posição da própria avaliação**, no formato `"24°S 51°O"`. Isso **difere de `por_regiao` do `/kpis`**, que usa a última posição do equipamento: numa série, cada ponto fica na região onde a avaliação aconteceu. Avaliação sem coordenada fica de fora.
+- **Seleção:** os `limite` grupos de maior `score_medio` na janela (desempate: mais `avaliacoes`).
+  Com `chave`, só aquele grupo; chave que não casa devolve `series: []` com `200`.
+- `score_medio` e `avaliacoes` do grupo são calculados **sobre a janela**. `series` vem por
+  `score_medio` desc, `pontos` por `dia` asc.
+- **CSV:** não há rota. O front gera o arquivo a partir desta resposta
+  (`eixo,chave,dia,score_medio,avaliacoes`).
+
 ## POST /avaliacoes
 
 Ingestão de uma leitura de campo. O cliente envia **apenas o que observa**; o servidor busca o
