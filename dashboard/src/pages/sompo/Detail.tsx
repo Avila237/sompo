@@ -136,7 +136,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
             <span style={{ textTransform: 'capitalize' }}>{equipamento.tipo_equipamento}</span>
             <span>{equipamento.idade_equipamento} anos</span>
             <span>{equipamento.historico_sinistros} sinistro(s)</span>
-            {ultima && <span className="mono">{ultima.operador_id}</span>}
+            {ultima && <span className="mono">{ultima.operador_id ?? '—'}</span>}
             {ultima && <span>última aval. {fmtData(ultima.timestamp)}</span>}
           </div>
         </div>
@@ -301,10 +301,10 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
             <Card title="Operador atual">
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--bg-elev-2)', border: '2px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: 'var(--fg-dim)' }}>
-                  {ultima.operador_id.slice(-2)}
+                  {(ultima.operador_id ?? '—').slice(-2)}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>{ultima.operador_id}</div>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>{ultima.operador_id ?? 'outro operador'}</div>
                   <div style={{ fontSize: 12, color: 'var(--fg-dim)' }}>Score histórico {Math.round(ultima.score_operador_historico)}</div>
                 </div>
                 {noturno && <Chip state="warn" label="operação noturna" size="sm" />}
