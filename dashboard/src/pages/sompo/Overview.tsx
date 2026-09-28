@@ -3,13 +3,12 @@ import { WTONE, scoreBand } from '../../lib/risco'
 import {
   loadEquipamentos,
   loadVisaoGeral,
-  toEquipment,
   type EquipamentoView,
   type OperacaoAgg,
   type TendenciaPonto,
   type VisaoGeral,
 } from '../../data/api'
-import type { Equipment, Region, ToneKey } from '../../types'
+import type { Region, ToneKey } from '../../types'
 import { Card, ScoreBadge, ScoreBar, Trend, KPITile, SectionHeader, Button, ErroCarga } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
@@ -233,7 +232,7 @@ export default function SompoOverview({
   onPickEquip,
   onNav,
 }: {
-  onPickEquip: (e: Equipment) => void
+  onPickEquip: (equipamentoId: string) => void
   onNav: (screen: string) => void
 }) {
   const [views, setViews] = useState<EquipamentoView[]>([])
@@ -296,8 +295,7 @@ export default function SompoOverview({
   // A API devolve equipamento_id no alerta, entao nao e mais preciso extrair
   // o id da mensagem por regex.
   const handleAlertClick = (equipamentoId: string) => {
-    const v = views.find((e) => e.id === equipamentoId)
-    if (v) onPickEquip(toEquipment(v))
+    if (views.some((e) => e.id === equipamentoId)) onPickEquip(equipamentoId)
   }
 
   const handleClearFilters = () => { setRiskFilter('all'); setTypeFilter('all') }
@@ -454,7 +452,7 @@ export default function SompoOverview({
             {top5.map((eq) => (
               <button
                 key={eq.id}
-                onClick={() => onPickEquip(toEquipment(eq))}
+                onClick={() => onPickEquip(eq.id)}
                 style={{
                   background: 'var(--bg-elev-2)', border: '1px solid var(--line)', borderRadius: 8,
                   padding: '10px 12px',

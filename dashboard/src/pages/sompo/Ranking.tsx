@@ -2,10 +2,8 @@
 import { WTONE, scoreBandLabel, SEM_AVALIACAO } from '../../lib/risco'
 import {
   loadEquipamentos,
-  toEquipment,
   type EquipamentoView,
 } from '../../data/api'
-import type { Equipment } from '../../types'
 import { Card, Chip, ScoreBadge, SectionHeader, Button, ErroCarga } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
@@ -101,7 +99,7 @@ function Th({
 export default function SompoRanking({
   onPickEquip,
 }: {
-  onPickEquip: (e: Equipment) => void
+  onPickEquip: (equipamentoId: string) => void
 }) {
   const [views, setViews] = useState<EquipamentoView[]>([])
   const [loading, setLoading] = useState(true)
@@ -263,7 +261,7 @@ export default function SompoRanking({
           {filtered.map((eq, i) => (
             <button
               key={eq.id}
-              onClick={() => onPickEquip(toEquipment(eq))}
+              onClick={() => onPickEquip(eq.id)}
               style={{
                 display: 'grid', gridTemplateColumns: gridCols, padding: '10px 18px',
                 alignItems: 'center', gap: 8, background: 'none', border: 'none',
