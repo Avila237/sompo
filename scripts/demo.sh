@@ -144,7 +144,7 @@ if [ -z "$SEM_WEB" ]; then
   done
   if curl -s -o /dev/null "http://localhost:${PORTA_WEB}/" 2>/dev/null; then
     ok "dashboard no ar em http://localhost:${PORTA_WEB}"
-    nota "faca login com o usuario 'analista' — a senha esta em: grep DEMO_USERS .env"
+    nota "faca login com o usuario 'analista' (cadastro: scripts/criar_usuario.py)"
   else
     falha "dashboard nao subiu; veja ${LOG_WEB}"
   fi
@@ -186,9 +186,12 @@ pausa
 # ------------------------------------------------------------------ 3. login
 titulo "3. Autenticacao"
 
-SENHA=$(grep '^DEMO_USERS' .env | sed 's/.*analista:\([^:,]*\):.*/\1/')
-RESP=$(curl -s -X POST "${API}/auth/token" -H 'Content-Type: application/json' \
-  -d "{\"usuario\":\"analista\",\"senha\":\"${SENHA}\"}")
+# Senha pedida sem eco: usuarios vivem na tabela usuarios, nao no .env (S4-18).
+read -rs -p "  Senha do usuario analista: " SENHA; echo
+# Corpo montado pelo Python e passado pelo stdin: a senha nao aparece na lista
+# de processos, e aspas ou barras nela nao quebram o JSON.
+RESP=$(SENHA="$SENHA" python3 -c 'import json,os; print(json.dumps({"usuario":"analista","senha":os.environ["SENHA"]}))' \
+  | curl -s -X POST "${API}/auth/token" -H 'Content-Type: application/json' --data @-)
 TOKEN=$(echo "$RESP" | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
 echo "$RESP" | python3 -c '
 import json,sys
@@ -248,7 +251,7 @@ echo
 nota "cada leitura: valida -> clima Open-Meteo -> deriva manutencao -> persiste"
 nota "              -> XGBoost + SHAP -> grava predicao -> grava auditoria"
 echo
-.venv/bin/python scripts/simulate_telemetry.py --n "$LEITURAS" --intervalo 2 --cenario critico
+SAFEFIELD_SENHA="$SENHA" .venv/bin/python scripts/simulate_telemetry.py --n "$LEITURAS" --intervalo 2 --cenario critico
 
 DEPOIS=$(.venv/bin/python -c "from backend.db.repository import contar; print(contar('avaliacoes'))")
 echo

@@ -21,6 +21,7 @@ from backend.api.main import app  # noqa: E402
 from backend.api.routers import auth as rota_auth  # noqa: E402
 from backend.core import config  # noqa: E402
 from backend.services import clima  # noqa: E402
+from tests.conftest import SENHAS  # noqa: E402
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -33,8 +34,7 @@ def sem_historico_de_tentativas():
 
 
 def _credencial_valida():
-    usuario, dados = next(iter(config.DEMO_USERS.items()))
-    return usuario, dados["senha"]
+    return "analista", SENHAS["analista"]
 
 
 class TestSenhaComCaractereNaoAscii:
@@ -45,8 +45,7 @@ class TestSenhaComCaractereNaoAscii:
         assert r.status_code == 401
 
     def test_senha_com_acento_cadastrada_autentica(self):
-        with patch.dict(config.DEMO_USERS, {"joão": {"senha": "coração-1", "perfil": "gestor"}}):
-            r = client.post("/auth/token", json={"usuario": "joão", "senha": "coração-1"})
+        r = client.post("/auth/token", json={"usuario": "joão", "senha": SENHAS["joão"]})
         assert r.status_code == 200
         assert r.json()["perfil"] == "gestor"
 

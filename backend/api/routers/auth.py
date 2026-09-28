@@ -1,6 +1,7 @@
 """Emissao de token."""
 
 import math
+import threading
 import time
 from collections import defaultdict, deque
 
@@ -8,8 +9,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.schemas import TokenRequest, TokenResponse
-from backend.core.exceptions import CredenciaisInvalidas
-from backend.core.security import autenticar, criar_token
+from backend.core.security import criar_token
+from backend.services.autenticacao import autenticar
 
 router = APIRouter(tags=["auth"])
 
@@ -21,6 +22,7 @@ router = APIRouter(tags=["auth"])
 MAX_FALHAS = 5
 JANELA_S = 60.0
 _falhas: dict[str, deque[float]] = defaultdict(deque)
+_trava = threading.Lock()
 
 
 def _relogio() -> float:
@@ -45,17 +47,24 @@ def _segundos_de_bloqueio(ip: str) -> int:
 @router.post("/auth/token", response_model=TokenResponse)
 def emitir_token(req: TokenRequest, request: Request):
     ip = request.client.host if request.client else "desconhecido"
-    espera = _segundos_de_bloqueio(ip)
+    # A tentativa conta ANTES do hash, que leva ~0,1-0,3 s: contando so depois,
+    # requisicoes simultaneas passariam todas pela checagem. O sucesso devolve.
+    with _trava:
+        espera = _segundos_de_bloqueio(ip)
+        if not espera:
+            marca = _relogio()
+            _falhas[ip].append(marca)
     if espera:
         return JSONResponse(
             status_code=429,
             content={"detail": "Muitas tentativas de login. Tente novamente mais tarde."},
             headers={"Retry-After": str(espera)},
         )
-    try:
-        perfil = autenticar(req.usuario, req.senha)
-    except CredenciaisInvalidas:
-        _falhas[ip].append(_relogio())
-        raise
-    token, minutos = criar_token(req.usuario, perfil)
-    return TokenResponse(access_token=token, perfil=perfil, expira_em_minutos=minutos)
+    conta = autenticar(req.usuario, req.senha)
+    with _trava:
+        _falhas[ip].remove(marca)
+    token, minutos = criar_token(req.usuario, conta["perfil"], conta["operador_id"])
+    return TokenResponse(
+        access_token=token, perfil=conta["perfil"], operador_id=conta["operador_id"],
+        expira_em_minutos=minutos,
+    )

@@ -129,12 +129,15 @@ class RespostaScore(BaseModel):
 
 
 class TokenRequest(BaseModel):
-    usuario: str
-    senha: str
+    # Sem caractere de controle: NUL chegaria ao Postgres e viraria 500.
+    usuario: str = Field(..., min_length=1, max_length=60, pattern=r"^[^\x00-\x1f\x7f]+$")
+    senha: str = Field(..., min_length=1, max_length=256)
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     perfil: str
+    # Preenchido so para o perfil operador: e o que recorta o que ele ve.
+    operador_id: str | None = None
     expira_em_minutos: int

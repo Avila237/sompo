@@ -216,13 +216,24 @@ def agregado_por_regiao(celula_graus: int = 3, limite: int = 14) -> list[dict]:
     return saida[:limite]
 
 
-def alertas(limite: int = 7, faixa_minima: str = "medio") -> list[dict]:
+def equipamentos_do_operador(operador_id: str) -> set[str]:
+    """Equipamentos que o operador ja operou: o recorte do perfil operador (S4-18)."""
+    return {
+        a["equipamento_id"] for a in repo.listar_avaliacoes_resumo()
+        if a["operador_id"] == operador_id
+    }
+
+
+def alertas(
+    limite: int = 7, faixa_minima: str = "medio", equipamentos: set[str] | None = None
+) -> list[dict]:
     """
     Regra de alerta (portada de buildAlertas, que rodava no cliente):
     avaliacoes ordenadas da mais recente para a mais antiga, descartando as de
     faixa abaixo de `faixa_minima`, limitadas a `limite`.
 
     faixa_minima='medio' reproduz o comportamento anterior (faixa != 'baixo').
+    `equipamentos` restringe a um recorte, filtrado antes do limite.
     """
     ordem = {"baixo": 0, "medio": 1, "alto": 2}
     corte = ordem.get(faixa_minima, 1)
@@ -235,6 +246,8 @@ def alertas(limite: int = 7, faixa_minima: str = "medio") -> list[dict]:
         score = float(a["risco_score"])
         faixa = a["faixa_risco"]
         if ordem[faixa] < corte:
+            continue
+        if equipamentos is not None and a["equipamento_id"] not in equipamentos:
             continue
         saida.append(
             {

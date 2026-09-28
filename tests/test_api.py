@@ -20,8 +20,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from backend.api.main import app  # noqa: E402
-from backend.core import config  # noqa: E402
 from backend.core.security import criar_token  # noqa: E402
+from tests.conftest import SENHAS  # noqa: E402
 
 # raise_server_exceptions=False: queremos observar o 500 que o handler produz,
 # nao a excecao crua propagada pelo TestClient.
@@ -116,12 +116,11 @@ class TestAutenticacao:
         assert r.status_code == 401
 
     def test_credencial_correta_devolve_token(self):
-        usuario, dados = next(iter(config.DEMO_USERS.items()))
-        r = client.post("/auth/token", json={"usuario": usuario, "senha": dados["senha"]})
+        r = client.post("/auth/token", json={"usuario": "analista", "senha": SENHAS["analista"]})
         assert r.status_code == 200
         corpo = r.json()
         assert corpo["token_type"] == "bearer"
-        assert corpo["perfil"] == dados["perfil"]
+        assert corpo["perfil"] == "analista"
         assert corpo["access_token"]
 
 

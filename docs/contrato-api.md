@@ -13,8 +13,36 @@ Todas as rotas exigem `Authorization: Bearer <token>`, exceto `POST /auth/token`
 O Swagger (`/docs`, `/redoc`, `/openapi.json`) também é público, por decisão: descreve o contrato,
 não expõe dado, e é por ele que o avaliador explora a API.
 
-Token expira em `JWT_EXPIRE_MINUTES` (default 480). Perfis: `operador`, `gestor`, `analista`. Nesta
-versão os três enxergam os mesmos dados; o perfil vai no token, mas nenhuma rota o usa para filtrar.
+Token expira em `JWT_EXPIRE_MINUTES` (default 480). Usuários vivem na tabela `usuarios`, com senha
+em hash scrypt; o cadastro é feito por `scripts/criar_usuario.py`, que pede a senha sem eco.
+
+### Perfis e o que cada um acessa
+
+Há uma frota só. Os perfis diferem no **recorte**: `analista` (Sompo), `gestor` (gestor de frota) e
+`tecnico` veem a frota inteira; `operador` vê só os equipamentos que já operou (tem ao menos uma
+avaliação com o seu `operador_id`).
+
+| Rota | analista | gestor | tecnico | operador |
+|---|---|---|---|---|
+| `POST /avaliacoes` | qualquer `operador_id` | `403` | `403` | só o próprio `operador_id` e só equipamento que já operou, senão `403` |
+| `GET /equipamentos` | todos | todos | todos | só os que operou |
+| `GET /equipamentos/{id}` | todos | todos | todos | só os que operou, senão `403` |
+| `GET /alertas` | todos | todos | todos | só dos equipamentos que operou |
+| `GET /kpis`, `GET /tendencias` | sim | sim | sim | `403` (agregação da frota) |
+
+O `403` do operador no detalhe vem **antes** da busca: equipamento alheio e equipamento
+inexistente respondem igual, e o operador não descobre o que existe fora do seu recorte. Recusas
+de `POST /avaliacoes` por perfil entram na auditoria com `status='erro'`.
+
+O operador não envia para equipamento fora do recorte: senão, uma leitura em nome próprio num
+equipamento alheio o colocaria no recorte. A primeira leitura de um operador novo num
+equipamento entra pelo `analista` (integração).
+
+**Limitação conhecida:** o token vale até expirar. Desativar um usuário ou trocar o perfil dele
+só tem efeito no próximo login, até `JWT_EXPIRE_MINUTES` depois.
+
+Recomendações: todos os perfis recebem todas no detalhe; o dashboard destaca as do `publico` do
+usuário.
 
 ### POST /auth/token
 
@@ -26,9 +54,14 @@ versão os três enxergam os mesmos dados; o perfil vai no token, mas nenhuma ro
   "access_token": "<jwt>",
   "token_type": "bearer",
   "perfil": "analista",
+  "operador_id": null,
   "expira_em_minutos": 480
 }
 ```
+
+`operador_id` vem preenchido só para o perfil `operador`. Usuário desativado, inexistente ou
+senha errada respondem o mesmo `401`, no mesmo tempo. `usuario` com mais de 60 caracteres ou
+`senha` com mais de 256 é `422`.
 
 ## Erros
 
@@ -38,6 +71,7 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 |---|---|---|
 | Sem token | `401` | `"Token ausente."` |
 | Token inválido ou expirado | `401` | `"Token invalido ou expirado."` |
+| Perfil sem acesso à rota ou fora do recorte (matriz acima) | `403` | motivo, ex.: `"Perfil 'operador' nao acessa este recurso."` |
 | Credencial errada em `/auth/token` | `401` | `"Usuario ou senha invalidos."` |
 | 5 credenciais erradas do mesmo IP em 60 s (`/auth/token`) | `429` | `"Muitas tentativas de login. Tente novamente mais tarde."` + header `Retry-After` em segundos |
 | Equipamento inexistente | `404` | `"Equipamento 'EQ-9999' nao encontrado."` |
@@ -420,9 +454,12 @@ recebido (sem o próprio `leitura_id`, antes do enriquecimento climático).
 
 `leitura_id` que não é UUID é `422`.
 
-O reenvio é decidido **antes** de validar o cadastro, consultar a Open-Meteo ou rodar o modelo:
-um retry recebe o resultado original mesmo que a Open-Meteo esteja fora naquele momento. O hash
-trata campo opcional ausente e campo opcional `null` como o mesmo payload.
+A autorização por perfil vem **primeiro**. Um reenvio de quem não pode enviar aquela leitura
+(gestor, técnico, operador em nome de outro ou fora do recorte) é `403`, igual a um envio novo,
+e nunca devolve o resultado gravado. Autorizado, o reenvio é decidido **antes** de validar o
+cadastro, consultar a Open-Meteo ou rodar o modelo: um retry recebe o resultado original mesmo
+que a Open-Meteo esteja fora naquele momento. O hash trata campo opcional ausente e campo
+opcional `null` como o mesmo payload.
 
 ```json
 // resposta 201

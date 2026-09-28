@@ -63,6 +63,16 @@ class CredenciaisInvalidas(SafeFieldError):
     mensagem = "Usuario ou senha invalidos."
 
 
+class AcessoNegado(SafeFieldError):
+    """Autenticado, mas o perfil nao alcanca o recurso (matriz perfil x rota)."""
+
+    status_code = 403
+
+    def __init__(self, mensagem: str):
+        self.mensagem = mensagem
+        super().__init__(self.mensagem)
+
+
 class ClimaIndisponivel(SafeFieldError):
     status_code = 502
 
