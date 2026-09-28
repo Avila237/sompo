@@ -1,5 +1,6 @@
 ﻿import { useState } from 'react'
-import { CLIENTS, scoreBand, scoreBandLabel } from '../../data/mock'
+import { CLIENTS } from '../../data/mock'
+import { scoreBand, scoreBandLabel } from '../../lib/risco'
 import { Card, ScoreBadge, Chip, Trend, SectionHeader } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import SideNav from '../../components/SideNav'

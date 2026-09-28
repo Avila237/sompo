@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useMemo } from 'react'
-import { WTONE, scoreBand, scoreBandLabel, SEM_AVALIACAO } from '../../data/mock'
+import { WTONE, scoreBand, scoreBandLabel, SEM_AVALIACAO } from '../../lib/risco'
 import {
   loadEquipamentoDetail,
   aggregateShapByGroup,

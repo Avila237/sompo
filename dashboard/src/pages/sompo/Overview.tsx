@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo, useEffect } from 'react'
-import { WTONE, scoreBand } from '../../data/mock'
+import { WTONE, scoreBand } from '../../lib/risco'
 import {
   loadEquipamentos,
   loadVisaoGeral,

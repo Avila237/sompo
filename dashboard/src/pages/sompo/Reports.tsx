@@ -1,5 +1,5 @@
 ﻿import { useState, type ReactNode } from 'react'
-import { WTONE } from '../../data/mock'
+import { WTONE } from '../../lib/risco'
 import type { ToneKey } from '../../types'
 import { Card, Button, SectionHeader, Chip } from '../../components/shared'
 import { WIco } from '../../components/Icons'
