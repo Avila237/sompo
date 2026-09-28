@@ -471,9 +471,8 @@ treino.
 O ponto importante é que treino e inferência não podem divergir. Divergência de pré-processamento
 é a classe de bug que não aparece em teste unitário e envenena silenciosamente toda predição em
 produção. Na inferência, `preprocess_features()` é o único caminho: a API, o script de predições em
-lote e os testes passam por ela. O treino, que precisa **ajustar** o encoder e não só aplicá-lo,
-repete as mesmas etapas em `train.py` sem chamar a função. Hoje os dois caminhos produzem o mesmo
-vetor; unificá-los está previsto no ajuste final do modelo.
+lote, os testes e o próprio treino passam por ela. O treino só acrescenta um passo antes:
+**ajustar** o encoder (`ajustar_encoder()`), que a inferência depois apenas aplica.
 
 #### 6. XGBoost → score ✅
 

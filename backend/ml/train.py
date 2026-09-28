@@ -19,7 +19,6 @@ from sklearn.metrics import (
     r2_score,
 )
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import OrdinalEncoder
 
 DATA_PATH = "data/dataset_safefield.parquet"
 MODELS_DIR = "models"
@@ -54,6 +53,7 @@ from backend.ml.preprocess import (  # noqa: E402,F401
     CAT_COLS,
     EXCLUDE_COLS,
     TARGET,
+    ajustar_encoder,
     derive_faixa,
     preprocess_features,
 )
@@ -67,14 +67,11 @@ def main(referencia: bool = False):
     feature_cols = [c for c in df.columns if c not in EXCLUDE_COLS]
     assert len(feature_cols) == 30, f"Expected 30 features, got {len(feature_cols)}"
 
-    X = df[feature_cols].copy()
+    # Mesma funcao da inferencia (API, predicoes em lote): treino e producao
+    # nao podem preparar as features de jeitos diferentes.
+    encoder = ajustar_encoder(df)
+    X = preprocess_features(df[feature_cols].copy(), encoder)
     y = df[TARGET].copy()
-
-    for col in BOOL_COLS:
-        X[col] = X[col].astype(int)
-
-    encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
-    X[CAT_COLS] = encoder.fit_transform(X[CAT_COLS])
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.20, random_state=42
