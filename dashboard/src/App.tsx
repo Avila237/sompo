@@ -34,10 +34,10 @@ export default function App() {
 
   // key = token: cada login monta o Shell do zero, entao o proximo usuario nao
   // herda tela, persona nem equipamento selecionado do anterior.
-  return <Shell key={sessao.token} perfil={sessao.perfil} />
+  return <Shell key={sessao.token} perfil={sessao.perfil} usuario={sessao.usuario} />
 }
 
-function Shell({ perfil }: { perfil: string }) {
+function Shell({ perfil, usuario }: { perfil: string; usuario?: string }) {
   const [persona, setPersona] = useState<'sompo' | 'broker' | 'tech'>('sompo')
   const [screen, setScreen] = useState('overview')
   const [pickEquip, setPickEquip] = useState<string | null>(null) // equipamento_id
@@ -49,19 +49,19 @@ function Shell({ perfil }: { perfil: string }) {
       .then((eqs) => { if (ativo) setEquipCount(eqs.length) })
       .catch((e) => {
         // O contador do menu fica vazio; a mensagem para o usuario sai na
-        // propria tela (Visao geral / Ranking), que faz a mesma chamada.
+        // propria tela (Visão geral / Ranking), que faz a mesma chamada.
         console.error('Falha ao carregar contagem de equipamentos:', e)
       })
     return () => { ativo = false }
   }, [])
 
   const sompoNav = [
-    { k: 'overview',  label: 'Visao geral',          icon: <WIco.map /> },
+    { k: 'overview',  label: 'Visão geral',          icon: <WIco.map /> },
     { k: 'ranking',   label: 'Equipamentos',         icon: <WIco.grid />,   count: equipCount },
     { k: 'detail',    label: 'Detalhe equipamento',  icon: <WIco.info /> },
     { k: 'simulator', label: 'Simulador',            icon: <WIco.beaker /> },
-    { k: 'ubi',       label: 'UBI · Premios',        icon: <WIco.chart /> },
-    { k: 'reports',   label: 'Relatorios',           icon: <WIco.doc /> },
+    { k: 'ubi',       label: 'UBI · Prêmios',        icon: <WIco.chart /> },
+    { k: 'reports',   label: 'Relatórios',           icon: <WIco.doc /> },
   ]
 
   function handlePersona(p: string) {
@@ -92,7 +92,7 @@ function Shell({ perfil }: { perfil: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
-      <TopBar persona={persona} setPersona={handlePersona} perfil={perfil} onSair={logout} />
+      <TopBar persona={persona} setPersona={handlePersona} perfil={perfil} usuario={usuario} onSair={logout} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {persona === 'sompo' && (
           <SideNav items={sompoNav} active={screen} onPick={setScreen} />
