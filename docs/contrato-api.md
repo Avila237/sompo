@@ -138,7 +138,10 @@ Ordenado por `risco_score` desc. Uma linha por equipamento, com o score da avali
       "operador_id": "OP-0017",
       "ultima_avaliacao": "2025-11-18T10:49:45+00:00",
       "latitude": -23.882754,
-      "longitude": -44.369725
+      "longitude": -44.369725,
+      "manutencao_atrasada": true,
+      "atraso_manutencao_pct": 1.38,
+      "ultima_manutencao_dias": 208
     },
     "..."
   ]
@@ -148,9 +151,14 @@ Ordenado por `risco_score` desc. Uma linha por equipamento, com o score da avali
 - `tendencia` é a diferença entre o score da última avaliação e o da penúltima; `0.0` com uma só.
 - `faixa_risco` é a faixa gravada na última avaliação, derivada do score cru no momento da
   predição. Não é recalculada a partir do `risco_score` devolvido, que tem duas casas.
+- `manutencao_atrasada`, `atraso_manutencao_pct` (múltiplo do intervalo recomendado; `> 1` é
+  atraso) e `ultima_manutencao_dias` vêm da última avaliação. Os dois primeiros o servidor deriva na
+  ingestão (Regra 14); o último é o que a leitura informou. Alimentam a tela de manutenção do
+  técnico. Podem vir `null` se a linha não os tiver.
 
 **Equipamento sem nenhuma avaliação** também aparece na lista, com:
-- `operador_id`, `ultima_avaliacao`, `latitude` e `longitude` iguais a `null`;
+- `operador_id`, `ultima_avaliacao`, `latitude`, `longitude`, `manutencao_atrasada`,
+  `atraso_manutencao_pct` e `ultima_manutencao_dias` iguais a `null`;
 - `total_avaliacoes` igual a `0`;
 - `risco_score`, `score_medio` e `tendencia` iguais a `0.0`;
 - `faixa_risco` igual a `"baixo"`.

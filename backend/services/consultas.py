@@ -91,6 +91,11 @@ def listar_equipamentos() -> list[dict]:
                 "ultima_avaliacao": ultima["timestamp"] if ultima else None,
                 "latitude": float(ultima["latitude"]) if ultima else None,
                 "longitude": float(ultima["longitude"]) if ultima else None,
+                # Manutencao da ultima avaliacao (S4-36): a tela do tecnico ordena
+                # por ela. .get(): linha sem a coluna vira null, nao KeyError.
+                "manutencao_atrasada": ultima.get("manutencao_atrasada") if ultima else None,
+                "atraso_manutencao_pct": ultima.get("atraso_manutencao_pct") if ultima else None,
+                "ultima_manutencao_dias": ultima.get("ultima_manutencao_dias") if ultima else None,
             }
         )
     saida.sort(key=lambda e: e["risco_score"], reverse=True)
