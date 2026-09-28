@@ -66,7 +66,10 @@ def group_contributions(shap_values: np.ndarray, features: list) -> pd.DataFrame
 def explain_record(shap_values: np.ndarray, features: list, idx: int, top_n: int = 5) -> list:
     """
     Retorna os top N fatores para um registro especifico.
-    Cada fator: {"feature": str, "shap_value": float, "group": str}
+    Cada fator: {"feature": str, "shap_value": float, "grupo": str}
+
+    'grupo' e a chave que a API grava (predictor.py). As predicoes do seed
+    sairam daqui com 'group'; services/consultas.py normaliza as duas na leitura.
     """
     row = shap_values[idx]
     indices = np.argsort(np.abs(row))[::-1][:top_n]
@@ -74,7 +77,7 @@ def explain_record(shap_values: np.ndarray, features: list, idx: int, top_n: int
         {
             "feature": features[i],
             "shap_value": float(row[i]),
-            "group": _FEATURE_TO_GROUP.get(features[i], "unknown"),
+            "grupo": _FEATURE_TO_GROUP.get(features[i], "unknown"),
         }
         for i in indices
     ]

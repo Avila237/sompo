@@ -148,6 +148,8 @@ class TestShapJson:
             fatores = r["top_fatores_shap"]
             assert len(fatores) == 5, f"Esperado 5 fatores, obteve {len(fatores)}"
 
+    # O grupo nao entra aqui: o seed gravou 'group' e a API grava 'grupo'.
+    # test_grupos_presentes_e_validos le a chave pela mesma regra da API.
     def test_fatores_tem_campos_obrigatorios(self, sample_predicoes):
         assert sample_predicoes, "Amostra de predicoes vazia"
         for r in sample_predicoes:
@@ -155,15 +157,23 @@ class TestShapJson:
             for fator in r["top_fatores_shap"]:
                 assert "feature" in fator, "Campo 'feature' ausente"
                 assert "shap_value" in fator, "Campo 'shap_value' ausente"
-                assert "group" in fator, "Campo 'group' ausente"
 
-    def test_grupos_validos(self, sample_predicoes):
+    def test_grupos_presentes_e_validos(self, sample_predicoes):
+        # Import tardio, como o do client: consultas le config.py, que exige
+        # as variaveis da API, e o skip sem credenciais tem de valer antes.
+        # Por isso este teste pede o .env completo da API (JWT_SECRET_KEY
+        # inclusive), e nao so as credenciais do Supabase.
+        from backend.services.consultas import normalizar_fatores_shap
+
         assert sample_predicoes, "Amostra de predicoes vazia"
         for r in sample_predicoes:
             assert r["top_fatores_shap"], "top_fatores_shap vazio"
-            for fator in r["top_fatores_shap"]:
-                assert fator["group"] in VALID_GROUPS, (
-                    f"Grupo invalido: {fator['group']}"
+            normalizados = normalizar_fatores_shap(r["top_fatores_shap"])
+            # Sem 'grupo' nem 'group', a normalizacao devolve 'outros', que
+            # nao e grupo valido: a ausencia da chave tambem falha aqui.
+            for bruto, fator in zip(r["top_fatores_shap"], normalizados):
+                assert fator["grupo"] in VALID_GROUPS, (
+                    f"Grupo ausente ou invalido: {bruto}"
                 )
 
 
