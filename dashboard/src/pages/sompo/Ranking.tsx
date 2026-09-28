@@ -1,58 +1,14 @@
-﻿import { useState, useMemo, useEffect } from 'react'
-import { WTONE, scoreBandLabel, SEM_AVALIACAO } from '../../data/mock'
+﻿import { useState, useMemo } from 'react'
+import { WTONE, scoreBandLabel, SEM_AVALIACAO } from '../../lib/risco'
 import {
   loadEquipamentos,
-  toEquipment,
   type EquipamentoView,
 } from '../../data/api'
-import type { Equipment } from '../../types'
-import { Card, Chip, ScoreBadge, SectionHeader, Button } from '../../components/shared'
+import { Card, Chip, ScoreBadge, SectionHeader, Button, ErroCarga, FilterSeg, Carregando } from '../../components/shared'
+import { useCarga } from '../../lib/useCarga'
+import { fmtDiaMes } from '../../lib/formato'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
-
-/* ── FilterSeg helper ────────────────────────────────────── */
-
-function FilterSeg({
-  value,
-  onChange,
-  opts,
-}: {
-  value: string
-  onChange: (v: string) => void
-  opts: Array<{ k: string; l: string; dot?: string }>
-}) {
-  return (
-    <div style={{ display: 'inline-flex', border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden' }}>
-      {opts.map((o) => {
-        const active = value === o.k
-        return (
-          <button
-            key={o.k}
-            onClick={() => onChange(o.k)}
-            style={{
-              padding: '6px 12px',
-              border: 'none',
-              borderRight: '1px solid var(--line)',
-              background: active ? 'var(--line)' : 'transparent',
-              color: active ? 'var(--fg)' : 'var(--fg-mute)',
-              fontWeight: 600,
-              fontSize: 12,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            {o.dot && (
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: o.dot, flexShrink: 0 }} />
-            )}
-            {o.l}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 /* ── Sortable header helper ──────────────────────────────── */
 
@@ -101,25 +57,16 @@ function Th({
 export default function SompoRanking({
   onPickEquip,
 }: {
-  onPickEquip: (e: Equipment) => void
+  onPickEquip: (equipamentoId: string) => void
 }) {
-  const [views, setViews] = useState<EquipamentoView[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const carga = useCarga((recarregar) => loadEquipamentos({ recarregar }))
+  const views = useMemo<EquipamentoView[]>(() => carga.dados ?? [], [carga.dados])
 
   const [search, setSearch] = useState('')
   const [band, setBand] = useState('all')
   const [type, setType] = useState('all')
   const [sortKey, setSortKey] = useState<SortKey>('score')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-
-  useEffect(() => {
-    let active = true
-    loadEquipamentos()
-      .then((eqs) => { if (active) { setViews(eqs); setLoading(false) } })
-      .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
-    return () => { active = false }
-  }, [])
 
   const handleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -166,23 +113,10 @@ export default function SompoRanking({
 
   const gridCols = '190px 1fr 90px 90px 70px 90px 70px 110px 30px'
 
-  const fmtDate = (ts: string) =>
-    ts ? new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '—'
+  if (carga.carregando) return <Carregando msg="Carregando equipamentos da API…" />
 
-  if (loading) {
-    return (
-      <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: 'var(--fg-mute)', fontSize: 14 }}>
-        Carregando equipamentos da API…
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: '24px 28px', color: 'var(--red)', fontSize: 14 }}>
-        Erro ao carregar equipamentos: {error}
-      </div>
-    )
+  if (carga.erro) {
+    return <ErroCarga titulo="Não foi possível carregar os equipamentos." msg={carga.erro} onTentar={carga.tentarDeNovo} />
   }
 
   return (
@@ -264,7 +198,7 @@ export default function SompoRanking({
           {filtered.map((eq, i) => (
             <button
               key={eq.id}
-              onClick={() => onPickEquip(toEquipment(eq))}
+              onClick={() => onPickEquip(eq.id)}
               style={{
                 display: 'grid', gridTemplateColumns: gridCols, padding: '10px 18px',
                 alignItems: 'center', gap: 8, background: 'none', border: 'none',
@@ -300,7 +234,7 @@ export default function SompoRanking({
               <div className="tabular" style={{ fontSize: 12, color: 'var(--fg-dim)' }}>{eq.avaliacoes}</div>
 
               {/* Last eval date */}
-              <div style={{ fontSize: 11, color: 'var(--fg-mute)', fontWeight: 500 }}>{fmtDate(eq.ultimaTs)}</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-mute)', fontWeight: 500 }}>{fmtDiaMes(eq.ultimaTs)}</div>
 
               {/* Arrow */}
               <span style={{ color: 'var(--fg-mute)', display: 'flex', justifyContent: 'center' }}>
