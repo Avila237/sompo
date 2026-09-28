@@ -6,22 +6,6 @@ export interface Tone {
   ring: string
 }
 
-export interface Equipment {
-  id: string
-  model: string
-  type: 'trator' | 'colheitadeira' | 'implemento'
-  op: string
-  opName: string
-  client: string
-  region: string
-  score: number | null // null = equipamento sem avaliação
-  trend: number
-  lastAlert: string
-  hours: number
-  maint: 'atrasada' | 'em dia'
-  maintPct: number
-}
-
 export interface Region {
   name: string
   x: number
@@ -37,12 +21,4 @@ export interface Client {
   alerts: number
   premium: string
   delta: number
-}
-
-export interface MaintItem {
-  id: string
-  item: string
-  due: string
-  pct: number
-  sev: ToneKey
 }

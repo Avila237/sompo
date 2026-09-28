@@ -5,6 +5,8 @@ type Chave = string | number
 export interface Carga<T> {
   dados: T | null
   erro: string | null
+  /** Status HTTP do último erro (ApiError), ou null para falha sem status. */
+  erroStatus: number | null
   /** Verdadeiro enquanto a busca da `chave` atual não terminou — inclusive logo após a chave mudar. */
   carregando: boolean
   /** A `chave` a que `dados` pertence (null antes do primeiro sucesso). Use-a para rotular o que está na tela. */
@@ -16,6 +18,7 @@ export interface Carga<T> {
 interface Estado<T> {
   dados: T | null
   erro: string | null
+  erroStatus: number | null
   chaveDados: Chave | null
   /** Última chave cuja busca terminou (sucesso ou erro). */
   chaveConcluida: Chave | null
@@ -35,7 +38,7 @@ interface Estado<T> {
  */
 export function useCarga<T>(carregar: (recarregar: boolean) => Promise<T>, chave: Chave = ''): Carga<T> {
   const [estado, setEstado] = useState<Estado<T>>({
-    dados: null, erro: null, chaveDados: null, chaveConcluida: null, recarregando: false,
+    dados: null, erro: null, erroStatus: null, chaveDados: null, chaveConcluida: null, recarregando: false,
   })
   const [tentativa, setTentativa] = useState(0)
 
@@ -47,20 +50,21 @@ export function useCarga<T>(carregar: (recarregar: boolean) => Promise<T>, chave
     let ativo = true
     carregarRef.current(tentativa > 0)
       .then((dados) => {
-        if (ativo) setEstado({ dados, erro: null, chaveDados: chave, chaveConcluida: chave, recarregando: false })
+        if (ativo) setEstado({ dados, erro: null, erroStatus: null, chaveDados: chave, chaveConcluida: chave, recarregando: false })
       })
       .catch((e) => {
-        if (ativo) setEstado((s) => ({ ...s, erro: String(e?.message ?? e), chaveConcluida: chave, recarregando: false }))
+        const erroStatus = typeof e?.status === 'number' ? e.status : null
+        if (ativo) setEstado((s) => ({ ...s, erro: String(e?.message ?? e), erroStatus, chaveConcluida: chave, recarregando: false }))
       })
     return () => { ativo = false }
   }, [chave, tentativa])
 
   const tentarDeNovo = useCallback(() => {
-    setEstado((s) => ({ ...s, erro: null, recarregando: true }))
+    setEstado((s) => ({ ...s, erro: null, erroStatus: null, recarregando: true }))
     setTentativa((t) => t + 1)
   }, [])
 
   // Derivado, não guardado: "carregando" logo que a chave muda, sem setState síncrono no efeito
   const carregando = estado.recarregando || estado.chaveConcluida !== chave
-  return { dados: estado.dados, erro: estado.erro, chaveDados: estado.chaveDados, carregando, tentarDeNovo }
+  return { dados: estado.dados, erro: estado.erro, erroStatus: estado.erroStatus, chaveDados: estado.chaveDados, carregando, tentarDeNovo }
 }

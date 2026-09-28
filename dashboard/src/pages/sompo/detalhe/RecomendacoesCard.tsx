@@ -19,8 +19,14 @@ type Filtro = 'todos' | Publico
  * Ações preventivas da última avaliação, com o critério que disparou cada uma.
  * A lista vem em ordem de prioridade do backend; o filtro só recorta por quem age.
  */
-export function RecomendacoesCard({ recomendacoes }: { recomendacoes: Recomendacao[] }) {
-  const [filtro, setFiltro] = useState<Filtro>('todos')
+export function RecomendacoesCard({ recomendacoes, publicoPadrao = null }: {
+  recomendacoes: Recomendacao[]
+  /** Público do perfil logado (BRA-460): o filtro abre nele quando há recomendação para ele. */
+  publicoPadrao?: Publico | null
+}) {
+  const [filtro, setFiltro] = useState<Filtro>(() =>
+    publicoPadrao && recomendacoes.some((r) => r.publico === publicoPadrao) ? publicoPadrao : 'todos',
+  )
 
   if (recomendacoes.length === 0) {
     return (
