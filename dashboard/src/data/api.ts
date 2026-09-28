@@ -59,10 +59,11 @@ interface EquipamentoItemResp {
   faixa_risco: string
   tendencia: number
   total_avaliacoes: number
-  operador_id: string
+  // contrato: os quatro vêm null em equipamento sem avaliacao
+  operador_id: string | null
   ultima_avaliacao: string | null
-  latitude: number
-  longitude: number
+  latitude: number | null
+  longitude: number | null
 }
 
 /** Uma linha por equipamento, ja agregada pelo servidor. */
@@ -80,8 +81,8 @@ export interface EquipamentoView {
   avaliacoes: number
   operador: string
   ultimaTs: string
-  lat: number
-  lon: number
+  lat: number | null
+  lon: number | null
 }
 
 function toView(e: EquipamentoItemResp): EquipamentoView {
@@ -141,8 +142,14 @@ export interface Kpis {
   scoreMedio: number
   riscoAlto: number
   pctRiscoAlto: number
-  /** Ausente enquanto a API nao expuser `total_operadores` — ver nota abaixo. */
-  operadores: number | null
+  operadores: number // operadores distintos nas avaliacoes
+}
+
+/** Ponto da serie diaria. So existem dias COM dados — ver `tendencia` no contrato. */
+export interface TendenciaPonto {
+  dia: string // YYYY-MM-DD
+  score: number
+  avaliacoes: number
 }
 
 /** Agregacao por tipo de operacao — terceiro eixo exigido pelo RF-09. */
@@ -166,12 +173,7 @@ export interface VisaoGeral {
   porOperacao: OperacaoAgg[]
   regioes: Region[]
   alertas: Alerta[]
-  /**
-   * Serie de media diaria de score. `null` enquanto a API nao devolver
-   * `tendencia` em GET /kpis — a Visao geral esconde o grafico nesse caso em
-   * vez de exibir dado vazio. Ver "Pendencias de contrato" no PR.
-   */
-  tendencia: number[] | null
+  tendencia: TendenciaPonto[]
 }
 
 interface KpisResp {
@@ -182,7 +184,7 @@ interface KpisResp {
     equipamentos_risco_alto: number
     pct_risco_alto: number
     avaliacoes_por_faixa: Record<string, number>
-    total_operadores?: number
+    total_operadores: number
   }
   por_operacao: Array<{
     tipo_operacao: string
@@ -199,8 +201,7 @@ interface KpisResp {
     total_equipamentos: number
     score_medio: number
   }>
-  /** Campo aditivo ainda nao implementado no backend. */
-  tendencia?: Array<{ dia: string; score_medio: number }>
+  tendencia: Array<{ dia: string; score_medio: number; avaliacoes: number }>
 }
 
 interface AlertaResp {
@@ -209,7 +210,7 @@ interface AlertaResp {
   operador_id: string
   risco_score: number
   faixa_risco: string
-  tipo_operacao: string
+  tipo_operacao: string | null // contrato: null se a avaliacao nao tiver o campo
   timestamp: string
   mensagem: string
 }
@@ -239,9 +240,7 @@ export async function loadAlertas(): Promise<Alerta[]> {
 /**
  * Carrega tudo que a Visao geral precisa em duas requisicoes paralelas.
  *
- * @param dias janela da serie de tendencia; repassada como `?dias=` para o
- *   momento em que a API implementar o campo. Parametro desconhecido e
- *   ignorado pelo FastAPI, entao nao quebra hoje.
+ * @param dias janela da serie `tendencia`, em dias COM dados (nao corridos).
  */
 export async function loadVisaoGeral(dias: number): Promise<VisaoGeral> {
   const [k, a] = await Promise.all([
@@ -256,7 +255,7 @@ export async function loadVisaoGeral(dias: number): Promise<VisaoGeral> {
       scoreMedio: Math.round(k.kpis.score_medio),
       riscoAlto: k.kpis.equipamentos_risco_alto,
       pctRiscoAlto: k.kpis.pct_risco_alto,
-      operadores: k.kpis.total_operadores ?? null,
+      operadores: k.kpis.total_operadores,
     },
     porOperacao: k.por_operacao.map((o) => ({
       tipo: o.tipo_operacao,
@@ -272,7 +271,9 @@ export async function loadVisaoGeral(dias: number): Promise<VisaoGeral> {
       avg: Math.round(r.score_medio),
     })),
     alertas: a.itens.map(toAlerta),
-    tendencia: k.tendencia ? k.tendencia.map((p) => p.score_medio) : null,
+    // Mantem `dia`: descarta-lo fazia o eixo rotular "N d" quando os pontos
+    // podem cobrir meses (so ha pontos em dias com dados)
+    tendencia: k.tendencia.map((p) => ({ dia: p.dia, score: p.score_medio, avaliacoes: p.avaliacoes })),
   }
 }
 
@@ -385,7 +386,7 @@ export function toEquipment(v: EquipamentoView): Equipment {
     op: v.operador,
     opName: v.operador,
     client: '—',
-    region: v.ultimaTs ? `${Math.abs(v.lat).toFixed(1)}°S ${Math.abs(v.lon).toFixed(1)}°O` : '—',
+    region: v.lat !== null && v.lon !== null ? `${Math.abs(v.lat).toFixed(1)}°S ${Math.abs(v.lon).toFixed(1)}°O` : '—',
     score: v.score,
     trend: v.trend,
     lastAlert: v.ultimaTs ? new Date(v.ultimaTs).toLocaleDateString('pt-BR') : '—',

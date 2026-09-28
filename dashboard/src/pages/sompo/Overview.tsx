@@ -6,6 +6,7 @@ import {
   toEquipment,
   type EquipamentoView,
   type OperacaoAgg,
+  type TendenciaPonto,
   type VisaoGeral,
 } from '../../data/api'
 import type { Equipment, Region, ToneKey } from '../../types'
@@ -147,7 +148,14 @@ function BrazilMap({ regions, onPickRegion }: { regions: Region[]; onPickRegion?
 
 /* -- Trend chart sub-component ----------------------------- */
 
-function TrendChart({ data }: { data: number[] }) {
+// "2025-12-28" → "28/12/25", sem passar por Date para não deslocar o dia pelo fuso
+const fmtDia = (dia: string) => {
+  const [a, m, d] = dia.split('-')
+  return a && m && d ? `${d}/${m}/${a.slice(2)}` : dia
+}
+
+function TrendChart({ pontos }: { pontos: TendenciaPonto[] }) {
+  const data = pontos.map((p) => p.score)
   const W = 480, H = 200, PAD = { t: 16, r: 12, b: 24, l: 12 }
   const cw = W - PAD.l - PAD.r
   const ch = H - PAD.t - PAD.b
@@ -197,9 +205,10 @@ function TrendChart({ data }: { data: number[] }) {
           )
         })()}
 
-        <text x={PAD.l} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight">1</text>
-        <text x={PAD.l + cw / 2} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="middle">{Math.ceil(data.length / 2)}</text>
-        <text x={W - PAD.r} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="end">{data.length} d</text>
+        {/* Eixo com a data real do ponto: os pontos são dias com dados, não dias corridos */}
+        <text x={PAD.l} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight">{fmtDia(pontos[0].dia)}</text>
+        <text x={PAD.l + cw / 2} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="middle">{fmtDia(pontos[Math.floor((pontos.length - 1) / 2)].dia)}</text>
+        <text x={W - PAD.r} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="end">{fmtDia(pontos[pontos.length - 1].dia)}</text>
       </svg>
 
       <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingLeft: 4 }}>
@@ -236,7 +245,7 @@ export default function SompoOverview({
   const [tentVisao, setTentVisao] = useState(0)
   const [tentEquip, setTentEquip] = useState(0)
 
-  const [period, setPeriod] = useState<'30d' | '60d' | '90d'>('30d')
+  const [period, setPeriod] = useState<30 | 60 | 90>(30) // dias com dados
   const [showFilters, setShowFilters] = useState(false)
   const [riskFilter, setRiskFilter] = useState<'all' | 'safe' | 'warn' | 'crit'>('all')
   const [typeFilter, setTypeFilter] = useState<'all' | 'colheitadeira' | 'trator' | 'implemento'>('all')
@@ -254,8 +263,7 @@ export default function SompoOverview({
   // ao trocar o periodo porque a janela da serie e resolvida no servidor.
   useEffect(() => {
     let active = true
-    const dias = period === '30d' ? 30 : period === '60d' ? 60 : 90
-    loadVisaoGeral(dias)
+    loadVisaoGeral(period)
       .then((v) => { if (active) { setVisao(v); setErroVisao(null); setLoading(false) } })
       .catch((e) => { if (active) { setErroVisao(String(e?.message ?? e)); setLoading(false) } })
     return () => { active = false }
@@ -265,8 +273,7 @@ export default function SompoOverview({
   const tentarEquip = () => { setErroEquip(null); setTentEquip((t) => t + 1) }
 
   const kpis = visao?.kpis ?? null
-  const operadores = visao?.kpis.operadores ?? null
-  const trend = visao?.tendencia ?? null
+  const trend = visao?.tendencia ?? []
   const regions = useMemo(() => visao?.regioes ?? [], [visao])
   const porOperacao = useMemo(
     () => [...(visao?.porOperacao ?? [])].sort((a, b) => b.scoreMedio - a.scoreMedio),
@@ -381,14 +388,12 @@ export default function SompoOverview({
       )}
 
       {/* --- KPIs --- */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${operadores === null ? 4 : 5}, 1fr)`, gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         <KPITile label="Equipamentos" value={kpis.totalEquip} sub="Frota monitorada" />
         <KPITile label="Avaliações" value={kpis.totalAval.toLocaleString('pt-BR')} sub="Registros de risco" />
         <KPITile label="Score médio" value={kpis.scoreMedio} unit="/100" accent={scoreTone} sub={scoreToneLabel} subTone={scoreTone} />
         <KPITile label="Risco alto" value={kpis.riscoAlto} accent="crit" sub={`${kpis.pctRiscoAlto.toFixed(1)} % da frota`} subTone="crit" />
-        {operadores !== null && (
-          <KPITile label="Operadores" value={operadores} sub="Perfis monitorados" />
-        )}
+        <KPITile label="Operadores" value={kpis.operadores} sub="Perfis monitorados" />
       </div>
 
       {/* --- Map + Trend --- */}
@@ -399,15 +404,16 @@ export default function SompoOverview({
           </div>
         </Card>
 
+        {/* A janela conta dias COM dados (contrato de /kpis): "30d" sugeria dias corridos */}
         <Card
-          title="Evolução do score médio"
+          title={`Score médio · últimos ${period} dias com dados`}
           action={
-            trend === null ? null : (
             <div style={{ display: 'flex', gap: 4 }}>
-              {(['30d', '60d', '90d'] as const).map((p) => (
+              {([30, 60, 90] as const).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPeriod(p)}
+                  title={`Últimos ${p} dias que têm avaliação`}
                   style={{
                     padding: '3px 10px', borderRadius: 4, border: '1px solid var(--line)',
                     background: period === p ? 'var(--line)' : 'transparent',
@@ -419,23 +425,10 @@ export default function SompoOverview({
                 </button>
               ))}
             </div>
-            )
           }
           pad={16}
         >
-          {trend === null ? (
-            <div style={{
-              height: 340, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              textAlign: 'center', padding: '0 24px', color: 'var(--fg-mute)',
-              fontSize: 12, lineHeight: 1.6,
-            }}>
-              Série temporal ainda não exposta pela API.
-              <br />
-              Aguarda o campo <span className="mono">tendencia</span> em <span className="mono">GET /kpis</span>.
-            </div>
-          ) : (
-            <TrendChart data={trend} />
-          )}
+          <TrendChart pontos={trend} />
         </Card>
       </div>
 
