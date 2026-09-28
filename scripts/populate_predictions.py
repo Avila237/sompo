@@ -164,7 +164,7 @@ def main():
     print(f"  modelo_versao: {example['modelo_versao']}")
     print("  top_fatores_shap:")
     for fator in example["top_fatores_shap"]:
-        print(f"    {fator['feature']:<40} shap={fator['shap_value']:+.3f}  grupo={fator['group']}")
+        print(f"    {fator['feature']:<40} shap={fator['shap_value']:+.3f}  grupo={fator['grupo']}")
     print("=" * 60)
     print("Predicoes populadas com sucesso!")
 
