@@ -336,7 +336,12 @@ pelo front (PR #14) e implementado sem mudança de shape.
 {
   "eixo": "operacao",
   "dias": 30,
-  "janela": { "inicio": "2025-11-02", "fim": "2026-09-21", "dias_com_dados": 30 },
+  "janela": {
+    "inicio": "2025-11-02",
+    "fim": "2026-09-21",
+    "dias_com_dados": 30,
+    "datas": ["2025-11-02", "2025-11-04", "..."]
+  },
   "series": [
     {
       "chave": "transporte",
@@ -354,8 +359,9 @@ pelo front (PR #14) e implementado sem mudança de shape.
 ```
 
 - **Janela:** os últimos `dias` dias com pelo menos uma avaliação **na base inteira**, não por grupo,
-  para todas as séries dividirem o mesmo eixo X. `dias_com_dados` é menor que `dias` quando a base
-  tem menos dias.
+  para todas as séries dividirem o mesmo eixo X. `datas` lista esses dias em ordem crescente: é o
+  eixo X, e inclui dias em que nenhuma série devolvida tem ponto. `dias_com_dados` é menor que `dias`
+  quando a base tem menos dias.
 - **Lacuna, não zero:** um grupo só tem ponto nos dias em que ele tem avaliação. Dia sem dado não
   vira `0` nem é interpolado.
 - **Agrupamento:**
