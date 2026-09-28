@@ -107,6 +107,29 @@ class TestGarantiaParaMedioEAlto:
         assert "historico_sinistros" in rec["criterio"] and "7" in rec["criterio"]
         assert "+18.6" in rec["criterio"]
 
+    @pytest.mark.parametrize(
+        "feature,valor,esperado",
+        [
+            ("tem_iot", True, "tem_iot=true"),
+            ("tem_iot", False, "tem_iot=false"),
+            ("declividade", 2.345678, "declividade=2.34568"),
+        ],
+    )
+    def test_valor_do_fator_no_formato_das_regras(self, feature, valor, esperado):
+        """Booleano minusculo como nas regras; float sem casas espurias."""
+        fatores = [{"feature": feature, "shap_value": 3.0, "grupo": "equipamento"}]
+        (rec,) = recomendar({**NEUTRA, feature: valor}, "medio", fatores)
+        assert esperado in rec["criterio"]
+        assert "True" not in rec["criterio"] and "False" not in rec["criterio"]
+
+    def test_fator_sem_valor_conhecido_omite_o_valor(self):
+        """Predicao do seed nao gravou 'valor' e a feature nao esta na leitura."""
+        fatores = [{"feature": "declividade", "valor": None, "shap_value": 4.0, "grupo": "geografico"}]
+        leitura = {k: v for k, v in NEUTRA.items() if k != "declividade"}
+        (rec,) = recomendar(leitura, "medio", fatores)
+        assert "None" not in rec["criterio"]
+        assert rec["criterio"] == "maior contribuição para o risco: declividade (+4.0 pontos)"
+
     def test_sem_regra_e_sem_fator_positivo_ainda_recomenda(self):
         fatores = [{"feature": "declividade", "shap_value": -1.0, "grupo": "geografico"}]
         (rec,) = recomendar(NEUTRA, "medio", fatores)
