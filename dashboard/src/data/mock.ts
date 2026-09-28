@@ -1,4 +1,4 @@
-﻿import type { Equipment, Region, Contrib, Client, MaintItem, ToneKey, Tone } from '../types'
+﻿import type { Equipment, Client, MaintItem, ToneKey, Tone } from '../types'
 
 export const WTONE: Record<ToneKey, Tone> = {
   safe: { fg: '#5AE06B', bg: 'rgba(90,224,107,0.1)', ring: 'rgba(90,224,107,0.3)' },
@@ -19,27 +19,6 @@ export function scoreBandLabel(s: number): string {
 /** Rótulo de equipamento sem nenhuma avaliação — nunca exibir como score 0 / "baixo". */
 export const SEM_AVALIACAO = 'SEM AVALIAÇÃO'
 
-export const GROUPS: Record<string, { label: string; color: string }> = {
-  env: { label: 'Ambiental', color: 'var(--blue)' },
-  op: { label: 'Operador', color: 'var(--amber)' },
-  maint: { label: 'Manutenção', color: 'var(--red)' },
-}
-
-export const REGIONS: Region[] = [
-  { name: 'MT — Sorriso', x: 0.42, y: 0.48, count: 48, avg: 28 },
-  { name: 'MT — Sinop', x: 0.43, y: 0.44, count: 32, avg: 32 },
-  { name: 'GO — Rio Verde', x: 0.52, y: 0.60, count: 56, avg: 26 },
-  { name: 'MS — Maracaju', x: 0.47, y: 0.70, count: 38, avg: 35 },
-  { name: 'BA — Oeste', x: 0.66, y: 0.48, count: 22, avg: 72 },
-  { name: 'PR — Cascavel', x: 0.52, y: 0.76, count: 34, avg: 24 },
-  { name: 'RS — Passo Fundo', x: 0.50, y: 0.88, count: 18, avg: 18 },
-  { name: 'MG — Triângulo', x: 0.62, y: 0.64, count: 27, avg: 30 },
-  { name: 'TO — Pedro Afonso', x: 0.58, y: 0.40, count: 14, avg: 58 },
-  { name: 'PI — Bom Jesus', x: 0.70, y: 0.36, count: 11, avg: 78 },
-  { name: 'SP — Ribeirão', x: 0.58, y: 0.70, count: 29, avg: 22 },
-  { name: 'MA — Balsas', x: 0.68, y: 0.32, count: 9, avg: 82 },
-]
-
 export const EQUIPMENT: Equipment[] = [
   { id: 'EQ-0042', model: 'John Deere 7J195', type: 'trator', op: 'OP-0015', opName: 'Mauricio Oliveira', client: 'Fazenda Três Pontes', region: 'MT — Sorriso', score: 88, trend: +12, lastAlert: '14:37 hoje', hours: 1247, maint: 'atrasada', maintPct: 38 },
   { id: 'EQ-0118', model: 'Case IH A8810', type: 'colheitadeira', op: 'OP-0027', opName: 'Ricardo Souza', client: 'Agropecuária São João', region: 'GO — Rio Verde', score: 74, trend: +6, lastAlert: '2h', hours: 3890, maint: 'em dia', maintPct: 0 },
@@ -54,19 +33,6 @@ export const EQUIPMENT: Equipment[] = [
   { id: 'EQ-0057', model: 'John Deere 7J195', type: 'trator', op: 'OP-0029', opName: 'Alex Monteiro', client: 'Grupo Amaggi', region: 'MT — Sinop', score: 64, trend: +4, lastAlert: '4h', hours: 1890, maint: 'atrasada', maintPct: 15 },
   { id: 'EQ-0023', model: 'Massey Ferguson 75.180', type: 'trator', op: 'OP-0019', opName: 'Renata Silva', client: 'Grupo Bom Futuro', region: 'BA — Oeste', score: 78, trend: +9, lastAlert: '8h', hours: 3120, maint: 'atrasada', maintPct: 28 },
 ]
-
-export const CONTRIBS: Contrib[] = [
-  { label: 'Vento em altitude acima do limite', group: 'env', pct: 34, val: '+22 pts' },
-  { label: 'Temperatura do motor 98°C', group: 'op', pct: 22, val: '+14 pts' },
-  { label: 'Atraso de troca de filtros (38%)', group: 'maint', pct: 18, val: '+12 pts' },
-  { label: 'Operador fadigado (9h sem pausa)', group: 'op', pct: 14, val: '+9 pts' },
-  { label: 'Inclinação média 6.1%', group: 'env', pct: 12, val: '+8 pts' },
-]
-
-export const HISTORY: number[] = Array.from({ length: 30 }, (_, i) => {
-  const base = 28 - Math.sin(i * 0.4) * 6 + (i > 22 ? (i - 22) * 4 : 0)
-  return Math.max(5, Math.min(85, base + (Math.random() - 0.5) * 4))
-})
 
 export const CLIENTS: Client[] = [
   { name: 'Fazenda Três Pontes', equips: 4, avg: 62, alerts: 3, premium: 'R$ 142k', delta: +8 },
