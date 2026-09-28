@@ -33,7 +33,7 @@ export default function Login({ onEntrar }: { onEntrar: () => void }) {
       // porque a acao do usuario e diferente em cada caso.
       const msg =
         err instanceof ApiError && err.status === 0
-          ? `${err.message} Confira se o backend esta rodando.`
+          ? `${err.message} Confira se o backend está rodando.`
           : err instanceof Error
             ? err.message
             : 'Falha ao autenticar.'

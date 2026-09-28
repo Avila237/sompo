@@ -18,11 +18,13 @@ const PERSONAS: { key: string; label: string; icon: () => JSX.Element }[] = [
 ]
 
 /* ── TopBar ── */
-export default function TopBar({ persona, setPersona, perfil, onSair }: {
+export default function TopBar({ persona, setPersona, perfil, usuario, onSair }: {
   persona: string
   setPersona: (p: string) => void
   /** Perfil da sessao autenticada (operador | gestor | analista). */
   perfil?: string
+  /** Usuário que entrou (vem do login). */
+  usuario?: string
   onSair?: () => void
 }) {
   const [showNotifs, setShowNotifs] = useState(false)
@@ -70,10 +72,6 @@ export default function TopBar({ persona, setPersona, perfil, onSair }: {
           fontWeight: 800, fontSize: 13, letterSpacing: 1.4,
           color: 'var(--fg)',
         }}>SAFEFIELD</span>
-        <span style={{
-          fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--fg-mute)',
-          background: 'var(--bg-elev-3)', borderRadius: 4, padding: '2px 6px',
-        }}>v2.4.1</span>
       </div>
 
       {/* ── CENTER: persona switcher ── */}
@@ -179,19 +177,23 @@ export default function TopBar({ persona, setPersona, perfil, onSair }: {
             background: 'var(--bg-elev-3)', border: '1px solid var(--line-2)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 700, color: 'var(--fg-dim)',
-          }}>LA</div>
+          }}>{(usuario ?? perfil ?? '?').slice(0, 2).toUpperCase()}</div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', lineHeight: 1.2 }}>
-              Luisa Andrade
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--fg-mute)' }}>
-              {perfil ? `Perfil: ${perfil}` : 'Analista de riscos'}
-            </div>
+            {usuario && (
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', lineHeight: 1.2 }}>
+                {usuario}
+              </div>
+            )}
+            {perfil && (
+              <div style={{ fontSize: usuario ? 10 : 12, color: usuario ? 'var(--fg-mute)' : 'var(--fg)' }}>
+                Perfil: {perfil}
+              </div>
+            )}
           </div>
           {onSair && (
             <button
               onClick={onSair}
-              title="Encerrar sessao"
+              title="Encerrar sessão"
               style={{
                 marginLeft: 6, padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', background: 'transparent', color: 'var(--fg-dim)',
