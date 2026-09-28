@@ -142,6 +142,19 @@ export function Button({ kind = 'secondary', children, onClick, tone = 'neut', s
   )
 }
 
+// Erro de carregamento com ação de recuperação — nenhuma falha da API fica sem saída
+export function ErroCarga({ titulo, msg, onTentar, compacto = false }: {
+  titulo: string; msg: string; onTentar: () => void; compacto?: boolean
+}) {
+  return (
+    <div role="alert" style={{ padding: compacto ? '14px 0' : '24px 28px', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+      <div style={{ fontSize: compacto ? 13 : 14, fontWeight: 600, color: 'var(--red)' }}>{titulo}</div>
+      <div style={{ fontSize: 12, color: 'var(--fg-dim)', lineHeight: 1.5 }}>{msg}</div>
+      <Button kind="ghost" size="sm" onClick={onTentar}>Tentar de novo</Button>
+    </div>
+  )
+}
+
 // Section header
 export function SectionHeader({ title, sub, actions }: { title: string; sub?: string; actions?: ReactNode }) {
   return (

@@ -10,7 +10,7 @@ import {
   type ShapFactor,
 } from '../../data/api'
 import type { Equipment } from '../../types'
-import { Card, Chip, ScoreBadge, Trend, Sparkline, Button } from '../../components/shared'
+import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
 
@@ -59,6 +59,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
   const [detail, setDetail] = useState<EquipamentoDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
     if (!equip) { setLoading(false); return }
@@ -69,7 +70,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
       .then((d) => { if (active) { setDetail(d); setLoading(false) } })
       .catch((e) => { if (active) { setError(String(e?.message ?? e)); setLoading(false) } })
     return () => { active = false }
-  }, [equip])
+  }, [equip, tentativa])
 
   const shapGroups = useMemo<GrupoShap[]>(
     () => (detail?.predicao ? aggregateShapByGroup(detail.predicao.top_fatores_shap) : []),
@@ -101,9 +102,11 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
 
   if (error || !detail) {
     return (
-      <div style={{ padding: '24px 28px', color: 'var(--red)', fontSize: 14 }}>
-        Erro ao carregar detalhe: {error ?? 'sem dados'}
-      </div>
+      <ErroCarga
+        titulo={`Não foi possível carregar o detalhe de ${equip.id}.`}
+        msg={error ?? 'A API não devolveu dados.'}
+        onTentar={() => setTentativa((t) => t + 1)}
+      />
     )
   }
 
