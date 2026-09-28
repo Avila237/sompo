@@ -85,7 +85,7 @@ function Shell({ perfil }: { perfil: string }) {
       case 'detail':    return <SompoDetail equipId={pickEquip} onBack={() => setScreen('ranking')} />
       case 'simulator': return <ComingSoon><SompoSimulator /></ComingSoon>
       case 'ubi':       return <ComingSoon><SompoUBI /></ComingSoon>
-      case 'reports':   return <ComingSoon><SompoReports /></ComingSoon>
+      case 'reports':   return <SompoReports />
       default:          return <SompoOverview onPickEquip={goDetail} onNav={setScreen} />
     }
   }

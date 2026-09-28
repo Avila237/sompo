@@ -123,8 +123,8 @@ export function SompoMark({ size = 12, muted = false }: { size?: number; muted?:
 }
 
 // Button with tone
-export function Button({ kind = 'secondary', children, onClick, tone = 'neut', style = {}, size = 'md' }: {
-  kind?: 'primary' | 'secondary' | 'ghost'; children: ReactNode; onClick?: () => void; tone?: ToneKey; style?: CSSProperties; size?: 'sm' | 'md'
+export function Button({ kind = 'secondary', children, onClick, tone = 'neut', style = {}, size = 'md', disabled = false }: {
+  kind?: 'primary' | 'secondary' | 'ghost'; children: ReactNode; onClick?: () => void; tone?: ToneKey; style?: CSSProperties; size?: 'sm' | 'md'; disabled?: boolean
 }) {
   const t = WTONE[tone]
   const isPri = kind === 'primary'
@@ -136,7 +136,7 @@ export function Button({ kind = 'secondary', children, onClick, tone = 'neut', s
     ? { background: 'transparent', color: 'var(--fg)', border: '1px solid var(--line-2)' }
     : { background: t.bg, color: t.fg, border: `1px solid ${t.ring}` }
   return (
-    <button onClick={onClick} style={{ padding: pad, borderRadius: 6, fontWeight: 600, fontSize: fs, letterSpacing: 0.2, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, ...styles, ...style }}>
+    <button onClick={onClick} disabled={disabled} style={{ padding: pad, borderRadius: 6, fontWeight: 600, fontSize: fs, letterSpacing: 0.2, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1, display: 'inline-flex', alignItems: 'center', gap: 6, ...styles, ...style }}>
       {children}
     </button>
   )
