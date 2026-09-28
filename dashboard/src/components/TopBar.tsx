@@ -1,5 +1,5 @@
 ﻿import { useState, useRef, useEffect, type JSX } from 'react'
-import { WTONE } from '../data/mock'
+import { WTONE } from '../lib/risco'
 import { loadAlertas, type Alerta } from '../data/api'
 import { WIco } from './Icons'
 

@@ -1,23 +1,5 @@
-﻿import type { Equipment, Client, MaintItem, ToneKey, Tone } from '../types'
-
-export const WTONE: Record<ToneKey, Tone> = {
-  safe: { fg: '#5AE06B', bg: 'rgba(90,224,107,0.1)', ring: 'rgba(90,224,107,0.3)' },
-  warn: { fg: '#FFB526', bg: 'rgba(255,181,38,0.1)', ring: 'rgba(255,181,38,0.3)' },
-  crit: { fg: '#E8372E', bg: 'rgba(232,55,46,0.12)', ring: 'rgba(232,55,46,0.35)' },
-  neut: { fg: '#A8AEAB', bg: 'rgba(168,174,171,0.06)', ring: 'rgba(168,174,171,0.2)' },
-  info: { fg: '#6EB9FF', bg: 'rgba(110,185,255,0.08)', ring: 'rgba(110,185,255,0.25)' },
-}
-
-export function scoreBand(s: number): ToneKey {
-  return s <= 33 ? 'safe' : s <= 66 ? 'warn' : 'crit'
-}
-
-export function scoreBandLabel(s: number): string {
-  return s <= 33 ? 'BAIXO' : s <= 66 ? 'MÉDIO' : 'ALTO'
-}
-
-/** Rótulo de equipamento sem nenhuma avaliação — nunca exibir como score 0 / "baixo". */
-export const SEM_AVALIACAO = 'SEM AVALIAÇÃO'
+﻿/** Dados fictícios das telas atrás de "Em breve" (Corretor, Técnico, UBI). Nada aqui chega às telas reais. */
+import type { Equipment, Client, MaintItem } from '../types'
 
 export const EQUIPMENT: Equipment[] = [
   { id: 'EQ-0042', model: 'John Deere 7J195', type: 'trator', op: 'OP-0015', opName: 'Mauricio Oliveira', client: 'Fazenda Três Pontes', region: 'MT — Sorriso', score: 88, trend: +12, lastAlert: '14:37 hoje', hours: 1247, maint: 'atrasada', maintPct: 38 },

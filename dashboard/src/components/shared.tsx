@@ -1,6 +1,6 @@
 ﻿import { type ReactNode, type CSSProperties } from 'react'
 import type { ToneKey } from '../types'
-import { WTONE, scoreBand } from '../data/mock'
+import { WTONE, scoreBand } from '../lib/risco'
 
 // Card wrapper
 export function Card({ title, action, children, style = {}, pad = 18 }: {

@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo } from 'react'
-import { WTONE, scoreBand, scoreBandLabel } from '../../data/mock'
+import { WTONE, scoreBand, scoreBandLabel } from '../../lib/risco'
 import { Card, Chip, ScoreBar, Button, SectionHeader } from '../../components/shared'
 
 /* ── Local: FilterSeg ──────────────────────────────────────────────── */
