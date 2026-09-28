@@ -37,6 +37,9 @@ models/shap_values.npy
 # Excecao: o handoff precisa atravessar entre as maquinas
 !.claude/handoff.md
 
+# Cache local do Supabase CLI (pooler-url, project-ref); o repo e publico
+supabase/.temp/
+
 # Material de terceiros (decks e artigos de referência) — citar, não versionar
 docs/references/*.pdf
 
