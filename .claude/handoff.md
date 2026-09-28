@@ -49,11 +49,10 @@ Nada pela metade. Os PRs abertos e as dependências de cada um:
 
 | PR | Issue | Depende de |
 |---|---|---|
-| #30 | BRA-468 (ressalvas) | — |
-| #33 | BRA-298 (textos fictícios) | — |
-| #34 | BRA-466 (evidências de falha) | entrar **depois do #33** (os prints foram tirados com ele) |
-| #36 | BRA-467 (README "Como rodar", macOS) | — ; ⚠️ cita `DEMO_USERS`, que o #38 aposenta |
-| #37 | CORS expõe `X-Request-ID` | — |
+| #34 | BRA-466 (evidências de falha) | entrar **depois do #44** (prints recapturados com ele); revisão do Guilherme respondida |
+| #44 | recuperação completa da Visão geral (achado na revisão do #34) | — |
+| #36 | BRA-467 (README "Como rodar", macOS) | revisão respondida; a linha que cita `DEMO_USERS` nas credenciais ainda precisa de ajuste depois do #38 |
+| #37 | CORS expõe `X-Request-ID` e envolve o 500 | revisão respondida; testes movidos para `test_seguranca.py` (sem conflito com o #38) |
 | #39 | BRA-469 (manutenção em `/equipamentos`) | — |
 | #40 (rascunho) | BRA-460 (leitura por perfil) | #38, #39, #33, #30 (os dois últimos entraram na branch **por merge**; depois do squash deles, `git merge origin/main` resolve) |
 | #41 (rascunho) | BRA-462 (README final) | #38, #35, #40, #37 + link do vídeo (BRA-463) + validação no Windows (BRA-442) |
