@@ -147,7 +147,9 @@ export function loadEquipamentos(opts: { recarregar?: boolean } = {}): Promise<E
   const promessa = apiGet<{ total: number; itens: EquipamentoItemResp[] }>('/equipamentos')
     .then((r) => {
       const itens = r.itens.map(toView)
-      ouvintesEquip.forEach((fn) => fn(itens))
+      // Só a carga ATUAL avisa: uma resposta atrasada de outra sessão (ou fora de
+      // ordem) poria no menu o total de outro usuário
+      if (equipCache === entrada) ouvintesEquip.forEach((fn) => fn(itens))
       return itens
     })
   const entrada = { promessa, em: Date.now() }
