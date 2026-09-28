@@ -3,6 +3,9 @@
 > Referência para geração, validação e consumo dos dados do projeto. Descreve o que
 > `scripts/generate_dataset.py` faz. Conferido contra o código em 28/09/2026; se os dois
 > divergirem, o código é a verdade e este documento está desatualizado.
+>
+> A estrutura do banco (tabelas, colunas, índices, RLS e funções) não está aqui: vive só em
+> `supabase/migrations/`, aplicadas em ordem de nome a partir de `20260527000000_base.sql`.
 
 ---
 

@@ -1,13 +1,25 @@
-﻿-- SafeField — Esquema do banco de dados Supabase (PostgreSQL)
--- Idempotente: pode ser executado multiplas vezes sem erro
+-- Base — estrutura inicial: equipamentos, operadores, avaliacoes e predicoes.
+--
+-- Substitui backend/db/schema.sql, removido: ele comecava com DROP TABLE e
+-- reexecuta-lo apagava todos os registros. Mesmas tabelas, colunas e indices,
+-- sem nenhum DROP e com IF NOT EXISTS em cada CREATE.
+--
+-- ADITIVA E IDEMPOTENTE, como as demais:
+--   - no banco que ja existe (montado por schema.sql + migrations) nao faz nada;
+--   - num banco vazio, seguida das outras migrations em ordem de nome, monta a
+--     mesma estrutura que schema.sql + migrations montavam.
+-- Por isso so cria o que schema.sql criava. Colunas, tabelas, RLS e funcoes
+-- posteriores ficam nas migrations seguintes, na ordem em que entraram.
+-- IF NOT EXISTS confere so o nome: nao corrige uma tabela que ja exista com
+-- outra estrutura.
+--
+-- A estrutura final do banco e este arquivo seguido dos demais de
+-- supabase/migrations/, em ordem de nome. Ensaio: scripts/ensaios/base_migration.sql.
 
-DROP TABLE IF EXISTS predicoes;
-DROP TABLE IF EXISTS avaliacoes;
-DROP TABLE IF EXISTS operadores;
-DROP TABLE IF EXISTS equipamentos;
+BEGIN;
 
--- ~200 registros (1 por equipamento unico)
-CREATE TABLE equipamentos (
+-- Um registro por equipamento (~200 no seed)
+CREATE TABLE IF NOT EXISTS equipamentos (
     equipamento_id   VARCHAR PRIMARY KEY,
     tipo_equipamento VARCHAR NOT NULL,
     modelo_equipamento VARCHAR NOT NULL,
@@ -19,13 +31,13 @@ CREATE TABLE equipamentos (
     intervalo_manut_recomendado_horas INT NOT NULL
 );
 
--- ~80 registros (1 por operador unico)
-CREATE TABLE operadores (
+-- Um registro por operador (~80 no seed)
+CREATE TABLE IF NOT EXISTS operadores (
     operador_id VARCHAR PRIMARY KEY
 );
 
--- 5000 avaliacoes de risco
-CREATE TABLE avaliacoes (
+-- Avaliacoes de risco: 5.000 do seed mais as ingeridas pela API
+CREATE TABLE IF NOT EXISTS avaliacoes (
     avaliacao_id     BIGSERIAL PRIMARY KEY,
     equipamento_id   VARCHAR NOT NULL REFERENCES equipamentos(equipamento_id),
     operador_id      VARCHAR NOT NULL REFERENCES operadores(operador_id),
@@ -70,13 +82,13 @@ CREATE TABLE avaliacoes (
     faixa_risco VARCHAR NOT NULL
 );
 
-CREATE INDEX idx_avaliacoes_equipamento ON avaliacoes(equipamento_id);
-CREATE INDEX idx_avaliacoes_operador    ON avaliacoes(operador_id);
-CREATE INDEX idx_avaliacoes_timestamp   ON avaliacoes(timestamp);
-CREATE INDEX idx_avaliacoes_faixa       ON avaliacoes(faixa_risco);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_equipamento ON avaliacoes(equipamento_id);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_operador    ON avaliacoes(operador_id);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_timestamp   ON avaliacoes(timestamp);
+CREATE INDEX IF NOT EXISTS idx_avaliacoes_faixa       ON avaliacoes(faixa_risco);
 
--- Predicoes do modelo (vazia neste prompt — populada no Prompt 2)
-CREATE TABLE predicoes (
+-- Predicoes do modelo: as do seed (scripts/populate_predictions.py) e as da API
+CREATE TABLE IF NOT EXISTS predicoes (
     predicao_id         BIGSERIAL PRIMARY KEY,
     avaliacao_id        BIGINT REFERENCES avaliacoes(avaliacao_id),
     timestamp_predicao  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -86,5 +98,7 @@ CREATE TABLE predicoes (
     modelo_versao       VARCHAR NOT NULL
 );
 
-CREATE INDEX idx_predicoes_avaliacao ON predicoes(avaliacao_id);
-CREATE INDEX idx_predicoes_faixa     ON predicoes(faixa_predita);
+CREATE INDEX IF NOT EXISTS idx_predicoes_avaliacao ON predicoes(avaliacao_id);
+CREATE INDEX IF NOT EXISTS idx_predicoes_faixa     ON predicoes(faixa_predita);
+
+COMMIT;

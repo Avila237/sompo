@@ -5,7 +5,7 @@
 --   docker run -d --name sompo-pg -e POSTGRES_PASSWORD=local -p 55432:5432 postgres:16
 --   docker exec sompo-pg psql -U postgres -c "CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;"
 --   docker exec sompo-pg createdb -U postgres ensaio
---   para cada arquivo em backend/db/schema.sql e supabase/migrations/*.sql, em ordem:
+--   para cada arquivo em supabase/migrations/*.sql, em ordem de nome (a base primeiro):
 --     docker exec -i sompo-pg psql -U postgres -d ensaio -v ON_ERROR_STOP=1 < <arquivo>
 -- Rodar:
 --   docker exec -i sompo-pg psql -U postgres -d ensaio < scripts/ensaios/sprint04_integridade.sql
