@@ -26,13 +26,38 @@ def _lista(nome: str, default: str = "") -> list[str]:
     return [p.strip() for p in bruto.split(",") if p.strip()]
 
 
+# 32 bytes = 256 bits, o tamanho da chave do HS256. Abaixo disso o segredo
+# cabe num ataque de forca bruta offline sobre qualquer token capturado.
+SEGREDO_JWT_MINIMO = 32
+
+
+def validar_segredo_jwt(valor: str | None) -> str:
+    """
+    Recusa segredo ausente ou curto. Os placeholders do .env.example tem menos
+    de 32 bytes de proposito: copiar o exemplo sem trocar o valor impede a API
+    de subir, em vez de rodar com um segredo que qualquer um conhece.
+    """
+    if not valor or not valor.strip():
+        raise EnvironmentError(
+            "Variavel de ambiente obrigatoria ausente: JWT_SECRET_KEY. "
+            "Use .env.example como referencia."
+        )
+    if len(valor.encode("utf-8")) < SEGREDO_JWT_MINIMO:
+        raise EnvironmentError(
+            f"JWT_SECRET_KEY tem menos de {SEGREDO_JWT_MINIMO} bytes. Gere um com: "
+            'python -c "import secrets; print(secrets.token_hex(32))"'
+        )
+    return valor
+
+
 # --- Supabase -------------------------------------------------------------
 SUPABASE_URL = _req("SUPABASE_URL")
 # service_role bypassa RLS: e o unico caminho de escrita e vive so no servidor.
+# SUPABASE_KEY e o nome antigo, aceito para nao quebrar .env ja existentes.
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or _req("SUPABASE_KEY")
 
 # --- Seguranca ------------------------------------------------------------
-JWT_SECRET_KEY = _req("JWT_SECRET_KEY")
+JWT_SECRET_KEY = validar_segredo_jwt(os.getenv("JWT_SECRET_KEY"))
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))
 

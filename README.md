@@ -97,10 +97,9 @@ variável é a base da API.
 Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. As credenciais de
 demonstração (`DEMO_USERS`) e a `SUPABASE_SERVICE_ROLE_KEY` são combinadas fora do repositório.
 
-O `.env.example` ainda não lista todas as variáveis que a API exige. Sem `DEMO_USERS` a API falha
-ao iniciar; acrescente-a no formato `usuario:senha:perfil,usuario:senha:perfil`, com perfil entre
-`operador`, `gestor` e `analista`. A lista completa do que é lido está em
-[`backend/core/config.py`](backend/core/config.py).
+Troque **todos** os placeholders. A API recusa subir se faltar variável obrigatória ou se o
+`JWT_SECRET_KEY` tiver menos de 32 bytes, o que inclui o placeholder do exemplo. Gere o segredo
+com `python -c "import secrets; print(secrets.token_hex(32))"`.
 
 > ⚠️ A `service_role` é superusuário do banco: só server-side, nunca no frontend, nunca versionada.
 
