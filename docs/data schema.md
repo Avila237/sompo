@@ -1,16 +1,17 @@
 # SafeField — Schema do Dataset
 
-> Referência única para geração, validação e consumo dos dados do projeto.
-> Este documento é a spec que o script `scripts/generate_dataset.py` deve seguir.
+> Referência para geração, validação e consumo dos dados do projeto. Descreve o que
+> `scripts/generate_dataset.py` faz. Conferido contra o código em 28/09/2026; se os dois
+> divergirem, o código é a verdade e este documento está desatualizado.
 
 ---
 
 ## 1. Visão Geral
 
-> **Dataset v2** — expandido com features de operador e manutenção (~40 colunas).
+> **Dataset v2** — expandido com features de operador e manutenção (37 colunas).
 
-- **Tamanho alvo:** ~5.000 registros
-- **Colunas:** ~40 (identificação, ambientais, geográficas, operacionais, equipamento, operador, manutenção, metadados RAG, target)
+- **Tamanho:** 5.000 registros, de 200 equipamentos e 80 operadores
+- **Colunas:** 37 (identificação, ambientais, geográficas, operacionais, equipamento, operador, manutenção, metadados, target). O modelo usa 30 delas, listadas em `models/features.json`
 - **Formato de saída:** `.parquet` (primário) + `.csv` (referência visual)
 - **Localização:** `data/dataset_safefield.parquet` e `data/dataset_safefield.csv`
 - **Cada registro representa:** uma avaliação de risco de um equipamento em um momento e contexto operacional específico
@@ -24,7 +25,7 @@
 | Coluna | Tipo Python | Domínio | Nullable | Fonte | Descrição |
 |---|---|---|---|---|---|
 | `equipamento_id` | str | `EQ-0001` a `EQ-0200` | não | cadastro | Identificador único. ~200 equipamentos com múltiplas avaliações cada |
-| `timestamp` | datetime | 2025-01-01 a 2025-12-31 | não | sistema | Momento da avaliação. Distribuído ao longo de um ano |
+| `timestamp` | datetime | 2025-01-01 a 2025-12-31 | não | sistema | Momento da avaliação. Distribuído ao longo de um ano. Avaliações ingeridas pela API depois do seed têm data de ingestão (2026 em diante) |
 
 ### 2.2 Dados Ambientais (origem: Open-Meteo)
 
@@ -71,7 +72,7 @@
 | Coluna | Tipo Python | Domínio | Nullable | Descrição |
 |---|---|---|---|---|
 | `risco_score` | float | 0.0 a 100.0 | não | Score contínuo de risco (gerado pela fórmula da seção 4) |
-| `faixa_risco` | str (cat) | baixo, medio, alto | não | Derivada: baixo (0–33), medio (34–66), alto (67–100) |
+| `faixa_risco` | str (cat) | baixo, medio, alto | não | Derivada do score (Regra 2): baixo `≤ 33`, medio `> 33` e `≤ 66`, alto `> 66` |
 
 ### 2.7 Dados do Operador (origem: app + histórico calculado)
 
@@ -94,9 +95,11 @@
 | `manutencao_atrasada` | bool | true / false | não | Calculado: `true` se ultrapassou qualquer um dos dois limites |
 | `atraso_manutencao_pct` | float | 0.0 a 3.0 | não | 1.0 = no limite, 1.5 = 50% atrasado, 0.5 = metade do caminho (ver Regra 14) |
 
-### 2.9 Metadados do Equipamento para RAG (não são features do modelo)
+### 2.9 Metadados do Equipamento (não são features do modelo)
 
-> Estas colunas são informativas — usadas para busca na base de conhecimento após o treinamento do XGBoost. Não devem entrar como features de entrada do modelo.
+> Estas colunas são informativas e não entram como features do modelo. Foram criadas para a busca
+> em base de conhecimento (RAG), que saiu de escopo na Entrega 3. Continuam no cadastro de
+> equipamentos: `modelo_equipamento` é exibido no dashboard.
 
 | Coluna | Tipo Python | Domínio | Nullable | Descrição |
 |---|---|---|---|---|
@@ -121,7 +124,10 @@ O script de geração **deve** respeitar estas regras. Dados que violem qualquer
 
 ### Regra 2 — Faixa de risco é derivada
 - `faixa_risco` é **sempre** calculada a partir de `risco_score`, nunca gerada independentemente
-- Faixas: `baixo` (0.0–33.0), `medio` (33.1–66.0), `alto` (66.1–100.0)
+- Faixas: `baixo` se `score ≤ 33`, `medio` se `33 < score ≤ 66`, `alto` se `score > 66`
+- No dataset o score tem uma casa decimal, então as faixas ficam `0.0–33.0`, `33.1–66.0` e
+  `66.1–100.0`. O modelo devolve score contínuo e a mesma regra vale para qualquer precisão
+  (`derive_faixa()` em `backend/ml/preprocess.py`)
 
 ### Regra 3 — Umidade do solo correlaciona com precipitação + tipo de solo
 - Fórmula sugerida:
@@ -184,9 +190,9 @@ O script de geração **deve** respeitar estas regras. Dados que violem qualquer
 
 ### Regra 12 — Manutenção correlaciona com idade e tipo de equipamento
 - Equipamentos mais velhos tendem a ter manutenção mais atrasada:
-  - `idade < 3` → `ultima_manutencao_dias` tende a ser baixo (0–60), `atraso_manutencao_pct` ≤ 1.0 na maioria
-  - `idade 3–10` → distribuição equilibrada, ~30% com `manutencao_atrasada = true`
-  - `idade > 10` → ~50% com `manutencao_atrasada = true`, `atraso_manutencao_pct` pode chegar a 2.0
+  - `idade < 3` → ~5% com `manutencao_atrasada = true`; `atraso_manutencao_pct` até 1.3
+  - `idade 3–10` → ~30% com `manutencao_atrasada = true`; `atraso_manutencao_pct` até 1.8
+  - `idade > 10` → ~50% com `manutencao_atrasada = true`; `atraso_manutencao_pct` até 2.5
 - Intervalos recomendados variam por tipo:
   - `colheitadeira` → `intervalo_manut_recomendado_dias` 90–180, horas 200–500 (manutenção mais frequente)
   - `trator` → dias 120–365, horas 300–1000
@@ -237,36 +243,60 @@ noturno = 1 if (horario_operacao >= 20 or horario_operacao <= 5) else 0
 vibracao_valor = vibracao_g if not null else 0  # para cálculo do score, null tratado como 0
 ```
 
-### 4.2 Contribuições individuais (pesos recalibrados)
+### 4.2 Contribuições individuais (pesos da calibração v2)
 
-Os pesos foram calibrados para que o score_base raramente ultrapasse 70 em condições
-normais, deixando espaço para as interações elevarem o score em combinações perigosas.
+Os pesos vêm de `calculate_risk_score()` em `scripts/generate_dataset.py`.
 
 ```python
 score_base = (
-    precipitacao_mm * 0.10          # 0–120 → máx ~12 pts   (calibrado)
-    + umidade_solo * 0.08           # 5–95  → máx ~7.6 pts  (calibrado)
-    + velocidade_vento * 0.05       # 0–80  → máx ~4 pts
-    + agua_score * 12               # 0–1   → máx 12 pts (ver abaixo)  (calibrado)
-    + declividade * 0.15            # 0–45  → máx ~6.75 pts (calibrado)
-    + velocidade_kmh * 0.12         # 0–40  → máx ~4.8 pts  (calibrado)
-    + horas_operacao * 1.20         # 0–24  → máx ~28.8 pts (calibrado)
-    + noturno * 5                   # 0/1   → 0 ou 5 pts    (calibrado)
-    + idade_equipamento * 0.4       # 0–25  → máx ~10 pts
-    + historico_sinistros * 6.0     # 0–10  → máx ~60 pts   (calibrado)
+    precipitacao_mm * 0.10          # 0–120 → máx 12 pts
+    + umidade_solo * 0.08           # 5–95  → máx 7,6 pts
+    + velocidade_vento * 0.05       # 0–80  → máx 4 pts
+    + agua_score * 12               # 0–1   → máx 12 pts (ver abaixo)
+    + declividade * 0.15            # 0–45  → máx 6,75 pts
+    + velocidade_kmh * 0.12         # 0–40  → máx 4,8 pts
+    + horas_operacao * 0.82         # 0–24  → máx 19,7 pts
+    + noturno * 4                   # 0/1   → 0 ou 4 pts
+    + idade_equipamento * 0.35      # 0–25  → máx 8,75 pts
+    + historico_sinistros * 5.70    # 0–10  → máx 57 pts
     # --- features de operador ---
-    + pct_velocidade_acima_recomendada * 0.12  # 0–100 → máx ~12 pts
-    + freq_eventos_bruscos * 0.8               # 0–20  → máx ~16 pts
-    + score_operador_historico * 0.05          # 0–100 → máx ~5 pts
+    + pct_velocidade_acima_recomendada * 0.02  # 0–100 → máx 2 pts
+    + freq_eventos_bruscos * 0.10              # 0–20  → máx 2 pts
+    + score_operador_historico * 0.02          # 0–100 → máx 2 pts
     # --- features de manutenção ---
-    + atraso_manutencao_pct * 8.0              # 0–3   → máx ~24 pts
+    + atraso_manutencao_pct * 0.60             # 0–3   → máx 1,8 pts
 )
-# Máximo teórico do score_base: ~214 (caso extremo, improvável)
-# Caso típico alto: ~70-90
+# Máximo teórico do score_base: ~144 (caso extremo, improvável)
 
 # agua_score: transformação não-linear da distância
-agua_score = max(0, (500 - distancia_agua_m)) / 500  # 0 se >500m, 1 se 10m
+agua_score = max(0, (500 - distancia_agua_m)) / 500  # 0 se >500m, ~1 se 10m
 ```
+
+**Histórico da calibração.** Os pesos foram ajustados duas vezes para atingir a distribuição alvo
+da seção 4.5:
+
+| Termo | Original | Calibração v1 (24 colunas) | Calibração v2 (37 colunas) |
+|---|---|---|---|
+| `precipitacao_mm` | 0.15 | 0.10 | 0.10 |
+| `umidade_solo` | 0.10 | 0.08 | 0.08 |
+| `agua_score` | 15 | 12 | 12 |
+| `declividade` | 0.20 | 0.15 | 0.15 |
+| `velocidade_kmh` | 0.15 | 0.12 | 0.12 |
+| `horas_operacao` | 0.80 | 1.20 | 0.82 |
+| `noturno` | 6 | 5 | 4 |
+| `idade_equipamento` | 0.40 | 0.40 | 0.35 |
+| `historico_sinistros` | 2.0 | 6.0 | 5.70 |
+| `pct_velocidade_acima_recomendada` | — | — | 0.02 (proposto 0.12) |
+| `freq_eventos_bruscos` | — | — | 0.10 (proposto 0.80) |
+| `score_operador_historico` | — | — | 0.02 (proposto 0.05) |
+| `atraso_manutencao_pct` | — | — | 0.60 (proposto 8.0) |
+
+> **Consequência conhecida (dívida D4).** Na v2, os pesos das features novas foram cortados para
+> preservar a distribuição de faixas. Somadas, operador e manutenção contribuem no máximo ~8
+> pontos nos termos lineares, mais até 13 nas interações 9–11, contra 57 de
+> `historico_sinistros` e até ~100 de `risco_acumulado` (seção 4.3). O modelo
+> aprende essa proporção: na explicação SHAP, `historico_sinistros` responde por ~44% e operador
+> mais manutenção por ~6%. A recalibração está registrada como task S4-17, em standby.
 
 ### 4.3 Bônus de interação
 
@@ -303,25 +333,24 @@ if tipo_operacao == "transporte" and velocidade_kmh > 25 and declividade > 10:
 if horas_operacao > 8 and noturno:
     interacoes += 10
 
-# 8. Equipamento com histórico alto + operação prolongada = risco composto  (calibrado)
+# 8. Equipamento com histórico alto + operação prolongada = risco composto
 risco_acumulado = max(0, historico_sinistros - 3) * horas_operacao * 0.60
-# Captura risco composto: equipamentos acidentados operando por muitas horas.
-# Exemplo: sinistros=8, horas=12 → bônus de +30 pontos
+# Termo contínuo, somado à parte (não entra em `interacoes`).
+# Exemplo: sinistros=8, horas=12 → +36 pontos. Máximo: 7 × 24 × 0,60 ≈ 100.
 
 # 9. Operador agressivo + condições ruins = risco composto
 if pct_velocidade_acima_recomendada > 30 and precipitacao_mm > 20:
-    interacoes += 10
+    interacoes += 4
 
 # 10. Manutenção atrasada + operação intensa = falha mecânica provável
 if atraso_manutencao_pct > 1.2 and horas_operacao > 8:
-    interacoes += 12
+    interacoes += 6
 
 # 11. Operador noturno habitual + operação noturna atual = fadiga crônica
 if pct_operacoes_noturnas > 50 and noturno:
-    interacoes += 8
+    interacoes += 3
 
-# Máximo teórico das interações: 107 (todas ativas simultaneamente, muito raro)
-# Caso típico: 0–30
+# Máximo teórico das interações 1–7 e 9–11: 90 (todas ativas simultaneamente, muito raro)
 ```
 
 ### 4.4 Score final
@@ -329,11 +358,11 @@ if pct_operacoes_noturnas > 50 and noturno:
 ```python
 import numpy as np
 
-ruido = np.random.normal(0, 3)  # ruído gaussiano para evitar aprendizado perfeito
+ruido = np.random.normal(0, 5)  # ruído gaussiano para evitar aprendizado perfeito
 score_raw = score_base + interacoes + risco_acumulado + ruido
 risco_score = np.clip(score_raw, 0, 100).round(1)
 
-# Faixa derivada
+# Faixa derivada (Regra 2)
 if risco_score <= 33:
     faixa_risco = "baixo"
 elif risco_score <= 66:
@@ -344,12 +373,15 @@ else:
 
 ### 4.5 Distribuição alvo
 
-Após geração, verificar se a distribuição aproxima:
-- **Baixo (0–33):** ~40% dos registros (obtido com seed=42: 39.9%)
-- **Médio (34–66):** ~35% dos registros (obtido com seed=42: 35.1%)
-- **Alto (67–100):** ~25% dos registros (obtido com seed=42: 24.9%)
+Após a geração, a distribuição de faixas deve se aproximar de:
+- **Baixo (`≤ 33`):** ~40% dos registros
+- **Médio (`> 33` e `≤ 66`):** ~35% dos registros
+- **Alto (`> 66`):** ~25% dos registros
 
-Se a distribuição estiver muito diferente, ajustar os pesos da seção 4.2.
+`tests/test_dataset.py` aceita ±8 pontos percentuais em cada faixa. A docstring do gerador
+registra ~39% / ~36% / ~25% com `seed=42` na calibração v2.
+
+Se a distribuição sair da tolerância, ajustar os pesos da seção 4.2.
 Essa proporção reflete a realidade de seguros: a maioria das operações é segura,
 um grupo intermediário merece atenção, e uma minoria é realmente perigosa.
 
@@ -357,16 +389,19 @@ um grupo intermediário merece atenção, e uma minoria é realmente perigosa.
 
 ## 5. Orientações para Implementação
 
-### 5.1 Estrutura sugerida do script
+### 5.1 Arquivos
 
 ```
 scripts/
-  generate_dataset.py     ← script principal
+  generate_dataset.py        ← gerador
 data/
-  dataset_safefield.parquet  ← formato primário (preserva tipos)
-  dataset_safefield.csv      ← formato visual (debug/apresentação)
+  dataset_safefield.parquet  ← formato primário (preserva tipos), gerado localmente
+  dataset_safefield.csv      ← formato visual (debug/apresentação), gerado localmente
 docs/
-  data_schema.md           ← este documento
+  data schema.md             ← este documento
+tests/
+  test_dataset.py            ← valida o dataset gerado contra as regras da seção 3
+  test_generate_dataset.py   ← valida as funções do gerador
 ```
 
 ### 5.2 Dependências do script
@@ -379,7 +414,7 @@ docs/
 - O dataset gerado deve ser idêntico em qualquer execução
 
 ### 5.4 Validações pós-geração (o script deve imprimir)
-1. Shape: (5000, ~40)
+1. Shape: (5000, 37)
 2. Distribuição de `faixa_risco` (% por faixa)
 3. Contagem de nulls em `vibracao_g` e `temperatura_motor`
 4. Ranges de todas as colunas numéricas (min/max)
@@ -393,6 +428,9 @@ docs/
 
 ## 6. Evolução Futura
 
-- Quando dados reais forem coletados (app + IoT), este schema será a referência para validação de entrada
-- O schema pode ser convertido em um contrato Pandera ou Pydantic para validação automatizada
+- As faixas de valor por campo já são validadas na entrada da API por Pydantic
+  (`backend/api/schemas.py`). As regras de consistência entre campos da seção 3 que se aplicam a
+  uma leitura individual (Regras 1, 4 e 5) ainda não são; ver task S4-14
+- Quando dados reais forem coletados (app + IoT), este schema continua a referência para validação
+  de entrada; as regras de distribuição (Regras 8–11) deixam de se aplicar a dado real
 - Novas features podem ser adicionadas (ex: dados OBD-II) seguindo o mesmo formato
