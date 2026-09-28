@@ -60,7 +60,7 @@ api ──▶ services ──▶ ml
 - `backend/db/` — `repository` (acesso ao Supabase), `supabase_client` (usado pelos scripts de seed)
 - `backend/core/` — `config` (lê o ambiente), `security` (JWT), `logging` (request_id via ContextVar), `exceptions`
 
-A direção nunca se inverte. Hoje há desvios conhecidos: `api/main.py` e `api/routers/health.py` importam `ml` direto. Estão registrados na task S4-21.
+A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` acessa o banco só pelas funções de `db/repository.py`.
 
 ## Stack
 

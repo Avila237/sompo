@@ -45,19 +45,22 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 | Campos incoerentes entre si (`parado` com velocidade; clima incompatível com a chuva) | `422` | lista do Pydantic, `type: "value_error"`, com a regra violada em `msg` |
 | Leitura incoerente com o cadastro (`temperatura_motor` sem IoT ou em implemento) | `422` | texto com a regra violada, ex.: `"temperatura_motor enviada para EQ-0042, que nao tem IoT (Regra 1)"` |
 | Open-Meteo fora **e** payload sem clima completo | `502` | mensagem com os campos climáticos ausentes |
-| Qualquer outra falha (modelo ausente, banco fora) | `500` | `"Erro interno. Consulte os logs do servidor."` + campo `request_id` |
+| Artefatos do modelo ausentes ou ilegíveis (`POST /avaliacoes`) | `503` | `"Modelo preditivo indisponivel. Verifique os artefatos em models/."` |
+| Supabase inacessível: conexão recusada, sem rota ou timeout (qualquer rota de dado) | `503` | `"Banco de dados indisponivel."` |
+| Qualquer outra falha | `500` | `"Erro interno. Consulte os logs do servidor."` + campo `request_id` |
 
 **Campo desconhecido é recusado, não ignorado.** Vale para os campos que o servidor deriva
 (`faixa_risco`, `atraso_manutencao_pct`, `manutencao_atrasada`): enviá-los é erro. É o que impede o
 cliente de forjar o resultado.
 
-**Correlação.** Respostas bem-sucedidas e erros tratados trazem o header `X-Request-ID`, o mesmo
-identificador das linhas de log daquela requisição. No `500` o header não é enviado; o
-`request_id` vem no corpo.
+**Correlação.** Toda resposta, inclusive o `500`, traz o header `X-Request-ID`, o mesmo
+identificador das linhas de log daquela requisição. No `500` ele vem também no corpo, em
+`request_id`.
 
-**Não há `503`.** Modelo ausente e banco indisponível chegam hoje como `500` genérico. As exceções
-de domínio para esses dois casos existem em `backend/core/exceptions.py`, mas nenhum ponto do código
-as levanta.
+**Auditoria das recusas.** Em `POST /avaliacoes`, toda recusa depois da autenticação (`404`,
+`422` de cadastro, `502` e `503` do modelo) grava uma linha em `auditoria` com `status='erro'` e
+o motivo em `detalhe`. Com o banco fora (`503` do Supabase), a própria auditoria não tem onde
+gravar; a falha fica no log.
 
 ## GET /health
 
@@ -67,10 +70,11 @@ Público. Diz se a API subiu e se o modelo carregou.
 // resposta 200, modelo carregado
 {"status": "ok", "modelo": {"carregado": true, "n_features": 30}, "modelo_versao": "xgboost-v1-baseline"}
 // resposta 200, modelo ausente
-{"status": "degradado", "modelo": {"carregado": false, "erro": "<mensagem da exceção>"}, "modelo_versao": "xgboost-v1-baseline"}
+{"status": "degradado", "modelo": {"carregado": false}, "modelo_versao": "xgboost-v1-baseline"}
 ```
 
-Responde `200` mesmo degradado; quem monitora deve ler `status`. Com o modelo ausente, cada chamada
+Responde `200` mesmo degradado; quem monitora deve ler `status`. A rota é pública, então não diz
+**por que** o modelo não carregou: o motivo vai para o log. Com o modelo ausente, cada chamada
 tenta carregá-lo de novo.
 
 ## GET /equipamentos

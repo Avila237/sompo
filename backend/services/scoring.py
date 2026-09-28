@@ -15,13 +15,42 @@ from backend.core.exceptions import (
     ClimaIndisponivel,
     EquipamentoNaoEncontrado,
     LeituraInconsistente,
+    ModeloIndisponivel,
     OperadorNaoEncontrado,
+    SafeFieldError,
 )
 from backend.db import repository as repo
 from backend.ml.predictor import get_predictor
 from backend.services import auditoria, clima
 
 logger = logging.getLogger("safefield.scoring")
+
+
+def carregar_modelo():
+    """Predictor carregado, ou ModeloIndisponivel (503) se os artefatos faltam."""
+    try:
+        return get_predictor(config.MODELS_DIR)
+    except Exception as e:
+        logger.error("modelo indisponivel em %s: %s", config.MODELS_DIR, e)
+        raise ModeloIndisponivel() from e
+
+
+def status_modelo() -> dict:
+    """Para o /health, que e publico: diz se carregou, nunca o motivo da falha."""
+    try:
+        return {"carregado": True, "n_features": len(carregar_modelo().features)}
+    except ModeloIndisponivel:
+        return {"carregado": False}
+
+
+def _recusar(quem: dict, leitura: dict, erro: SafeFieldError) -> SafeFieldError:
+    """Registra a recusa na auditoria e devolve o erro para ser levantado."""
+    auditoria.registrar(
+        quem["usuario"], quem["perfil"], "avaliacao", "erro",
+        equipamento_id=leitura["equipamento_id"],
+        detalhe=erro.mensagem,
+    )
+    return erro
 
 
 def derivar_manutencao(
@@ -148,30 +177,19 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
 
     equipamento = repo.buscar_equipamento(leitura["equipamento_id"])
     if equipamento is None:
-        auditoria.registrar(
-            quem["usuario"], quem["perfil"], "avaliacao", "erro",
-            equipamento_id=leitura["equipamento_id"],
-            detalhe="equipamento nao encontrado",
-        )
-        raise EquipamentoNaoEncontrado(leitura["equipamento_id"])
+        raise _recusar(quem, leitura, EquipamentoNaoEncontrado(leitura["equipamento_id"]))
     if not repo.operador_existe(leitura["operador_id"]):
-        auditoria.registrar(
-            quem["usuario"], quem["perfil"], "avaliacao", "erro",
-            equipamento_id=leitura["equipamento_id"],
-            detalhe=f"operador {leitura['operador_id']} nao encontrado",
-        )
-        raise OperadorNaoEncontrado(leitura["operador_id"])
+        raise _recusar(quem, leitura, OperadorNaoEncontrado(leitura["operador_id"]))
 
     inconsistencia = conferir_com_cadastro(leitura, equipamento)
     if inconsistencia:
-        auditoria.registrar(
-            quem["usuario"], quem["perfil"], "avaliacao", "erro",
-            equipamento_id=leitura["equipamento_id"],
-            detalhe=inconsistencia,
-        )
-        raise LeituraInconsistente(inconsistencia)
+        raise _recusar(quem, leitura, LeituraInconsistente(inconsistencia))
 
-    leitura, clima_origem = resolver_clima(leitura)
+    try:
+        leitura, clima_origem = resolver_clima(leitura)
+        predictor = carregar_modelo()
+    except (ClimaIndisponivel, ModeloIndisponivel) as e:
+        raise _recusar(quem, leitura, e) from e
     registro = montar_registro(leitura, equipamento)
     agora = datetime.now(timezone.utc)
 
@@ -183,7 +201,6 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
     linha_avaliacao["fonte"] = "telemetria"
     linha_avaliacao["clima_origem"] = clima_origem
 
-    predictor = get_predictor(config.MODELS_DIR)
     explicacao = predictor.prever(registro)
 
     # O score do modelo e a fonte da verdade tambem para a coluna de target.

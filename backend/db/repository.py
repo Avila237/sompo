@@ -133,6 +133,10 @@ def ultima_avaliacao(equipamento_id: str) -> dict | None:
     return r.data[0] if r.data else None
 
 
+def inserir_auditoria(registro: dict) -> None:
+    get_client().table("auditoria").insert(registro).execute()
+
+
 def predicao_de(avaliacao_id: int) -> dict | None:
     r = (
         get_client().table("predicoes")
