@@ -18,6 +18,7 @@ interface TokenResp {
   access_token: string
   token_type: string
   perfil: string
+  operador_id?: string | null // só para o perfil operador (BRA-451)
   expira_em_minutos: number
 }
 
@@ -28,6 +29,7 @@ export async function login(usuario: string, senha: string): Promise<void> {
     token: r.access_token,
     perfil: r.perfil,
     usuario,
+    operadorId: r.operador_id ?? null,
     expiraEm: Date.now() + r.expira_em_minutos * 60_000,
   })
 }
@@ -69,6 +71,10 @@ interface EquipamentoItemResp {
   ultima_avaliacao: string | null
   latitude: number | null
   longitude: number | null
+  // manutencao da ultima avaliacao (BRA-469); ausentes numa API anterior
+  manutencao_atrasada?: boolean | null
+  atraso_manutencao_pct?: number | null
+  ultima_manutencao_dias?: number | null
 }
 
 /** Uma linha por equipamento, ja agregada pelo servidor. */
@@ -88,6 +94,10 @@ export interface EquipamentoView {
   ultimaTs: string
   lat: number | null
   lon: number | null
+  /** undefined = a API ainda não expõe o campo; null = equipamento sem o dado */
+  manutAtrasada: boolean | null | undefined
+  atrasoPct: number | null | undefined
+  diasManut: number | null | undefined
 }
 
 function toView(e: EquipamentoItemResp): EquipamentoView {
@@ -110,6 +120,9 @@ function toView(e: EquipamentoItemResp): EquipamentoView {
     ultimaTs: e.ultima_avaliacao ?? '',
     lat: e.latitude,
     lon: e.longitude,
+    manutAtrasada: e.manutencao_atrasada,
+    atrasoPct: e.atraso_manutencao_pct,
+    diasManut: e.ultima_manutencao_dias,
   }
 }
 

@@ -8,6 +8,7 @@ import { fmtData } from '../../lib/formato'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
 import { RecomendacoesCard } from './detalhe/RecomendacoesCard'
+import type { Publico } from '../../data/recomendacoes'
 
 /* ── Diverging SHAP bar (positivo = aumenta risco) ────────── */
 
@@ -50,7 +51,12 @@ const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 
 /* ── Main ─────────────────────────────────────────────────── */
 
-export default function SompoDetail({ equipId, onBack }: { equipId: string | null; onBack: () => void }) {
+export default function SompoDetail({ equipId, onBack, publico = null }: {
+  equipId: string | null
+  onBack: () => void
+  /** Público do perfil logado: o card de recomendações abre filtrado nele. */
+  publico?: Publico | null
+}) {
   const carga = useCarga(() => (equipId ? loadEquipamentoDetail(equipId) : Promise.resolve(null)), equipId ?? '')
   const detail = carga.dados
 
@@ -69,12 +75,23 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
   if (!equipId) {
     return (
       <div style={{ padding: '40px 28px', textAlign: 'center', color: 'var(--fg-mute)', fontSize: 14 }}>
-        Selecione um equipamento no Ranking para ver o detalhe.
+        Selecione um equipamento para ver o detalhe.
       </div>
     )
   }
 
   if (carga.carregando) return <Carregando msg={`Carregando detalhe de ${equipId}…`} />
+
+  // 403 = fora do recorte do perfil (ex.: operador em equipamento que não operou): tentar de novo não resolve
+  if (carga.erroStatus === 403) {
+    return (
+      <div role="alert" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--red)' }}>Sem acesso ao equipamento {equipId}.</div>
+        <div style={{ fontSize: 12, color: 'var(--fg-dim)' }}>{carga.erro}</div>
+        <Button kind="ghost" size="sm" onClick={onBack}>Voltar</Button>
+      </div>
+    )
+  }
 
   if (carga.erro || !detail) {
     return (
@@ -155,7 +172,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
       </div>
 
       {/* O que fazer vem antes da decomposição: sem avaliação, não há o que recomendar */}
-      {ultima && <RecomendacoesCard recomendacoes={recomendacoes} />}
+      {ultima && <RecomendacoesCard recomendacoes={recomendacoes} publicoPadrao={publico} />}
 
       {/* Two-column grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14, alignItems: 'start' }}>
