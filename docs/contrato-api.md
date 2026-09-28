@@ -38,11 +38,23 @@ O operador não envia para equipamento fora do recorte: senão, uma leitura em n
 equipamento alheio o colocaria no recorte. A primeira leitura de um operador novo num
 equipamento entra pelo `analista` (integração).
 
+**Minimização (LGPD).** O operador vê os equipamentos que já operou, mas uma avaliação desses
+equipamentos pode ser de outro operador. Em `GET /equipamentos`, `GET /equipamentos/{id}` e
+`GET /alertas`, toda avaliação de **outro** operador chega a ele com `operador_id`, `latitude` e
+`longitude` iguais a `null`; as dele chegam intactas. Campo que a rota não devolve (a posição, em
+`/alertas`) continua ausente, não vira `null`. A posição é feature do modelo, então no detalhe o
+`valor` dos fatores `latitude` e `longitude` em `predicao.top_fatores_shap` também vem `null`, e,
+se a posição for o fator dominante, o `criterio` da recomendação cita a feature sem o valor. O
+resto da avaliação (score, faixa, telemetria, clima) não muda. `analista`, `gestor` e `tecnico`
+recebem tudo.
+
 **Limitação conhecida:** o token vale até expirar. Desativar um usuário ou trocar o perfil dele
 só tem efeito no próximo login, até `JWT_EXPIRE_MINUTES` depois.
 
-Recomendações: todos os perfis recebem todas no detalhe; o dashboard destaca as do `publico` do
-usuário.
+Recomendações: todos os perfis recebem todas no detalhe, e cada uma traz o seu `publico`
+(`operador`, `gestor` ou `tecnico`). A API não filtra nem reordena por perfil. O destaque das
+recomendações do perfil logado no dashboard é escopo da BRA-460; hoje o card só filtra por
+`publico` quando o usuário escolhe.
 
 ### POST /auth/token
 
@@ -94,10 +106,10 @@ cliente de forjar o resultado.
 identificador das linhas de log daquela requisição. No `500` ele vem também no corpo, em
 `request_id`.
 
-**Auditoria das recusas.** Em `POST /avaliacoes`, toda recusa depois da autenticação (`404`,
-`409`, `422` de cadastro, `502` e `503` do modelo) grava uma linha em `auditoria` com `status='erro'` e
-o motivo em `detalhe`. Com o banco fora (`503` do Supabase), a própria auditoria não tem onde
-gravar; a falha fica no log.
+**Auditoria das recusas.** Em `POST /avaliacoes`, toda recusa depois da autenticação (`403` por
+perfil ou fora do recorte, `404`, `409`, `422` de cadastro, `502` e `503` do modelo) grava uma
+linha em `auditoria` com `status='erro'` e o motivo em `detalhe`. Com o banco fora (`503` do
+Supabase), a própria auditoria não tem onde gravar; a falha fica no log.
 
 ## GET /health
 
@@ -166,6 +178,10 @@ Ordenado por `risco_score` desc. Uma linha por equipamento, com o score da avali
 Quem consome deve checar `total_avaliacoes` antes de exibir o score: sem avaliação, `0` não
 significa risco baixo.
 
+**Perfil `operador`:** num equipamento cuja última avaliação é de outro operador, `operador_id`,
+`latitude` e `longitude` vêm `null` (minimização, em Perfis), com `total_avaliacoes` maior que
+`0`. É `total_avaliacoes` que distingue esse caso do equipamento sem avaliação.
+
 ## GET /equipamentos/{id}
 
 Detalhe de um equipamento. `404` se o id não existe no cadastro.
@@ -173,14 +189,21 @@ Detalhe de um equipamento. `404` se o id não existe no cadastro.
 | Campo | Conteúdo | Pode ser `null`? |
 |---|---|---|
 | `equipamento` | linha completa do cadastro | não |
-| `ultima_avaliacao` | linha completa da avaliação mais recente em `avaliacoes` | sim, se não há avaliação |
+| `ultima_avaliacao` | avaliação mais recente em `avaliacoes`, sem as colunas internas | sim, se não há avaliação |
 | `predicao` | predição ligada a essa avaliação | sim, se não há avaliação ou predição |
 | `recomendacoes` | ações preventivas para a última avaliação (ver `POST /avaliacoes`) | lista vazia sem avaliação |
 | `historico` | `{timestamp, risco_score}` de todas as avaliações, da mais antiga à mais recente | lista vazia |
 
-`ultima_avaliacao` é a linha completa de `avaliacoes`. Além dos campos de telemetria, operação,
-clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_id`, `operador_id`),
-`timestamp`, `risco_score`, `faixa_risco` e a procedência (`fonte`, `clima_origem`).
+`ultima_avaliacao` traz todas as colunas de `avaliacoes`, menos `leitura_id` e `payload_hash`:
+são internas da idempotência de `POST /avaliacoes` e não saem em nenhuma rota de leitura, para
+nenhum perfil. Além dos campos de telemetria, operação, clima e manutenção, ela traz os
+identificadores (`avaliacao_id`, `equipamento_id`, `operador_id`), `timestamp`, `risco_score`,
+`faixa_risco` e a procedência (`fonte`, `clima_origem`).
+
+Para o perfil `operador`, se a última avaliação é de outro operador, `ultima_avaliacao` vem com
+`operador_id`, `latitude` e `longitude` iguais a `null`, o `valor` dos fatores `latitude` e
+`longitude` em `predicao.top_fatores_shap` vem `null` e as `recomendacoes` são montadas sem a
+posição (minimização, em Perfis).
 
 ```json
 {
@@ -224,7 +247,7 @@ clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_
     "faixa_risco": "alto",
     "fonte": "telemetria",
     "clima_origem": "open-meteo",
-    "__nota": "+ latitude, longitude, temperatura_ar, velocidade_vento"
+    "__nota": "omitidos no exemplo, mas presentes na resposta: temperatura_ar, velocidade_vento, latitude, longitude"
   },
   "predicao": {
     "avaliacao_id": 5001,
@@ -245,7 +268,15 @@ clima e manutenção, ela traz os identificadores (`avaliacao_id`, `equipamento_
       },
       "..."
     ],
-    "modelo_versao": "xgboost-v1-baseline"
+    "modelo_versao": "xgboost-v1-baseline",
+    "contribuicoes_por_grupo": {
+      "ambiental": 17.7577,
+      "geografico": 12.0574,
+      "operacional": -2.0559,
+      "equipamento": -4.9901,
+      "operador": -0.9026,
+      "manutencao": -0.0194
+    }
   },
   "historico": [
     {
@@ -303,7 +334,8 @@ mais recente para a mais antiga, descartando as de faixa abaixo de `faixa_minima
 }
 ```
 
-`tipo_operacao` pode vir `null` se a avaliação não tiver o campo.
+`tipo_operacao` pode vir `null` se a avaliação não tiver o campo. Para o perfil `operador`,
+`operador_id` vem `null` nos alertas de avaliação de outro operador (minimização, em Perfis).
 
 ## GET /kpis
 
@@ -451,7 +483,8 @@ qualquer uma falhar, nenhuma fica, e a requisição responde `500`.
 
 **Idempotência por `leitura_id`.** Campo opcional do payload: um UUID que o cliente gera
 **antes** do primeiro envio e reusa no retry. O servidor guarda junto um hash do payload
-recebido (sem o próprio `leitura_id`, antes do enriquecimento climático).
+recebido (sem o próprio `leitura_id`, antes do enriquecimento climático). Os dois
+(`leitura_id` e `payload_hash`) ficam no banco: nenhuma rota de leitura os devolve.
 
 | situação | resposta |
 |---|---|

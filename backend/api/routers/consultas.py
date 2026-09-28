@@ -7,6 +7,9 @@ from fastapi import APIRouter, Depends, Query
 from backend.api.deps import perfil_entre, usuario_atual
 from backend.core.exceptions import AcessoNegado, EquipamentoNaoEncontrado
 from backend.services import consultas
+# Importada pelo nome: a minimizacao roda mesmo quando o modulo consultas e
+# substituido por um falso (testes da matriz de perfis).
+from backend.services.consultas import minimizar_para_operador
 
 router = APIRouter(tags=["consultas"])
 
@@ -20,6 +23,13 @@ def _recorte(usuario: dict) -> set[str] | None:
     if usuario["perfil"] in FROTA:
         return None
     return consultas.equipamentos_do_operador(usuario["operador_id"])
+
+
+def _minimizado(resposta: dict, usuario: dict) -> dict:
+    """LGPD: para o operador, avaliacao de outro operador sai sem quem operou e onde."""
+    if usuario["perfil"] in FROTA:
+        return resposta
+    return minimizar_para_operador(resposta, usuario["operador_id"])
 
 
 @router.get("/equipamentos")
@@ -41,7 +51,7 @@ def listar_equipamentos(
             if alvo in e["equipamento_id"].lower()
             or alvo in (e["modelo_equipamento"] or "").lower()
         ]
-    return {"total": len(itens), "itens": itens}
+    return _minimizado({"total": len(itens), "itens": itens}, usuario)
 
 
 @router.get("/equipamentos/{equipamento_id}")
@@ -56,7 +66,7 @@ def detalhe_equipamento(
     detalhe = consultas.detalhe_equipamento(equipamento_id)
     if detalhe is None:
         raise EquipamentoNaoEncontrado(equipamento_id)
-    return detalhe
+    return _minimizado(detalhe, usuario)
 
 
 @router.get("/alertas")
@@ -68,7 +78,7 @@ def listar_alertas(
     itens = consultas.alertas(
         limite=limite, faixa_minima=faixa_minima, equipamentos=_recorte(usuario)
     )
-    return {"total": len(itens), "itens": itens}
+    return _minimizado({"total": len(itens), "itens": itens}, usuario)
 
 
 @router.get("/kpis")
