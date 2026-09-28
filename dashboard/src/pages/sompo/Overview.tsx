@@ -166,7 +166,8 @@ export default function SompoOverview({
 
         {/* A janela conta dias COM dados (contrato de /kpis): "30d" sugeria dias corridos */}
         <Card
-          title={`Score médio · últimos ${period} dias com dados`}
+          // Período dos dados NA TELA: após uma recarga que falhou, o título não pode prometer o período pedido
+          title={`Score médio · últimos ${visaoC.chaveDados ?? period} dias com dados${visaoC.carregando ? ' · atualizando…' : ''}`}
           action={
             <div style={{ display: 'flex', gap: 4 }}>
               {([30, 60, 90] as const).map((p) => (
