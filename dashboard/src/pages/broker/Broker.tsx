@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react'
 import { CLIENTS } from '../../data/mock'
-import { scoreBand, scoreBandLabel } from '../../lib/risco'
+import { faixaDaMedia, rotuloDaMedia } from '../../lib/risco'
 import { Card, ScoreBadge, Chip, Trend, SectionHeader } from '../../components/shared'
 import { WIco } from '../../components/Icons'
 import SideNav from '../../components/SideNav'
@@ -33,7 +33,7 @@ export default function Broker() {
         {tab === 'clients' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
             {CLIENTS.map((c, i) => {
-              const band = scoreBand(c.avg)
+              const band = faixaDaMedia(c.avg)
               return (
                 <Card key={i} pad={16}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -42,10 +42,10 @@ export default function Broker() {
                         <div style={{ fontSize: 15, fontWeight: 700 }}>{c.name}</div>
                         <div style={{ fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{c.equips} equipamentos</div>
                       </div>
-                      <ScoreBadge score={c.avg} size="sm" />
+                      <ScoreBadge score={c.avg} tone={faixaDaMedia(c.avg)} size="sm" />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <Chip state={band} label={scoreBandLabel(c.avg)} size="sm" />
+                      <Chip state={band} label={rotuloDaMedia(c.avg)} size="sm" />
                       <span style={{ fontSize: 11, color: c.alerts > 2 ? 'var(--amber)' : 'var(--fg-dim)' }}>
                         {c.alerts} alerta{c.alerts !== 1 ? 's' : ''}
                       </span>

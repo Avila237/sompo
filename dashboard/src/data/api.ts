@@ -37,9 +37,8 @@ export function logout(): void {
 /* ── Faixa de risco ───────────────────────────────────────── */
 
 /**
- * A API e a fonte da faixa (`derive_faixa` no backend). Os limiares sao os
- * mesmos do `scoreBand` do frontend (<=33 baixo, <=66 medio, senao alto),
- * entao a migracao nao muda nenhuma classificacao ja exibida.
+ * A API e a unica fonte da faixa de uma avaliacao (`derive_faixa` no backend,
+ * sobre o score cru). O cliente converte em tom, nunca reclassifica.
  */
 export function faixaToTone(faixa: string): ToneKey {
   return faixa === 'baixo' ? 'safe' : faixa === 'medio' ? 'warn' : 'crit'
@@ -74,7 +73,7 @@ export interface EquipamentoView {
   idade: number
   sinistros: number
   iot: boolean
-  score: number | null // score da avaliacao mais recente (arredondado); null = sem avaliacao
+  score: number | null // score da avaliacao mais recente; null = sem avaliacao
   scoreMedio: number   // media das avaliacoes do equipamento
   trend: number        // ultima avaliacao - penultima
   faixa: ToneKey       // 'neut' quando sem avaliacao
@@ -96,7 +95,7 @@ function toView(e: EquipamentoItemResp): EquipamentoView {
     idade: e.idade_equipamento,
     sinistros: e.historico_sinistros,
     iot: e.tem_iot,
-    score: semAvaliacao ? null : Math.round(e.risco_score),
+    score: semAvaliacao ? null : e.risco_score, // 2 casas, como a API devolve; arredondar so na exibicao
     scoreMedio: Math.round(e.score_medio),
     trend: Math.round(e.tendencia),
     faixa: semAvaliacao ? 'neut' : faixaToTone(e.faixa_risco),

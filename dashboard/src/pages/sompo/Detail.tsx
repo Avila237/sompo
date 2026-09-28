@@ -1,6 +1,6 @@
 ﻿import { useMemo } from 'react'
-import { WTONE, scoreBand, scoreBandLabel, SEM_AVALIACAO } from '../../lib/risco'
-import { loadEquipamentoDetail, type ShapFactor } from '../../data/api'
+import { WTONE, rotuloDaFaixa } from '../../lib/risco'
+import { loadEquipamentoDetail, faixaToTone, type ShapFactor } from '../../data/api'
 import { aggregateShapByGroup, featureLabel, SHAP_GROUP_META, type GrupoShap } from '../../data/shap'
 import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga, Carregando } from '../../components/shared'
 import { useCarga } from '../../lib/useCarga'
@@ -88,8 +88,9 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
   const { equipamento, ultima, predicao, historico } = detail
   // Sem avaliação não há score: exibir 0/"baixo" transformaria ausência de dado em risco baixo
   const score = ultima ? ultima.risco_score : null
-  const band = score === null ? 'neut' : scoreBand(score)
-  const bandLabel = score === null ? SEM_AVALIACAO : scoreBandLabel(score)
+  // Faixa gravada pela API, não recalculada do número exibido (contrato, armadilha 4)
+  const band = ultima ? faixaToTone(ultima.faixa_risco) : 'neut'
+  const bandLabel = rotuloDaFaixa(band)
   const trend =
     historico.length >= 2
       ? Math.round(historico[historico.length - 1].score - historico[historico.length - 2].score)
@@ -121,7 +122,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <ScoreBadge score={score} size="xl" />
+        <ScoreBadge score={score} tone={band} size="xl" />
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
             <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4 }}>{equipamento.equipamento_id}</span>
