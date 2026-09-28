@@ -7,6 +7,7 @@ import { getSessao, assinarSessao, type Sessao } from './lib/auth'
 import Login from './components/Login'
 import type { Equipment } from './types'
 import { ComingSoon } from './components/ComingSoon'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 import SompoOverview from './pages/sompo/Overview'
 import SompoRanking from './pages/sompo/Ranking'
@@ -88,7 +89,10 @@ export default function App() {
           <SideNav items={sompoNav} active={screen} onPick={setScreen} />
         )}
         <main style={{ flex: 1, overflow: 'auto' }}>
-          {renderPage()}
+          {/* key: trocar de tela ou equipamento zera o erro; a navegação segue viva */}
+          <ErrorBoundary key={`${persona}:${screen}:${pickEquip?.id ?? ''}`}>
+            {renderPage()}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

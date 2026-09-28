@@ -312,7 +312,7 @@ export interface AvaliacaoFull {
   tipo_solo: string
   distancia_agua_m: number
   declividade: number
-  tipo_operacao: string
+  tipo_operacao: string | null // contrato: pode faltar na avaliacao
   velocidade_kmh: number
   vibracao_g: number | null
   temperatura_motor: number | null
