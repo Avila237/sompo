@@ -106,9 +106,9 @@ export default function Login({ onEntrar }: { onEntrar: () => void }) {
           disabled={enviando}
           style={{
             marginTop: 4, padding: '10px 14px', borderRadius: 6, fontWeight: 700, fontSize: 13,
-            cursor: enviando ? 'default' : 'pointer', border: '1px solid #5AE06B',
-            background: enviando ? 'var(--bg-elev-2)' : '#5AE06B',
-            color: enviando ? 'var(--fg-mute)' : '#0A0C0B',
+            cursor: enviando ? 'default' : 'pointer', border: '1px solid var(--green)',
+            background: enviando ? 'var(--bg-elev-2)' : 'var(--green)',
+            color: enviando ? 'var(--fg-mute)' : 'var(--bg)',
           }}
         >
           {enviando ? 'Entrando…' : 'Entrar'}

@@ -114,8 +114,8 @@ export function Sparkline({ data, color = 'var(--green)', height = 40, fill = tr
 export function SompoMark({ size = 12, muted = false }: { size?: number; muted?: boolean }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: size, letterSpacing: 1.2, color: muted ? 'var(--fg-dim)' : 'var(--fg)' }}>
-      <span style={{ display: 'inline-block', width: size, height: size, borderRadius: 2, background: '#E8372E', position: 'relative' }}>
-        <span style={{ position: 'absolute', inset: 2, border: '1.5px solid #0A0C0B', borderRadius: 1 }} />
+      <span style={{ display: 'inline-block', width: size, height: size, borderRadius: 2, background: 'var(--red)', position: 'relative' }}>
+        <span style={{ position: 'absolute', inset: 2, border: '1.5px solid var(--bg)', borderRadius: 1 }} />
       </span>
       SOMPO
     </span>
@@ -131,7 +131,7 @@ export function Button({ kind = 'secondary', children, onClick, tone = 'neut', s
   const pad = size === 'sm' ? '6px 10px' : '8px 14px'
   const fs = size === 'sm' ? 12 : 13
   const styles = isPri
-    ? { background: t.fg, color: '#0A0C0B', border: `1px solid ${t.fg}` }
+    ? { background: t.fg, color: 'var(--bg)', border: `1px solid ${t.fg}` }
     : kind === 'ghost'
     ? { background: 'transparent', color: 'var(--fg)', border: '1px solid var(--line-2)' }
     : { background: t.bg, color: t.fg, border: `1px solid ${t.ring}` }
@@ -151,6 +151,58 @@ export function ErroCarga({ titulo, msg, onTentar, compacto = false }: {
       <div style={{ fontSize: compacto ? 13 : 14, fontWeight: 600, color: 'var(--red)' }}>{titulo}</div>
       <div style={{ fontSize: 12, color: 'var(--fg-dim)', lineHeight: 1.5 }}>{msg}</div>
       <Button kind="ghost" size="sm" onClick={onTentar}>Tentar de novo</Button>
+    </div>
+  )
+}
+
+// Segmented control de filtro (Visão geral e Ranking)
+export function FilterSeg({
+  value,
+  onChange,
+  opts,
+}: {
+  value: string
+  onChange: (v: string) => void
+  opts: Array<{ k: string; l: string; dot?: string }>
+}) {
+  return (
+    <div style={{ display: 'inline-flex', border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden' }}>
+      {opts.map((o) => {
+        const active = value === o.k
+        return (
+          <button
+            key={o.k}
+            onClick={() => onChange(o.k)}
+            style={{
+              padding: '6px 12px',
+              border: 'none',
+              borderRight: '1px solid var(--line)',
+              background: active ? 'var(--line)' : 'transparent',
+              color: active ? 'var(--fg)' : 'var(--fg-mute)',
+              fontWeight: 600,
+              fontSize: 12,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            {o.dot && (
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: o.dot, flexShrink: 0 }} />
+            )}
+            {o.l}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// Estado de carregamento de tela inteira
+export function Carregando({ msg }: { msg: string }) {
+  return (
+    <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: 'var(--fg-mute)', fontSize: 14 }}>
+      {msg}
     </div>
   )
 }

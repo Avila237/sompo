@@ -2,19 +2,13 @@
 import { WTONE } from '../lib/risco'
 import { loadAlertas, type Alerta } from '../data/api'
 import { WIco } from './Icons'
+import { fmtDataHora } from '../lib/formato'
 
 /* ── alertas do sino: GET /alertas, buscados a cada abertura do dropdown ── */
 type AlertasState =
   | { status: 'loading' }
   | { status: 'ok'; itens: Alerta[] }
   | { status: 'error'; msg: string }
-
-const fmtDataHora = (ts: string) => {
-  const d = new Date(ts)
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
 
 /* ── persona config ── */
 const PERSONAS: { key: string; label: string; icon: () => JSX.Element }[] = [

@@ -1,230 +1,18 @@
-﻿import { useState, useMemo, useEffect } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { WTONE, scoreBand } from '../../lib/risco'
 import {
   loadEquipamentos,
   loadVisaoGeral,
   type EquipamentoView,
-  type OperacaoAgg,
-  type TendenciaPonto,
-  type VisaoGeral,
 } from '../../data/api'
-import type { Region, ToneKey } from '../../types'
-import { Card, ScoreBadge, ScoreBar, Trend, KPITile, SectionHeader, Button, ErroCarga } from '../../components/shared'
+import type { ToneKey } from '../../types'
+import { Card, ScoreBadge, Trend, KPITile, SectionHeader, Button, ErroCarga, FilterSeg, Carregando } from '../../components/shared'
+import { useCarga } from '../../lib/useCarga'
+import { OperacaoRow } from './overview/OperacaoRow'
+import { BrazilMap } from './overview/BrazilMap'
+import { TrendChart } from './overview/TrendChart'
 import { WIco } from '../../components/Icons'
 import { ComingSoon } from '../../components/ComingSoon'
-
-/* -- Agregacao por tipo de operacao (terceiro eixo do RF-09) -- */
-
-function OperacaoRow({ o }: { o: OperacaoAgg }) {
-  const tone = scoreBand(o.scoreMedio)
-  const pctAlto = o.avaliacoes ? (o.riscoAlto / o.avaliacoes) * 100 : 0
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 52px 110px 120px', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', textTransform: 'capitalize' }}>
-        {o.tipo}
-      </span>
-      <ScoreBar score={o.scoreMedio} height={8} />
-      <span className="tabular" style={{ fontSize: 13, fontWeight: 700, color: WTONE[tone].fg, textAlign: 'right' }}>
-        {o.scoreMedio}
-      </span>
-      <span className="tabular" style={{ fontSize: 11, color: 'var(--fg-mute)', textAlign: 'right' }}>
-        {o.avaliacoes.toLocaleString('pt-BR')} avaliações
-      </span>
-      <span className="tabular" style={{ fontSize: 11, color: 'var(--fg-dim)', textAlign: 'right' }}>
-        {o.riscoAlto.toLocaleString('pt-BR')} altas · {pctAlto.toFixed(0)} %
-      </span>
-    </div>
-  )
-}
-
-/* -- FilterSeg helper -------------------------------------- */
-
-function FilterSeg({
-  value,
-  onChange,
-  opts,
-}: {
-  value: string
-  onChange: (v: string) => void
-  opts: Array<{ k: string; l: string; dot?: string }>
-}) {
-  return (
-    <div style={{ display: 'inline-flex', border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden' }}>
-      {opts.map((o) => {
-        const active = value === o.k
-        return (
-          <button
-            key={o.k}
-            onClick={() => onChange(o.k)}
-            style={{
-              padding: '6px 12px',
-              border: 'none',
-              borderRight: '1px solid var(--line)',
-              background: active ? 'var(--line)' : 'transparent',
-              color: active ? 'var(--fg)' : 'var(--fg-mute)',
-              fontWeight: 600,
-              fontSize: 12,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            {o.dot && (
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: o.dot, flexShrink: 0 }} />
-            )}
-            {o.l}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/* -- Brazil map sub-component ------------------------------ */
-
-function BrazilMap({ regions, onPickRegion }: { regions: Region[]; onPickRegion?: (r: Region) => void }) {
-  const highRisk = regions.length
-    ? regions.reduce((a, b) => (b.avg > a.avg ? b : a), regions[0])
-    : null
-  return (
-    <svg viewBox="0 0 420 420" width="100%" height="100%" style={{ display: 'block' }}>
-      <path
-        d="M160,40 C120,50 90,80 70,110 C50,140 40,180 45,220 C50,260 70,300 100,330
-           C130,360 170,380 210,390 C250,380 290,360 310,340 C340,310 360,270 365,230
-           C370,190 360,150 340,120 C320,90 290,60 250,45 C220,35 190,35 160,40 Z"
-        fill="rgba(255,255,255,0.03)"
-        stroke="var(--line)"
-        strokeWidth="1.5"
-      />
-
-      {regions.map((r) => {
-        const cx = r.x * 420
-        const cy = r.y * 420
-        const radius = Math.sqrt(r.count) * 2.4 + 4
-        const band = scoreBand(r.avg)
-        const color = WTONE[band].fg
-        return (
-          <g
-            key={r.name}
-            style={{ cursor: onPickRegion ? 'pointer' : 'default' }}
-            onClick={() => onPickRegion?.(r)}
-          >
-            <circle cx={cx} cy={cy} r={radius + 4} fill={color} fillOpacity="0.12" />
-            <circle cx={cx} cy={cy} r={radius} fill={color} fillOpacity="0.85" />
-            <title>{r.name} — score {r.avg}, {r.count} equip.</title>
-          </g>
-        )
-      })}
-
-      {highRisk && (() => {
-        const cx = highRisk.x * 420
-        const cy = highRisk.y * 420
-        const lx = Math.min(cx + 30, 320)
-        const ly = Math.max(cy - 30, 24)
-        return (
-          <g>
-            <line x1={cx} y1={cy} x2={lx} y2={ly} stroke="var(--fg-dim)" strokeWidth="0.7" strokeDasharray="3,2" />
-            <rect x={lx - 2} y={ly - 14} width={118} height={18} rx={3} fill="var(--bg-elev)" stroke="var(--line)" strokeWidth="0.7" />
-            <text x={lx + 4} y={ly - 1} fill={WTONE.crit.fg} fontSize="10" fontWeight="700" fontFamily="Inter Tight">
-              {highRisk.name} · {highRisk.avg}
-            </text>
-          </g>
-        )
-      })()}
-
-      <g transform="translate(290, 370)">
-        <circle cx="0" cy="0" r="4" fill={WTONE.safe.fg} />
-        <text x="8" y="3" fill="var(--fg-dim)" fontSize="9" fontFamily="Inter Tight">Baixo</text>
-        <circle cx="46" cy="0" r="4" fill={WTONE.warn.fg} />
-        <text x="54" y="3" fill="var(--fg-dim)" fontSize="9" fontFamily="Inter Tight">Médio</text>
-        <circle cx="96" cy="0" r="4" fill={WTONE.crit.fg} />
-        <text x="104" y="3" fill="var(--fg-dim)" fontSize="9" fontFamily="Inter Tight">Alto</text>
-      </g>
-    </svg>
-  )
-}
-
-/* -- Trend chart sub-component ----------------------------- */
-
-// "2025-12-28" → "28/12/25", sem passar por Date para não deslocar o dia pelo fuso
-const fmtDia = (dia: string) => {
-  const [a, m, d] = dia.split('-')
-  return a && m && d ? `${d}/${m}/${a.slice(2)}` : dia
-}
-
-function TrendChart({ pontos }: { pontos: TendenciaPonto[] }) {
-  const data = pontos.map((p) => p.score)
-  const W = 480, H = 200, PAD = { t: 16, r: 12, b: 24, l: 12 }
-  const cw = W - PAD.l - PAD.r
-  const ch = H - PAD.t - PAD.b
-  const max = 100, min = 0
-
-  if (data.length < 2) {
-    return (
-      <div style={{ height: H, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-mute)', fontSize: 13 }}>
-        Sem dados suficientes no período.
-      </div>
-    )
-  }
-
-  const pts = data.map((v, i) => {
-    const x = PAD.l + (i / (data.length - 1)) * cw
-    const y = PAD.t + (1 - (v - min) / (max - min)) * ch
-    return `${x},${y}`
-  }).join(' ')
-
-  const avg = data.reduce((a, b) => a + b, 0) / data.length
-  const mn = Math.min(...data)
-  const mx = Math.max(...data)
-  const bandY = (v: number) => PAD.t + (1 - v / 100) * ch
-
-  return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: 'block' }}>
-        <rect x={PAD.l} y={bandY(100)} width={cw} height={bandY(66) - bandY(100)} fill="rgba(232,55,46,0.05)" />
-        <rect x={PAD.l} y={bandY(66)} width={cw} height={bandY(33) - bandY(66)} fill="rgba(255,181,38,0.05)" />
-        <rect x={PAD.l} y={bandY(33)} width={cw} height={bandY(0) - bandY(33)} fill="rgba(90,224,107,0.05)" />
-
-        <line x1={PAD.l} y1={bandY(33)} x2={W - PAD.r} y2={bandY(33)} stroke="rgba(90,224,107,0.2)" strokeWidth="0.7" strokeDasharray="4,3" />
-        <line x1={PAD.l} y1={bandY(66)} x2={W - PAD.r} y2={bandY(66)} stroke="rgba(255,181,38,0.2)" strokeWidth="0.7" strokeDasharray="4,3" />
-
-        <polyline points={pts} fill="none" stroke={WTONE[scoreBand(avg)].fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-
-        {(() => {
-          const last = data[data.length - 1]
-          const x = W - PAD.r
-          const y = PAD.t + (1 - last / 100) * ch
-          const c = WTONE[scoreBand(last)].fg
-          return (
-            <>
-              <circle cx={x} cy={y} r="5" fill={c} fillOpacity="0.2" />
-              <circle cx={x} cy={y} r="3" fill={c} />
-            </>
-          )
-        })()}
-
-        {/* Eixo com a data real do ponto: os pontos são dias com dados, não dias corridos */}
-        <text x={PAD.l} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight">{fmtDia(pontos[0].dia)}</text>
-        <text x={PAD.l + cw / 2} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="middle">{fmtDia(pontos[Math.floor((pontos.length - 1) / 2)].dia)}</text>
-        <text x={W - PAD.r} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="end">{fmtDia(pontos[pontos.length - 1].dia)}</text>
-      </svg>
-
-      <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingLeft: 4 }}>
-        {[
-          { k: 'MÍN', v: mn.toFixed(0), tone: 'safe' as const },
-          { k: 'MÉD', v: avg.toFixed(0), tone: 'warn' as const },
-          { k: 'MÁX', v: mx.toFixed(0), tone: 'crit' as const },
-        ].map((s) => (
-          <div key={s.k} style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-            <span style={{ fontSize: 10, color: 'var(--fg-mute)', fontWeight: 700, letterSpacing: 1 }}>{s.k}</span>
-            <span className="tabular" style={{ fontSize: 16, fontWeight: 800, color: WTONE[s.tone].fg }}>{s.v}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 /* -- Main component ---------------------------------------- */
 
@@ -235,41 +23,20 @@ export default function SompoOverview({
   onPickEquip: (equipamentoId: string) => void
   onNav: (screen: string) => void
 }) {
-  const [views, setViews] = useState<EquipamentoView[]>([])
-  const [visao, setVisao] = useState<VisaoGeral | null>(null)
-  const [loading, setLoading] = useState(true)
-  // Erros separados: falha só em /equipamentos afeta só o Top 5, não a página toda
-  const [erroVisao, setErroVisao] = useState<string | null>(null)
-  const [erroEquip, setErroEquip] = useState<string | null>(null)
-  const [tentVisao, setTentVisao] = useState(0)
-  const [tentEquip, setTentEquip] = useState(0)
-
   const [period, setPeriod] = useState<30 | 60 | 90>(30) // dias com dados
   const [showFilters, setShowFilters] = useState(false)
   const [riskFilter, setRiskFilter] = useState<'all' | 'safe' | 'warn' | 'crit'>('all')
   const [typeFilter, setTypeFilter] = useState<'all' | 'colheitadeira' | 'trator' | 'implemento'>('all')
 
+  // Cargas separadas: falha só em /equipamentos afeta só o Top 5, não a página toda.
   // A lista de equipamentos alimenta o Top 5 e nao depende do periodo.
-  useEffect(() => {
-    let active = true
-    loadEquipamentos({ recarregar: tentEquip > 0 })
-      .then((eqs) => { if (active) { setViews(eqs); setErroEquip(null) } })
-      .catch((e) => { if (active) setErroEquip(String(e?.message ?? e)) })
-    return () => { active = false }
-  }, [tentEquip])
-
+  const equipC = useCarga((recarregar) => loadEquipamentos({ recarregar }))
   // KPIs, regioes, alertas e tendencia vem de /kpis + /alertas. Refaz a busca
   // ao trocar o periodo porque a janela da serie e resolvida no servidor.
-  useEffect(() => {
-    let active = true
-    loadVisaoGeral(period)
-      .then((v) => { if (active) { setVisao(v); setErroVisao(null); setLoading(false) } })
-      .catch((e) => { if (active) { setErroVisao(String(e?.message ?? e)); setLoading(false) } })
-    return () => { active = false }
-  }, [period, tentVisao])
+  const visaoC = useCarga(() => loadVisaoGeral(period), period)
 
-  const tentarVisao = () => { setErroVisao(null); setTentVisao((t) => t + 1) }
-  const tentarEquip = () => { setErroEquip(null); setTentEquip((t) => t + 1) }
+  const views = useMemo<EquipamentoView[]>(() => equipC.dados ?? [], [equipC.dados])
+  const visao = visaoC.dados
 
   const kpis = visao?.kpis ?? null
   const trend = visao?.tendencia ?? []
@@ -301,20 +68,15 @@ export default function SompoOverview({
   const handleClearFilters = () => { setRiskFilter('all'); setTypeFilter('all') }
   const filtersActive = riskFilter !== 'all' || typeFilter !== 'all'
 
-  if (loading) {
-    return (
-      <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, color: 'var(--fg-mute)', fontSize: 14 }}>
-        Carregando dados da API…
-      </div>
-    )
-  }
+  // Com dados na tela, recarga (período, tentar de novo) não troca a página por "Carregando"
+  if (visaoC.carregando && !kpis) return <Carregando msg="Carregando dados da API…" />
 
   if (!kpis) {
     return (
       <ErroCarga
         titulo="Não foi possível carregar a visão geral."
-        msg={erroVisao ?? 'A API não devolveu dados.'}
-        onTentar={() => { setLoading(true); tentarVisao() }}
+        msg={visaoC.erro ?? 'A API não devolveu dados.'}
+        onTentar={visaoC.tentarDeNovo}
       />
     )
   }
@@ -340,9 +102,9 @@ export default function SompoOverview({
       />
 
       {/* Já havia dados e a recarga (ex.: troca de período) falhou: mantém a tela e avisa */}
-      {erroVisao && (
+      {visaoC.erro && (
         <Card pad={0} style={{ padding: '0 18px' }}>
-          <ErroCarga compacto titulo="Falha ao atualizar os indicadores; exibindo os últimos carregados." msg={erroVisao} onTentar={tentarVisao} />
+          <ErroCarga compacto titulo="Falha ao atualizar os indicadores; exibindo os últimos carregados." msg={visaoC.erro} onTentar={visaoC.tentarDeNovo} />
         </Card>
       )}
 
@@ -473,10 +235,10 @@ export default function SompoOverview({
                 <span className="mono" style={{ fontSize: 11, color: 'var(--fg-mute)', textAlign: 'right' }}>{eq.avaliacoes} aval.</span>
               </button>
             ))}
-            {erroEquip && (
-              <ErroCarga compacto titulo="Não foi possível carregar os equipamentos." msg={erroEquip} onTentar={tentarEquip} />
+            {equipC.erro && (
+              <ErroCarga compacto titulo="Não foi possível carregar os equipamentos." msg={equipC.erro} onTentar={equipC.tentarDeNovo} />
             )}
-            {!erroEquip && top5.length === 0 && (
+            {!equipC.erro && top5.length === 0 && (
               <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--fg-mute)', fontSize: 13 }}>
                 Nenhum equipamento nesta faixa.
               </div>
