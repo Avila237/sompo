@@ -63,7 +63,9 @@ def buscar(latitude: float, longitude: float, tipo_solo: str) -> dict | None:
         dados = r.json()
     except (requests.RequestException, ValueError) as e:
         logger.warning(
-            "Open-Meteo indisponivel para (%.4f, %.4f): %s — usando o payload",
+            # Uma casa decimal (~11 km): a posicao exata localiza a fazenda e o
+            # operador, dado pessoal sob a LGPD. Para diagnostico basta a regiao.
+            "Open-Meteo indisponivel para (%.1f, %.1f): %s — usando o payload",
             latitude, longitude, e,
         )
         return None
