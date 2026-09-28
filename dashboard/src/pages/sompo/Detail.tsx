@@ -1,13 +1,7 @@
 ﻿import { useMemo } from 'react'
 import { WTONE, scoreBand, scoreBandLabel, SEM_AVALIACAO } from '../../lib/risco'
-import {
-  loadEquipamentoDetail,
-  aggregateShapByGroup,
-  featureLabel,
-  SHAP_GROUP_META,
-  type GrupoShap,
-  type ShapFactor,
-} from '../../data/api'
+import { loadEquipamentoDetail, type ShapFactor } from '../../data/api'
+import { aggregateShapByGroup, featureLabel, SHAP_GROUP_META, type GrupoShap } from '../../data/shap'
 import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga, Carregando } from '../../components/shared'
 import { useCarga } from '../../lib/useCarga'
 import { fmtData } from '../../lib/formato'
