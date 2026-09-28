@@ -103,8 +103,13 @@ variável é a base da API.
 
 #### Configuração do backend (`.env` na raiz)
 
-Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. As credenciais de
-demonstração (`DEMO_USERS`) e a `SUPABASE_SERVICE_ROLE_KEY` são combinadas fora do repositório.
+Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. A
+`SUPABASE_SERVICE_ROLE_KEY` é combinada fora do repositório.
+
+**Usuários** ficam na tabela `usuarios` do banco (senha em hash scrypt), não no `.env`. Cadastre com
+`python scripts/criar_usuario.py <usuario> --perfil <perfil>`, com perfil entre `analista`,
+`gestor`, `tecnico` e `operador`; o operador exige `--operador OP-xxxx`. A senha é pedida no
+terminal, sem eco, com no mínimo 12 caracteres.
 
 Troque **todos** os placeholders. A API recusa subir se faltar variável obrigatória ou se o
 `JWT_SECRET_KEY` tiver menos de 32 bytes, o que inclui o placeholder do exemplo. Gere o segredo
@@ -131,6 +136,26 @@ que assumem as 5.000 avaliações exatas do seed e falham assim que houver inges
 
 Se a tela de login acusar que não consegue falar com a API, confira se o Terminal 1 está de pé e
 se a porta em `VITE_API_BASE_URL` bate com a do `uvicorn`.
+
+#### Roteiro de demonstração (`scripts/demo.sh`)
+
+Com o setup feito (venv, `.env`, modelo treinado e usuário `analista` cadastrado),
+`bash scripts/demo.sh` sobe a API e o dashboard e percorre o fluxo integrado. `--auto 4` avança
+sozinho, e `--sem-web` roda só a API.
+
+- **Windows:** rode no **Git Bash**, não no PowerShell nem no cmd. O script acha o Python em
+  `.venv\Scripts\python.exe`.
+- As portas 8000 e 5173 precisam estar livres: o script não encerra processos que não iniciou.
+  Use `--porta N` para trocar a da API.
+- Os logs ficam num diretório temporário, cujo caminho aparece no início.
+- A checagem de RLS (etapa 2d) precisa da `SUPABASE_ANON_KEY`. Sem ela, a etapa aparece como
+  "não verificado".
+
+#### Onde as instruções foram testadas
+
+- **macOS:** clone limpo seguindo só esta seção (BRA-467).
+- **CI:** o job de backend roda em **Ubuntu, Windows e macOS** a cada PR.
+- **Windows, manualmente:** validação do setup completo em andamento (BRA-442).
 
 ### Atualizando (repositório já clonado)
 
@@ -351,7 +376,7 @@ O percurso completo, salto a salto e com o estado real de cada um, está em
 
 ### 5.5 Segurança
 
-**Autenticação.** JWT próprio (`python-jose`), emitido em `POST /auth/token` com validade de 8 horas.
+**Autenticação.** JWT próprio (PyJWT), emitido em `POST /auth/token` com validade de 8 horas.
 Usuários vivem na tabela `usuarios`, com senha em hash **scrypt** (parâmetros da OWASP gravados no
 próprio hash); o cadastro é feito por `scripts/criar_usuario.py`, que pede a senha sem eco. O login
 limita tentativas antes de calcular o hash e responde igual, no mesmo tempo, para usuário
@@ -368,6 +393,11 @@ API (o front só evita abrir tela que a API recusaria):
 
 O token do operador carrega o `operador_id`, que liga o login ao recorte. Negado → `403` com o
 motivo em `detail`. Matriz completa em [`docs/contrato-api.md`](docs/contrato-api.md).
+
+**Minimização (LGPD).** Nos equipamentos que operou, o operador vê as avaliações de **outros**
+operadores sem `operador_id`, `latitude` e `longitude` (também mascarados nos fatores SHAP). Os
+perfis de frota veem tudo. Os campos internos de idempotência (`leitura_id`, `payload_hash`) não
+saem em nenhuma resposta de leitura.
 
 **Proteção do dado.** Nenhum cliente fala com o banco (5.1): `service_role` só server-side, RLS
 ligada sem policy para `anon`. O token fica em `sessionStorage`, e o build de produção do dashboard
@@ -559,6 +589,13 @@ proximidade de água"* — que é a informação acionável, não o número sozi
 
 Só com score e explicação calculados a leitura vira uma linha em `avaliacoes`, já com o
 `risco_score` e a `faixa_risco` que o modelo produziu. Se o modelo falhar, nada foi gravado.
+Avaliação e predição são gravadas numa **transação só**: se qualquer uma falhar, nenhuma fica, e
+nada fica órfão.
+
+**Reenvio não duplica.** O cliente pode mandar um `leitura_id` (UUID gerado antes do primeiro
+envio e reusado no retry). Reenvio com o mesmo payload devolve `200` com o resultado original, sem
+gravar; o mesmo `leitura_id` com payload diferente é `409`. O reenvio é decidido antes de consultar
+o clima ou rodar o modelo.
 
 **Procedência** — duas colunas criadas em
 `supabase/migrations/20260824120000_entrega03.sql` tornam a origem auditável sem cruzar log com
@@ -572,10 +609,10 @@ banco:
 Sem elas, as 5.000 linhas do seed e as geradas pela API ficam indistinguíveis — e um score
 calculado com clima de fallback pareceria idêntico a um calculado com clima medido.
 
-> ⚠️ `backend/db/schema.sql` começa com `DROP TABLE` e não contém esta migration. Reexecutá-lo
-> apaga todos os registros, inclusive os de telemetria e a auditoria. Toda mudança de estrutura
-> vai na migration em `supabase/migrations/`, que é idempotente (`ADD COLUMN IF NOT EXISTS`,
-> `CREATE TABLE IF NOT EXISTS`) e não destrói nada.
+> A estrutura do banco vive só em `supabase/migrations/`, aplicadas em ordem de nome a partir de
+> `20260527000000_base.sql`, que substituiu o antigo `backend/db/schema.sql` (removido porque
+> começava com `DROP TABLE`). Todas são aditivas e idempotentes e não destroem nada. Com a CLI
+> logada: `supabase db push --linked`.
 
 #### 9. Persistência da predição ✅
 
@@ -636,7 +673,7 @@ passar por autenticação.
 |---|---|---|
 | Backend / API | FastAPI + Uvicorn (Python 3.13) | ✅ em uso |
 | Validação de entrada | Pydantic | ✅ faixas e consistência entre campos |
-| Autenticação | JWT via `python-jose` | ✅ em uso |
+| Autenticação | JWT via PyJWT; senhas em hash scrypt (stdlib) | ✅ em uso |
 | Modelo de ML | XGBoost | ✅ em uso |
 | Explicabilidade | SHAP | ✅ em uso |
 | Rastreabilidade ML | MLflow (`safefield-xgboost`) | ✅ em uso |
@@ -768,12 +805,12 @@ Na fase de protótipo, o modelo será treinado com dados simulados (~5.000 regis
 
 | Dimensão | Sprint 1 · Fundação | Sprint 2 · Modelo | Sprint 3 · Integração | Sprint 4 · Consolidação |
 |---|---|---|---|---|
-| Dados | dataset v1, EDA inicial | dataset de 37 colunas; Supabase com 4 tabelas | ingestão por API, com procedência (`fonte`, `clima_origem`) | consistência cruzada na entrada; clima medido em campo prevalece |
+| Dados | dataset v1, EDA inicial | dataset de 37 colunas; Supabase com 4 tabelas | ingestão por API, com procedência (`fonte`, `clima_origem`) | consistência cruzada na entrada; clima medido em campo prevalece; reenvio idempotente por `leitura_id` e gravação atômica |
 | Modelo | — | XGBoost + SHAP por grupo; MLflow | inferência por requisição, modelo carregado no startup | pré-processamento único entre treino e inferência; métricas de referência versionadas |
 | Backend | — | FastAPI declarado, sem rotas | API integradora: 7 rotas, validação, scoring e persistência | recomendações, tendências por eixo, 503 previsível, `request_id` |
 | Segurança | — | chave do banco no bundle do browser | JWT; nenhum cliente fala com o banco | usuários com hash scrypt, escopo por perfil, CSP, auditoria de cada decisão |
 | Interface | — | dashboard com 3 telas lendo o banco | as mesmas 3 telas lendo a API | relatórios de tendência, recomendações no Detalhe, leitura por perfil, robustez a falhas |
-| Qualidade | primeira suíte de testes | testes do modelo e do SHAP | testes de integração da API | CI com lint, testes e auditoria de dependências; setup validado em clone limpo |
+| Qualidade | primeira suíte de testes | testes do modelo e do SHAP | testes de integração da API | CI com lint, testes e auditoria de dependências, backend em Ubuntu, Windows e macOS; setup validado em clone limpo |
 
 ### O que a Sprint 4 consolidou
 
@@ -787,8 +824,9 @@ cada perfil**:
   uma linha de auditoria por decisão.
 - **Valor ao usuário.** Recomendações com critério explícito, tendência de risco nos três eixos que o
   enunciado pede e uma tela de entrada para cada perfil (analista, gestor, técnico, operador).
-- **Reprodutibilidade.** Versões fixadas, CI em todo PR e o "Como rodar" corrigido a partir de um
-  clone limpo.
+- **Reprodutibilidade.** Versões fixadas, CI em todo PR com o backend testado em Ubuntu, Windows
+  e macOS, o "Como rodar" corrigido a partir de um clone limpo e um roteiro de demonstração
+  (`scripts/demo.sh`) que roda também no Git Bash do Windows.
 
 ---
 
@@ -814,6 +852,7 @@ cada perfil**:
 ### Evidências
 
 - Front, falhas da API: [`docs/evidencias/front/`](docs/evidencias/front/)
+- Backend: `docs/evidencias/` (BRA-461, em andamento)
 - Contrato da API, conferido contra o código: [`docs/contrato-api.md`](docs/contrato-api.md)
 - Requisitos da Sprint 4 e estado de cada um: [`docs/spec-sprint-04.md`](docs/spec-sprint-04.md)
 

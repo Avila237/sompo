@@ -19,7 +19,8 @@ npm run dev
 ```
 
 Abra o endereço que o Vite imprimir (por padrão **http://localhost:5173**) e entre com um usuário
-de demonstração (`DEMO_USERS` do `.env` do backend, combinado fora do repositório).
+cadastrado na tabela `usuarios` por `scripts/criar_usuario.py` (ver "Configuração do backend" no
+[README da raiz](../README.md)). O perfil do usuário define o menu e a tela inicial.
 
 Outros scripts:
 
