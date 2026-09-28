@@ -51,7 +51,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 }
 
 const fmtSigned = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '—')
 
 /* ── Main ─────────────────────────────────────────────────── */
 
