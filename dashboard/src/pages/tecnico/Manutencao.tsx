@@ -43,7 +43,8 @@ export default function Manutencao({ onPickEquip }: { onPickEquip: (equipamentoI
 
   const atrasadas = ordenados.filter((e) => e.manutAtrasada === true)
   const emDia = ordenados.filter((e) => e.manutAtrasada === false)
-  const maior = ordenados.find((e) => e.atrasoPct != null)
+  // Só entre os atrasados: sem nenhum, uma razão < 1 aparecia como "maior atraso"
+  const maior = atrasadas.find((e) => e.atrasoPct != null)
   const visiveis = filtro === 'atrasadas' ? atrasadas : ordenados
 
   return (
@@ -62,13 +63,13 @@ export default function Manutencao({ onPickEquip }: { onPickEquip: (equipamentoI
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
         <KPITile label="Manutenção atrasada" value={atrasadas.length} accent="crit" sub="equipamentos" subTone="crit" />
-        <KPITile label="Maior atraso" value={maior?.atrasoPct != null ? fmtAtraso(maior.atrasoPct) : '—'} sub={maior ? `${maior.id} · do intervalo recomendado` : 'sem dado'} />
+        <KPITile label="Maior atraso" value={maior?.atrasoPct != null ? fmtAtraso(maior.atrasoPct) : '—'} sub={maior ? `${maior.id} · do intervalo recomendado` : 'nenhum equipamento atrasado'} />
         <KPITile label="Em dia" value={emDia.length} accent="safe" sub="equipamentos" subTone="safe" />
       </div>
 
       <Card pad={0}>
         <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 8, padding: '10px 18px', fontSize: 10, color: 'var(--fg-mute)', letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700 }}>
-          <span>Equipamento</span><span>Modelo</span><span>Manutenção</span><span>Atraso</span><span>Desde a última</span><span>Risco</span>
+          <span>Equipamento</span><span>Modelo</span><span>Manutenção</span><span title="Múltiplo do intervalo recomendado já usado; acima de 1× é atraso">Intervalo usado</span><span>Desde a última</span><span>Risco</span>
         </div>
         {visiveis.length === 0 && (
           <div style={{ padding: '14px 18px', fontSize: 13, color: 'var(--fg-mute)', borderTop: '1px solid var(--line)' }}>

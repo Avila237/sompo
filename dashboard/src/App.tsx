@@ -83,7 +83,12 @@ function Shell({ perfil, usuario }: { perfil: Perfil; usuario?: string }) {
       case 'manutencao': return <Manutencao onPickEquip={goDetail} />
       case 'overview':   return <SompoOverview onPickEquip={goDetail} onNav={(t) => setScreen(t as Tela)} />
       case 'ranking':    return <SompoRanking onPickEquip={goDetail} />
-      case 'detail':     return <SompoDetail equipId={pickEquip} publico={cfg.publico} onBack={() => setScreen(cfg.lista)} />
+      case 'detail':     return (
+        <SompoDetail
+          equipId={pickEquip} publico={cfg.publico} acoes={cfg.acoesDetalhe}
+          voltarPara={ITENS_MENU[cfg.lista].label} onBack={() => setScreen(cfg.lista)}
+        />
+      )
       case 'reports':    return <SompoReports />
       case 'simulator':  return <ComingSoon><SompoSimulator /></ComingSoon>
       case 'ubi':        return <ComingSoon><SompoUBI /></ComingSoon>

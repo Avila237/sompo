@@ -23,23 +23,25 @@ interface ConfigPerfil {
   lista: Tela
   /** Público cujas recomendações o card do Detalhe abre filtrado; null = todas. */
   publico: Publico | null
+  /** Mostra no Detalhe as ações de frota ainda sem endpoint ("Em breve"): não fazem sentido para o operador. */
+  acoesDetalhe: boolean
 }
 
 export const PERFIS: Record<Perfil, ConfigPerfil> = {
   analista: {
-    rotulo: 'Analista (Sompo)', inicio: 'overview', lista: 'ranking', publico: null,
+    rotulo: 'Analista (Sompo)', inicio: 'overview', lista: 'ranking', publico: null, acoesDetalhe: true,
     menu: ['overview', 'ranking', 'detail', 'reports', 'simulator', 'ubi'],
   },
   gestor: {
-    rotulo: 'Gestor de frota', inicio: 'overview', lista: 'ranking', publico: 'gestor',
+    rotulo: 'Gestor de frota', inicio: 'overview', lista: 'ranking', publico: 'gestor', acoesDetalhe: true,
     menu: ['overview', 'ranking', 'detail', 'reports'],
   },
   tecnico: {
-    rotulo: 'Técnico de manutenção', inicio: 'manutencao', lista: 'manutencao', publico: 'tecnico',
+    rotulo: 'Técnico de manutenção', inicio: 'manutencao', lista: 'manutencao', publico: 'tecnico', acoesDetalhe: true,
     menu: ['manutencao', 'overview', 'ranking', 'detail', 'reports'],
   },
   operador: {
-    rotulo: 'Operador', inicio: 'meus', lista: 'meus', publico: 'operador',
+    rotulo: 'Operador', inicio: 'meus', lista: 'meus', publico: 'operador', acoesDetalhe: false,
     menu: ['meus', 'detail'],
   },
 }

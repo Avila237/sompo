@@ -18,7 +18,6 @@ interface TokenResp {
   access_token: string
   token_type: string
   perfil: string
-  operador_id?: string | null // só para o perfil operador (BRA-451)
   expira_em_minutos: number
 }
 
@@ -29,7 +28,6 @@ export async function login(usuario: string, senha: string): Promise<void> {
     token: r.access_token,
     perfil: r.perfil,
     usuario,
-    operadorId: r.operador_id ?? null,
     expiraEm: Date.now() + r.expira_em_minutos * 60_000,
   })
 }
