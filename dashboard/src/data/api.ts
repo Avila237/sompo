@@ -127,12 +127,31 @@ let equipCache: { promessa: Promise<EquipamentoView[]>; em: number } | null = nu
 
 assinarSessao(() => { equipCache = null })
 
+type OuvinteEquip = (itens: EquipamentoView[]) => void
+const ouvintesEquip = new Set<OuvinteEquip>()
+
+/**
+ * Avisa a cada carga bem-sucedida de /equipamentos, venha de onde vier (menu,
+ * Visão geral, "Tentar de novo"). Sem isso, o contador do menu carregava uma vez
+ * e ficava vazio para sempre se a API estivesse fora nesse momento.
+ */
+export function assinarEquipamentos(fn: OuvinteEquip): () => void {
+  ouvintesEquip.add(fn)
+  return () => { ouvintesEquip.delete(fn) }
+}
+
 export function loadEquipamentos(opts: { recarregar?: boolean } = {}): Promise<EquipamentoView[]> {
   if (!opts.recarregar && equipCache && Date.now() - equipCache.em < EQUIP_TTL_MS) {
     return equipCache.promessa
   }
   const promessa = apiGet<{ total: number; itens: EquipamentoItemResp[] }>('/equipamentos')
-    .then((r) => r.itens.map(toView))
+    .then((r) => {
+      const itens = r.itens.map(toView)
+      // Só a carga ATUAL avisa: uma resposta atrasada de outra sessão (ou fora de
+      // ordem) poria no menu o total de outro usuário
+      if (equipCache === entrada) ouvintesEquip.forEach((fn) => fn(itens))
+      return itens
+    })
   const entrada = { promessa, em: Date.now() }
   equipCache = entrada
   promessa.catch(() => { if (equipCache === entrada) equipCache = null })
