@@ -6,6 +6,9 @@
  *
  * - variante padrão (tela): cobre todo o conteúdo com camada semi-transparente
  * - variante `inline` (botão/elemento): desabilita e exibe uma etiqueta "Em breve"
+ *
+ * O conteúdo coberto recebe `inert`: fica fora do Tab, do clique e da árvore de
+ * acessibilidade. Só `pointerEvents: none` deixava o botão acionável por teclado.
  */
 export function ComingSoon({
   children,
@@ -22,7 +25,7 @@ export function ComingSoon({
     return (
       <span style={{ position: 'relative', display: 'inline-flex', cursor: 'not-allowed' }}>
         <span
-          aria-hidden
+          inert
           style={{ pointerEvents: 'none', opacity: 0.4, filter: 'grayscale(0.5)', display: 'inline-flex' }}
         >
           {children}
@@ -51,7 +54,7 @@ export function ComingSoon({
   return (
     <div style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
       <div
-        aria-hidden
+        inert
         style={{
           height: '100%', overflow: 'hidden', pointerEvents: 'none',
           userSelect: 'none', filter: 'blur(2.5px)', opacity: 0.4,

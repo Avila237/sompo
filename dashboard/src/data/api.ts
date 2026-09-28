@@ -73,10 +73,10 @@ export interface EquipamentoView {
   idade: number
   sinistros: number
   iot: boolean
-  score: number       // score da avaliacao mais recente (arredondado)
-  scoreMedio: number  // media das avaliacoes do equipamento
-  trend: number       // ultima avaliacao - penultima
-  faixa: ToneKey
+  score: number | null // score da avaliacao mais recente (arredondado); null = sem avaliacao
+  scoreMedio: number   // media das avaliacoes do equipamento
+  trend: number        // ultima avaliacao - penultima
+  faixa: ToneKey       // 'neut' quando sem avaliacao
   avaliacoes: number
   operador: string
   ultimaTs: string
@@ -85,6 +85,9 @@ export interface EquipamentoView {
 }
 
 function toView(e: EquipamentoItemResp): EquipamentoView {
+  // A API devolve score 0.0 e faixa "baixo" para equipamento sem avaliacao
+  // (contrato-api.md, GET /equipamentos). Ausencia de dado nao e risco baixo.
+  const semAvaliacao = e.total_avaliacoes === 0
   return {
     id: e.equipamento_id,
     modelo: e.modelo_equipamento,
@@ -92,10 +95,10 @@ function toView(e: EquipamentoItemResp): EquipamentoView {
     idade: e.idade_equipamento,
     sinistros: e.historico_sinistros,
     iot: e.tem_iot,
-    score: Math.round(e.risco_score),
+    score: semAvaliacao ? null : Math.round(e.risco_score),
     scoreMedio: Math.round(e.score_medio),
     trend: Math.round(e.tendencia),
-    faixa: faixaToTone(e.faixa_risco),
+    faixa: semAvaliacao ? 'neut' : faixaToTone(e.faixa_risco),
     avaliacoes: e.total_avaliacoes,
     operador: e.operador_id || '—',
     ultimaTs: e.ultima_avaliacao ?? '',
@@ -138,6 +141,7 @@ export interface Alerta {
   sev: ToneKey
   msg: string
   time: string
+  ts: string // timestamp ISO da avaliacao que gerou o alerta
   equipamentoId: string
 }
 
@@ -200,6 +204,22 @@ function horaLocal(ts: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+function toAlerta(it: AlertaResp): Alerta {
+  return {
+    sev: faixaToTone(it.faixa_risco),
+    msg: it.mensagem,
+    time: horaLocal(it.timestamp),
+    ts: it.timestamp,
+    equipamentoId: it.equipamento_id,
+  }
+}
+
+/** GET /alertas — alertas reais derivados do score (regra no servidor). */
+export async function loadAlertas(): Promise<Alerta[]> {
+  const r = await apiGet<{ total: number; itens: AlertaResp[] }>('/alertas')
+  return r.itens.map(toAlerta)
+}
+
 /**
  * Carrega tudo que a Visao geral precisa em duas requisicoes paralelas.
  *
@@ -235,12 +255,7 @@ export async function loadVisaoGeral(dias: number): Promise<VisaoGeral> {
       count: r.total_equipamentos,
       avg: Math.round(r.score_medio),
     })),
-    alertas: a.itens.map((it) => ({
-      sev: faixaToTone(it.faixa_risco),
-      msg: it.mensagem,
-      time: horaLocal(it.timestamp),
-      equipamentoId: it.equipamento_id,
-    })),
+    alertas: a.itens.map(toAlerta),
     tendencia: k.tendencia ? k.tendencia.map((p) => p.score_medio) : null,
   }
 }

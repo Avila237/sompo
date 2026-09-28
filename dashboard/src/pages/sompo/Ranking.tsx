@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo, useEffect } from 'react'
-import { WTONE, scoreBandLabel } from '../../data/mock'
+import { WTONE, scoreBandLabel, SEM_AVALIACAO } from '../../data/mock'
 import {
   loadEquipamentos,
   toEquipment,
@@ -154,7 +154,8 @@ export default function SompoRanking({
         case 'tipo': cmp = a.tipo.localeCompare(b.tipo); break
         case 'operador': cmp = a.operador.localeCompare(b.operador); break
         case 'avaliacoes': cmp = a.avaliacoes - b.avaliacoes; break
-        case 'score': cmp = a.score - b.score; break
+        // sem avaliação (-1) fica abaixo de qualquer score real, inclusive 0
+        case 'score': cmp = (a.score ?? -1) - (b.score ?? -1); break
         case 'ultimaTs': cmp = a.ultimaTs.localeCompare(b.ultimaTs); break
       }
       return sortDir === 'asc' ? cmp : -cmp
@@ -293,7 +294,7 @@ export default function SompoRanking({
               <ScoreBadge score={eq.score} size="sm" />
 
               {/* Band chip */}
-              <Chip state={eq.faixa} label={scoreBandLabel(eq.score)} size="sm" />
+              <Chip state={eq.faixa} label={eq.score === null ? SEM_AVALIACAO : scoreBandLabel(eq.score)} size="sm" />
 
               {/* Aval count */}
               <div className="tabular" style={{ fontSize: 12, color: 'var(--fg-dim)' }}>{eq.avaliacoes}</div>

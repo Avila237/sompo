@@ -33,9 +33,9 @@ export function Chip({ state = 'neut', label, icon, size = 'md' }: {
   )
 }
 
-// Score badge
-export function ScoreBadge({ score, size = 'md' }: { score: number; size?: 'xl' | 'lg' | 'md' | 'sm' }) {
-  const band = scoreBand(score)
+// Score badge — `null` = equipamento sem avaliação: mostra "—" em tom neutro
+export function ScoreBadge({ score, size = 'md' }: { score: number | null; size?: 'xl' | 'lg' | 'md' | 'sm' }) {
+  const band = score === null ? 'neut' : scoreBand(score)
   const color = WTONE[band].fg
   const S = size === 'xl' ? 80 : size === 'lg' ? 48 : size === 'sm' ? 28 : 36
   const FS = size === 'xl' ? 34 : size === 'lg' ? 22 : size === 'sm' ? 13 : 17
@@ -45,7 +45,7 @@ export function ScoreBadge({ score, size = 'md' }: { score: number; size?: 'xl' 
       background: WTONE[band].bg, border: `1px solid ${WTONE[band].ring}`,
       color, fontSize: FS, fontWeight: 800, letterSpacing: -0.4,
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    }}>{Math.round(score)}</div>
+    }}>{score === null ? '—' : Math.round(score)}</div>
   )
 }
 

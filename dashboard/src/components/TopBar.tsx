@@ -1,18 +1,20 @@
 ﻿import { useState, useRef, useEffect, type JSX } from 'react'
 import { WTONE } from '../data/mock'
+import { loadAlertas, type Alerta } from '../data/api'
 import { WIco } from './Icons'
-import type { ToneKey } from '../types'
 
-/* ── notification data ── */
-interface Notif { sev: ToneKey; title: string; body: string; time: string }
+/* ── alertas do sino: GET /alertas, buscados a cada abertura do dropdown ── */
+type AlertasState =
+  | { status: 'loading' }
+  | { status: 'ok'; itens: Alerta[] }
+  | { status: 'error'; msg: string }
 
-const NOTIFS: Notif[] = [
-  { sev: 'crit', title: 'EQ-0042 · Alerta crítico',      body: 'Filtros hidráulicos com 38% de atraso na troca', time: '14:37' },
-  { sev: 'crit', title: 'EQ-0023 · Revisão vencida',      body: 'Revisão de 500h atrasada há 28 horas',           time: '12:05' },
-  { sev: 'warn', title: 'EQ-0011 · Óleo motor',           body: 'Troca de óleo do motor com 14h de atraso',       time: '10:22' },
-  { sev: 'warn', title: 'EQ-0057 · Calibração injetores', body: 'Atraso de 9h na calibração programada',          time: '08:50' },
-  { sev: 'info', title: 'Relatório semanal pronto',        body: '28 relatórios disponíveis para download',        time: 'ontem' },
-]
+const fmtDataHora = (ts: string) => {
+  const d = new Date(ts)
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 
 /* ── persona config ── */
 const PERSONAS: { key: string; label: string; icon: () => JSX.Element }[] = [
@@ -30,8 +32,22 @@ export default function TopBar({ persona, setPersona, perfil, onSair }: {
   onSair?: () => void
 }) {
   const [showNotifs, setShowNotifs] = useState(false)
-  const [unread, setUnread] = useState(NOTIFS.length)
+  const [alertas, setAlertas] = useState<AlertasState>({ status: 'loading' })
   const dropRef = useRef<HTMLDivElement>(null)
+  const reqId = useRef(0)
+
+  /* A API não guarda estado de "lido", então não há contador de não-lidas:
+     o sino só lista o que /alertas devolve no momento da abertura.
+     reqId descarta a resposta de uma abertura anterior que chegue atrasada. */
+  function toggleNotifs() {
+    if (showNotifs) { setShowNotifs(false); return }
+    setShowNotifs(true)
+    setAlertas({ status: 'loading' })
+    const id = ++reqId.current
+    loadAlertas()
+      .then((itens) => { if (id === reqId.current) setAlertas({ status: 'ok', itens }) })
+      .catch((e) => { if (id === reqId.current) setAlertas({ status: 'error', msg: String(e?.message ?? e) }) })
+  }
 
   /* close dropdown on outside click */
   useEffect(() => {
@@ -95,18 +111,16 @@ export default function TopBar({ persona, setPersona, perfil, onSair }: {
 
         {/* notification bell */}
         <div ref={dropRef} style={{ position: 'relative' }}>
-          <button onClick={() => setShowNotifs(v => !v)} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--fg-dim)', position: 'relative', padding: 4,
-          }}>
+          <button
+            onClick={toggleNotifs}
+            aria-label="Alertas recentes"
+            aria-expanded={showNotifs}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--fg-dim)', position: 'relative', padding: 4,
+            }}
+          >
             <WIco.bell />
-            {unread > 0 && (
-              <span style={{
-                width: 7, height: 7, borderRadius: 4,
-                background: 'var(--red)', border: '2px solid var(--bg)',
-                position: 'absolute', top: 2, right: 2,
-              }} />
-            )}
           </button>
 
           {/* dropdown */}
@@ -122,31 +136,40 @@ export default function TopBar({ persona, setPersona, perfil, onSair }: {
                 justifyContent: 'space-between', borderBottom: '1px solid var(--line)',
               }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)' }}>
-                  Notificações
+                  Alertas recentes
                 </span>
-                <button onClick={() => setUnread(0)} style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 11, color: 'var(--green)', fontWeight: 600,
-                }}>Marcar todas</button>
+                <span style={{ fontSize: 10, color: 'var(--fg-mute)' }}>risco médio ou alto</span>
               </div>
-              {NOTIFS.map((n, i) => (
-                <div key={i} style={{
+              {alertas.status === 'loading' && (
+                <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--fg-mute)' }}>
+                  Carregando alertas…
+                </div>
+              )}
+              {alertas.status === 'error' && (
+                <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--red)' }}>
+                  Não foi possível carregar os alertas: {alertas.msg}
+                </div>
+              )}
+              {alertas.status === 'ok' && alertas.itens.length === 0 && (
+                <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--fg-mute)' }}>
+                  Nenhum alerta no momento.
+                </div>
+              )}
+              {alertas.status === 'ok' && alertas.itens.map((a, i) => (
+                <div key={`${a.equipamentoId}-${a.ts}`} style={{
                   padding: '10px 16px', display: 'flex', gap: 10,
-                  borderBottom: i < NOTIFS.length - 1 ? '1px solid var(--line)' : 'none',
+                  borderBottom: i < alertas.itens.length - 1 ? '1px solid var(--line)' : 'none',
                 }}>
                   <span style={{
                     width: 8, height: 8, borderRadius: '50%', marginTop: 5, flexShrink: 0,
-                    background: WTONE[n.sev].fg,
+                    background: WTONE[a.sev].fg,
                   }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', marginBottom: 2 }}>
-                      {n.title}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--fg-dim)', lineHeight: 1.4 }}>
-                      {n.body}
+                      {a.msg}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--fg-mute)', marginTop: 4 }}>
-                      {n.time}
+                      {fmtDataHora(a.ts)}
                     </div>
                   </div>
                 </div>

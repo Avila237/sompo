@@ -16,6 +16,9 @@ export function scoreBandLabel(s: number): string {
   return s <= 33 ? 'BAIXO' : s <= 66 ? 'MÉDIO' : 'ALTO'
 }
 
+/** Rótulo de equipamento sem nenhuma avaliação — nunca exibir como score 0 / "baixo". */
+export const SEM_AVALIACAO = 'SEM AVALIAÇÃO'
+
 export const GROUPS: Record<string, { label: string; color: string }> = {
   env: { label: 'Ambiental', color: 'var(--blue)' },
   op: { label: 'Operador', color: 'var(--amber)' },
