@@ -34,12 +34,15 @@ def client():
     return get_supabase_client()
 
 
-def fetch_all(client, table, columns, order_by=None):
+def fetch_all(client, table, columns, order_by=None, eq=None):
     all_data = []
     page_size = 1000
     offset = 0
     while True:
         query = client.table(table).select(columns)
+        # Filtros de igualdade opcionais, ex.: {"fonte": "seed"}.
+        for column, value in (eq or {}).items():
+            query = query.eq(column, value)
         if order_by:
             query = query.order(order_by)
         result = query.range(offset, offset + page_size - 1).execute()
@@ -77,6 +80,8 @@ class TestIntegridade:
     def test_avaliacao_ids_existem(self, client):
         pred_ids = {r["avaliacao_id"] for r in fetch_all(client, "predicoes", "avaliacao_id")}
         aval_ids = {r["avaliacao_id"] for r in fetch_all(client, "avaliacoes", "avaliacao_id")}
+        # Sem predicoes, a diferenca e vazia e o teste passaria sem verificar nada.
+        assert pred_ids, "predicoes vazia: integridade referencial nao verificada"
         orphans = pred_ids - aval_ids
         assert len(orphans) == 0, f"avaliacao_ids orfaos em predicoes: {orphans}"
 
@@ -87,7 +92,11 @@ class TestIntegridade:
 
 
 class TestDistribuicao:
+    # O denominador e a contagem real da tabela, nao 5000 fixo: cada POST na
+    # API acrescenta uma predicao e deslocaria o percentual.
     def test_faixa_predita_baixo(self, client):
+        total = client.table("predicoes").select("*", count="exact").limit(0).execute().count
+        assert total > 0, "predicoes vazia: distribuicao indefinida"
         result = (
             client.table("predicoes")
             .select("*", count="exact")
@@ -95,10 +104,12 @@ class TestDistribuicao:
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 30 <= pct <= 50, f"baixo: {pct:.1f}% (esperado ~40%)"
 
     def test_faixa_predita_medio(self, client):
+        total = client.table("predicoes").select("*", count="exact").limit(0).execute().count
+        assert total > 0, "predicoes vazia: distribuicao indefinida"
         result = (
             client.table("predicoes")
             .select("*", count="exact")
@@ -106,10 +117,12 @@ class TestDistribuicao:
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 25 <= pct <= 45, f"medio: {pct:.1f}% (esperado ~35%)"
 
     def test_faixa_predita_alto(self, client):
+        total = client.table("predicoes").select("*", count="exact").limit(0).execute().count
+        assert total > 0, "predicoes vazia: distribuicao indefinida"
         result = (
             client.table("predicoes")
             .select("*", count="exact")
@@ -117,7 +130,7 @@ class TestDistribuicao:
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 15 <= pct <= 35, f"alto: {pct:.1f}% (esperado ~25%)"
 
 
@@ -127,20 +140,27 @@ class TestDistribuicao:
 
 
 class TestShapJson:
+    # Amostra vazia (ou lista de fatores vazia) faria os loops passarem sem
+    # nenhum assert: o nao-vazio e checado antes de iterar.
     def test_top_fatores_tem_5_elementos(self, sample_predicoes):
+        assert sample_predicoes, "Amostra de predicoes vazia"
         for r in sample_predicoes:
             fatores = r["top_fatores_shap"]
             assert len(fatores) == 5, f"Esperado 5 fatores, obteve {len(fatores)}"
 
     def test_fatores_tem_campos_obrigatorios(self, sample_predicoes):
+        assert sample_predicoes, "Amostra de predicoes vazia"
         for r in sample_predicoes:
+            assert r["top_fatores_shap"], "top_fatores_shap vazio"
             for fator in r["top_fatores_shap"]:
                 assert "feature" in fator, "Campo 'feature' ausente"
                 assert "shap_value" in fator, "Campo 'shap_value' ausente"
                 assert "group" in fator, "Campo 'group' ausente"
 
     def test_grupos_validos(self, sample_predicoes):
+        assert sample_predicoes, "Amostra de predicoes vazia"
         for r in sample_predicoes:
+            assert r["top_fatores_shap"], "top_fatores_shap vazio"
             for fator in r["top_fatores_shap"]:
                 assert fator["group"] in VALID_GROUPS, (
                     f"Grupo invalido: {fator['group']}"
@@ -164,6 +184,7 @@ class TestModeloVersao:
         assert result.count == 0, "Existem registros sem modelo_versao"
 
     def test_modelo_versao_preenchida(self, sample_predicoes):
+        assert sample_predicoes, "Amostra de predicoes vazia"
         for r in sample_predicoes:
             assert r["modelo_versao"] and len(r["modelo_versao"]) > 0
 
@@ -178,7 +199,13 @@ class TestConsistenciaScore:
         import numpy as np
 
         pred_data = fetch_all(client, "predicoes", "avaliacao_id,risco_score_predito", order_by="avaliacao_id")
-        aval_data = fetch_all(client, "avaliacoes", "avaliacao_id,risco_score", order_by="avaliacao_id")
+        # So avaliacoes do seed. Na ingestao pela API (fonte='telemetria') o
+        # target risco_score e gravado igual a propria predicao
+        # (backend/services/scoring.py), o que empurra a correlacao para 1.
+        aval_data = fetch_all(
+            client, "avaliacoes", "avaliacao_id,risco_score",
+            order_by="avaliacao_id", eq={"fonte": "seed"},
+        )
 
         aval_map = {r["avaliacao_id"]: float(r["risco_score"]) for r in aval_data}
 
@@ -190,5 +217,7 @@ class TestConsistenciaScore:
                 reais.append(aval_map[aid])
                 preditos.append(float(r["risco_score_predito"]))
 
+        # corrcoef exige ao menos 2 pares; com menos, devolve nan.
+        assert len(reais) >= 2, f"Pares seed insuficientes para correlacao: {len(reais)}"
         corr = float(np.corrcoef(reais, preditos)[0, 1])
         assert corr > 0.90, f"Correlacao {corr:.4f} abaixo de 0.90"

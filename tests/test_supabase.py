@@ -101,12 +101,15 @@ class TestIntegridade:
     def test_avaliacoes_equipamento_ids_existem(self, client):
         equip_ids = set(fetch_all_column(client, "equipamentos", "equipamento_id"))
         aval_equip_ids = set(fetch_all_column(client, "avaliacoes", "equipamento_id"))
+        # Sem avaliacoes, a diferenca e vazia e o teste passaria sem verificar nada.
+        assert aval_equip_ids, "avaliacoes vazia: integridade referencial nao verificada"
         orphans = aval_equip_ids - equip_ids
         assert len(orphans) == 0, f"Equipamento IDs orfaos: {orphans}"
 
     def test_avaliacoes_operador_ids_existem(self, client):
         ops_ids = set(fetch_all_column(client, "operadores", "operador_id"))
         aval_ops_ids = set(fetch_all_column(client, "avaliacoes", "operador_id"))
+        assert aval_ops_ids, "avaliacoes vazia: integridade referencial nao verificada"
         orphans = aval_ops_ids - ops_ids
         assert len(orphans) == 0, f"Operador IDs orfaos: {orphans}"
 
@@ -117,7 +120,11 @@ class TestIntegridade:
 
 
 class TestDistribuicao:
+    # O denominador e a contagem real da tabela, nao 5000 fixo: cada POST na
+    # API acrescenta uma avaliacao e deslocaria o percentual.
     def test_faixa_risco_baixo(self, client):
+        total = client.table("avaliacoes").select("*", count="exact").limit(0).execute().count
+        assert total > 0, "avaliacoes vazia: distribuicao indefinida"
         result = (
             client.table("avaliacoes")
             .select("*", count="exact")
@@ -125,10 +132,12 @@ class TestDistribuicao:
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 32 <= pct <= 48, f"baixo: {pct:.1f}% (esperado ~40%)"
 
     def test_faixa_risco_medio(self, client):
+        total = client.table("avaliacoes").select("*", count="exact").limit(0).execute().count
+        assert total > 0, "avaliacoes vazia: distribuicao indefinida"
         result = (
             client.table("avaliacoes")
             .select("*", count="exact")
@@ -136,10 +145,12 @@ class TestDistribuicao:
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 27 <= pct <= 43, f"medio: {pct:.1f}% (esperado ~35%)"
 
     def test_faixa_risco_alto(self, client):
+        total = client.table("avaliacoes").select("*", count="exact").limit(0).execute().count
+        assert total > 0, "avaliacoes vazia: distribuicao indefinida"
         result = (
             client.table("avaliacoes")
             .select("*", count="exact")
@@ -147,7 +158,7 @@ class TestDistribuicao:
             .limit(0)
             .execute()
         )
-        pct = result.count / 5000 * 100
+        pct = result.count / total * 100
         assert 17 <= pct <= 33, f"alto: {pct:.1f}% (esperado ~25%)"
 
 
