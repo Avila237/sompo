@@ -10,6 +10,7 @@ from collections import defaultdict
 
 from backend.db import repository as repo
 from backend.ml.preprocess import derive_faixa
+from backend.services.recomendacoes import recomendar
 
 # Limites do territorio brasileiro, usados para projetar lat/long em 0..1.
 LAT_MIN, LAT_MAX = -33.75, -2.50
@@ -116,10 +117,21 @@ def detalhe_equipamento(equipamento_id: str) -> dict | None:
     ]
     historico.sort(key=lambda h: h["timestamp"])
 
+    recomendacoes = []
+    if ultima is not None:
+        # A avaliacao nao repete o cadastral (idade, historico de sinistros):
+        # as regras leem a leitura somada ao cadastro do equipamento.
+        recomendacoes = recomendar(
+            {**equipamento, **ultima},
+            ultima["faixa_risco"],
+            predicao["top_fatores_shap"] if predicao else [],
+        )
+
     return {
         "equipamento": equipamento,
         "ultima_avaliacao": ultima,
         "predicao": predicao,
+        "recomendacoes": recomendacoes,
         "historico": historico,
     }
 

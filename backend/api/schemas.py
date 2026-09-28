@@ -100,6 +100,15 @@ class FatorSHAP(BaseModel):
     grupo: str
 
 
+class Recomendacao(BaseModel):
+    """Acao preventiva e o criterio explicito que a disparou (S4-25)."""
+
+    id: str
+    publico: Literal["operador", "gestor", "tecnico"]
+    acao: str
+    criterio: str
+
+
 class RespostaScore(BaseModel):
     """O score nunca viaja sozinho: sempre com faixa e decomposicao (RF-10)."""
 
@@ -110,6 +119,7 @@ class RespostaScore(BaseModel):
     clima_origem: str
     contribuicoes_por_grupo: dict[str, float]
     top_fatores: list[FatorSHAP]
+    recomendacoes: list[Recomendacao]
     modelo_versao: str
     timestamp: str
 

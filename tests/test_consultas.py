@@ -69,6 +69,26 @@ class TestFaixaGravadaPrevalece:
         assert op["avaliacoes_risco_alto"] == 1
 
 
+class TestRecomendacoesNoDetalhe:
+    def test_detalhe_usa_leitura_e_cadastro(self):
+        """historico_sinistros vem do cadastro; horas_operacao, da avaliacao."""
+        equipamento = {**EQUIPAMENTO, "historico_sinistros": 5}
+        ultima = {**AVALIACAO_NA_FRONTEIRA, "faixa_risco": "alto", "horas_operacao": 10.0}
+        with patch.object(consultas.repo, "buscar_equipamento", return_value=equipamento), \
+             patch.object(consultas.repo, "ultima_avaliacao", return_value=ultima), \
+             patch.object(consultas.repo, "predicao_de", return_value=None), \
+             patch.object(consultas.repo, "listar_avaliacoes_resumo", return_value=[ultima]):
+            detalhe = consultas.detalhe_equipamento("EQ-0001")
+        assert "historico_e_jornada_longa" in [r["id"] for r in detalhe["recomendacoes"]]
+
+    def test_sem_avaliacao_nao_ha_recomendacao(self):
+        with patch.object(consultas.repo, "buscar_equipamento", return_value=EQUIPAMENTO), \
+             patch.object(consultas.repo, "ultima_avaliacao", return_value=None), \
+             patch.object(consultas.repo, "listar_avaliacoes_resumo", return_value=[]):
+            detalhe = consultas.detalhe_equipamento("EQ-0001")
+        assert detalhe["recomendacoes"] == []
+
+
 class TestSemAvaliacao:
     def test_equipamento_sem_avaliacao_mantem_o_contrato(self):
         with patch.object(consultas.repo, "listar_equipamentos", return_value=[EQUIPAMENTO]), \
