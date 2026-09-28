@@ -1,10 +1,9 @@
 """
 Enriquecimento climatico via Open-Meteo (RF-05).
 
-A Open-Meteo e a fonte preferencial. Se falhar ou estourar o timeout, o fluxo
-cai para os valores climaticos do proprio payload e registra a procedencia na
-coluna clima_origem — nunca falha em silencio, e a auditoria consegue
-distinguir clima real de clima simulado.
+Clima medido em campo (payload completo) prevalece; a Open-Meteo so preenche
+o que falta (decisao de 28/09/2026, S4-20). A procedencia fica na coluna
+clima_origem, para a auditoria distinguir clima medido de clima consultado.
 
 umidade_solo e condicao_clima nao vem da API: sao derivadas pelas Regras 3 e 5
 de docs/data schema.md, as mesmas usadas na geracao do dataset. Usar outra
@@ -52,9 +51,11 @@ def buscar(latitude: float, longitude: float, tipo_solo: str) -> dict | None:
         "latitude": latitude,
         "longitude": longitude,
         "current": "temperature_2m,wind_speed_10m",
-        "daily": "precipitation_sum",
-        "past_days": 1,
-        "forecast_days": 1,
+        # As 24 horas cheias anteriores. precipitation_sum com past_days=1
+        # devolvia a chuva do dia anterior em UTC, nao das ultimas 24 h.
+        "hourly": "precipitation",
+        "past_hours": 24,
+        "forecast_hours": 0,
         "timezone": "UTC",
     }
     try:
@@ -72,7 +73,7 @@ def buscar(latitude: float, longitude: float, tipo_solo: str) -> dict | None:
 
     try:
         atual = dados["current"]
-        chuva_24h = float(dados["daily"]["precipitation_sum"][0] or 0.0)
+        chuva_24h = float(sum(h or 0.0 for h in dados["hourly"]["precipitation"]))
         temperatura = float(atual["temperature_2m"])
         vento = float(atual["wind_speed_10m"])
     except (KeyError, IndexError, TypeError, ValueError) as e:

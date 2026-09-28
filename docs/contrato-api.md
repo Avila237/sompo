@@ -384,15 +384,19 @@ cadastral no banco (tipo, idade, histórico de sinistros, `tem_iot`, intervalos 
 **deriva** o que não pode ser forjado: `atraso_manutencao_pct`, `manutencao_atrasada` (Regra 14 de
 `docs/data schema.md`) e `faixa_risco`. Responde `201`.
 
-**Os cinco campos climáticos são opcionais.** Se ausentes, o servidor busca na Open-Meteo pela
-coordenada. Se presentes, servem de fallback caso a API externa falhe.
+**Os cinco campos climáticos são opcionais, e o clima medido em campo prevalece.** Com os cinco
+no payload, a Open-Meteo nem é consultada. Com parte deles, a Open-Meteo preenche só o que falta
+(temperatura, chuva, vento); umidade do solo e condição ausentes são derivadas da chuva final
+(Regras 3 e 5), para não misturar a chuva medida com uma condição derivada de outra chuva.
+A chuva da Open-Meteo é a soma das **últimas 24 horas**.
 
 A resposta traz `clima_origem` dizendo de onde veio o dado:
 
 | valor | significado |
 |---|---|
-| `open-meteo` | enriquecido pela API externa |
-| `payload` | Open-Meteo falhou; usados os valores enviados pelo cliente |
+| `payload` | os cinco campos vieram do cliente; a Open-Meteo não foi consultada |
+| `open-meteo` | nenhum campo climático no payload; tudo veio da API externa |
+| `misto` | parte veio do payload, o resto foi completado pela Open-Meteo |
 | `seed` | linha histórica, populada pelo seed em lote (só aparece nas consultas, nunca nesta resposta) |
 
 Se a Open-Meteo falhar **e** o payload não trouxer o clima completo, a requisição é recusada com
