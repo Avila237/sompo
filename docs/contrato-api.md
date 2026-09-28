@@ -132,6 +132,7 @@ Detalhe de um equipamento. `404` se o id não existe no cadastro.
 | `equipamento` | linha completa do cadastro | não |
 | `ultima_avaliacao` | linha completa da avaliação mais recente em `avaliacoes` | sim, se não há avaliação |
 | `predicao` | predição ligada a essa avaliação | sim, se não há avaliação ou predição |
+| `recomendacoes` | ações preventivas para a última avaliação (ver `POST /avaliacoes`) | lista vazia sem avaliação |
 | `historico` | `{timestamp, risco_score}` de todas as avaliações, da mais antiga à mais recente | lista vazia |
 
 `ultima_avaliacao` é a linha completa de `avaliacoes`. Além dos campos de telemetria, operação,
@@ -434,10 +435,31 @@ segunda avaliação.
     },
     "..."
   ],
+  "recomendacoes": [
+    {
+      "id": "margem_alagavel",
+      "publico": "gestor",
+      "acao": "Afastar a operação da margem até o solo secar: área alagável após chuva.",
+      "criterio": "distancia_agua_m=120 < 200 e precipitacao_mm=42 > 25"
+    }
+  ],
   "modelo_versao": "xgboost-v1-baseline",
   "timestamp": "2026-08-24T13:02:53.465989+00:00"
 }
 ```
+
+### Recomendações
+
+`recomendacoes` traz as ações preventivas, cada uma com `publico` (`operador`, `gestor` ou
+`tecnico`), `acao` e o `criterio` que a disparou, com os valores reais da leitura. São regras
+determinísticas em `backend/services/recomendacoes.py`, nunca texto gerado; as de interação
+usam os mesmos limiares de `docs/data schema.md` §4.3.
+
+- A lista segue a ordem de prioridade das regras e pode vir vazia na faixa `baixo`.
+- **Toda avaliação de faixa `medio` ou `alto` tem ao menos uma recomendação.** Se nenhuma regra
+  disparar, entra `id: "fator_dominante"`, pelo fator SHAP que mais empurrou o risco para cima.
+  Sem fator positivo, entra `id: "monitorar"`.
+- O `id` identifica a regra e é estável: o front pode usá-lo para ícone ou agrupamento.
 
 ## Armadilhas conhecidas
 

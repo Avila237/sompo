@@ -740,6 +740,40 @@
         "title": "LeituraTelemetria",
         "description": "Uma leitura de campo: telemetria + ambiente + operacao."
       },
+      "Recomendacao": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "publico": {
+            "type": "string",
+            "enum": [
+              "operador",
+              "gestor",
+              "tecnico"
+            ],
+            "title": "Publico"
+          },
+          "acao": {
+            "type": "string",
+            "title": "Acao"
+          },
+          "criterio": {
+            "type": "string",
+            "title": "Criterio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "publico",
+          "acao",
+          "criterio"
+        ],
+        "title": "Recomendacao",
+        "description": "Acao preventiva e o criterio explicito que a disparou (S4-25)."
+      },
       "RespostaScore": {
         "properties": {
           "avaliacao_id": {
@@ -781,6 +815,13 @@
             "type": "array",
             "title": "Top Fatores"
           },
+          "recomendacoes": {
+            "items": {
+              "$ref": "#/components/schemas/Recomendacao"
+            },
+            "type": "array",
+            "title": "Recomendacoes"
+          },
           "modelo_versao": {
             "type": "string",
             "title": "Modelo Versao"
@@ -799,6 +840,7 @@
           "clima_origem",
           "contribuicoes_por_grupo",
           "top_fatores",
+          "recomendacoes",
           "modelo_versao",
           "timestamp"
         ],

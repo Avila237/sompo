@@ -22,6 +22,7 @@ from backend.core.exceptions import (
 from backend.db import repository as repo
 from backend.ml.predictor import get_predictor
 from backend.services import auditoria, clima
+from backend.services.recomendacoes import recomendar
 
 logger = logging.getLogger("safefield.scoring")
 
@@ -256,6 +257,7 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> dict:
         "clima_origem": clima_origem,
         "contribuicoes_por_grupo": explicacao.contribuicoes_por_grupo,
         "top_fatores": explicacao.top_fatores,
+        "recomendacoes": recomendar(registro, explicacao.faixa_risco, explicacao.top_fatores),
         "modelo_versao": config.MODELO_VERSAO,
         "timestamp": agora.isoformat(),
     }

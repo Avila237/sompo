@@ -295,6 +295,14 @@ class TestScoring:
         }
         assert set(resposta["contribuicoes_por_grupo"]) == esperados
 
+    def test_recomendacoes_vem_com_criterio(self, resposta):
+        """S4-25: acao preventiva com o criterio que a disparou."""
+        assert isinstance(resposta["recomendacoes"], list)
+        for rec in resposta["recomendacoes"]:
+            assert set(rec) == {"id", "publico", "acao", "criterio"}
+        if resposta["faixa_risco"] != "baixo":
+            assert resposta["recomendacoes"], "faixa media/alta sem recomendacao"
+
     def test_top_fatores_tem_shape_do_contrato(self, resposta):
         assert len(resposta["top_fatores"]) == 5
         for fator in resposta["top_fatores"]:
