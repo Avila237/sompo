@@ -34,6 +34,16 @@ def derive_faixa(score: float) -> str:
     return "alto"
 
 
+def ajustar_encoder(df: pd.DataFrame) -> OrdinalEncoder:
+    """
+    Ajusta o encoder das categoricas no treino. Categoria desconhecida na
+    inferencia vira -1 em vez de erro.
+    """
+    encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
+    encoder.fit(df[CAT_COLS])
+    return encoder
+
+
 def preprocess_features(df: pd.DataFrame, encoder: OrdinalEncoder) -> pd.DataFrame:
     """
     Aplica o mesmo pre-processamento do treino: booleanos para int, categoricas
