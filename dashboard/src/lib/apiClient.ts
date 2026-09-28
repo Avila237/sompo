@@ -132,15 +132,6 @@ export function apiGet<T>(caminho: string, params?: Params): Promise<T> {
   return requisitar<T>(`${caminho}${query(params)}`, { method: 'GET' }, true)
 }
 
-/** POST autenticado. Para `/auth/token`, use `apiPostPublico`. */
-export function apiPost<T>(caminho: string, corpo: unknown): Promise<T> {
-  return requisitar<T>(
-    caminho,
-    { method: 'POST', body: JSON.stringify(corpo), headers: { 'Content-Type': 'application/json' } },
-    true,
-  )
-}
-
 /** POST sem Authorization — so para as rotas publicas do contrato. */
 export function apiPostPublico<T>(caminho: string, corpo: unknown): Promise<T> {
   return requisitar<T>(
@@ -149,5 +140,3 @@ export function apiPostPublico<T>(caminho: string, corpo: unknown): Promise<T> {
     false,
   )
 }
-
-export const API_BASE_URL = BASE

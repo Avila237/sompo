@@ -30,13 +30,6 @@ export interface Region {
   avg: number
 }
 
-export interface Contrib {
-  label: string
-  group: 'env' | 'op' | 'maint'
-  pct: number
-  val: string
-}
-
 export interface Client {
   name: string
   equips: number
