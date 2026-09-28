@@ -97,6 +97,11 @@ variável é a base da API.
 Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. As credenciais de
 demonstração (`DEMO_USERS`) e a `SUPABASE_SERVICE_ROLE_KEY` são combinadas fora do repositório.
 
+O `.env.example` ainda não lista todas as variáveis que a API exige. Sem `DEMO_USERS` a API falha
+ao iniciar; acrescente-a no formato `usuario:senha:perfil,usuario:senha:perfil`, com perfil entre
+`operador`, `gestor` e `analista`. A lista completa do que é lido está em
+[`backend/core/config.py`](backend/core/config.py).
+
 > ⚠️ A `service_role` é superusuário do banco: só server-side, nunca no frontend, nunca versionada.
 
 #### Notas de ambiente
@@ -307,8 +312,9 @@ no dataset.
 
 ### 5.4 Processamento e modelo
 
-A API valida com Pydantic, complementa com o cadastro do equipamento, persiste a avaliação, monta
-o vetor de 30 features com a **mesma função usada no treino** e chama o modelo.
+A API valida com Pydantic, complementa com o cadastro do equipamento, monta o vetor de 30
+features com o **mesmo encoder ajustado no treino** e chama o modelo. Só depois de ter score e
+explicação em mãos ela persiste a avaliação e a predição.
 
 O **XGBoost** é carregado uma vez no startup, não por requisição, e devolve score de 0 a 100. O
 **SHAP** decompõe esse score em contribuições por grupo de features, preservando o sinal. O
@@ -336,7 +342,7 @@ telas integradas:
 |---|---|---|
 | Visão Geral | `GET /kpis`, `GET /alertas` | KPIs, distribuição geográfica, agregação por tipo de operação e alertas recentes |
 | Ranking | `GET /equipamentos` | 200 equipamentos com filtro, busca e ordenação |
-| Detalhe | `GET /equipamentos/{id}` | Decomposição SHAP por grupo, top fatores, manutenção e histórico |
+| Detalhe | `GET /equipamentos/{id}` | Decomposição SHAP por grupo (somada a partir dos 5 fatores gravados), top fatores, manutenção e histórico |
 
 As outras cinco telas (Simulador, UBI, Relatórios, Corretor, Técnico) têm o design pronto e exibem
 overlay **"Em breve"**. Stack: React 19 + TypeScript + Vite + Tailwind CSS v4.
@@ -356,24 +362,24 @@ flowchart TB
 
     subgraph API["API FastAPI — unica porta"]
         direction TB
-        VAL["Validacao Pydantic<br/>faixas e consistencia"]
+        VAL["Validacao Pydantic<br/>faixas e campos desconhecidos"]
         ENR["Enriquecimento climatico<br/>fallback: payload"]
-        PERSA["Persiste avaliacao<br/>fonte, clima_origem"]
         PRE["preprocess_features<br/>vetor de 30 features"]
         MOD["XGBoost + SHAP<br/>carregado no startup"]
+        PERSA["Persiste avaliacao<br/>fonte, clima_origem"]
         PERSP["Persiste predicao<br/>+ auditoria"]
-        VAL --> ENR --> PERSA --> PRE --> MOD --> PERSP
+        VAL --> ENR --> PRE --> MOD --> PERSA --> PERSP
     end
 
     subgraph DB["Supabase — PostgreSQL + RLS"]
-        TAB[("equipamentos 200<br/>operadores 80<br/>avaliacoes 5.000<br/>predicoes 5.000")]
+        TAB[("equipamentos 200<br/>operadores 80<br/>avaliacoes e predicoes<br/>5.000 do seed + telemetria")]
         AUD[("auditoria")]
     end
 
     SIM -->|"POST /avaliacoes · Bearer"| VAL
     DASH -->|"GET /equipamentos /kpis /alertas · Bearer"| API
     API -->|JSON| DASH
-    ENR -.->|"fallback: payload"| METEO
+    ENR -.->|"clima pela coordenada · timeout curto"| METEO
     PERSA -->|service_role| TAB
     PERSP -->|service_role| TAB
     PERSP -->|service_role| AUD
@@ -390,8 +396,8 @@ sistema e como são utilizados para alimentar o modelo preditivo"*. O percurso �
 qualquer leitura, do momento em que ela é emitida até aparecer na tela.
 
 ```
-origem → validação → complemento cadastral → enriquecimento climático → persistência da
-avaliação → vetor de 30 features → XGBoost → SHAP → persistência da predição → API → interface
+origem → validação → complemento cadastral → enriquecimento climático → vetor de 30 features →
+XGBoost → SHAP → persistência da avaliação → persistência da predição → API → interface
 ```
 
 Legenda de estado: **✅ implementado** · **🟡 parcial**
@@ -430,7 +436,7 @@ O servidor busca no banco o que não vem no payload: tipo, modelo, idade, histó
 `tem_iot` e os intervalos de manutenção recomendados pelo fabricante. A partir disso **deriva**
 `atraso_manutencao_pct` e `manutencao_atrasada`, seguindo a Regra 14 do schema de dados.
 
-Equipamento inexistente interrompe o fluxo com **`404`**, antes de qualquer escrita.
+Equipamento ou operador inexistente interrompe o fluxo com **`404`**, antes de qualquer escrita.
 
 #### 4. Enriquecimento climático ✅
 
@@ -448,9 +454,41 @@ campo com clima menos preciso vale mais que nenhuma leitura.
 recusada com **`502`**, listando os campos ausentes. O servidor não inventa clima para alimentar o
 modelo: um score derivado de dado fabricado é pior que score nenhum.
 
-#### 5. Persistência da avaliação ✅
+#### 5. Vetor de 30 features ✅
 
-A leitura validada e enriquecida vira uma linha em `avaliacoes`.
+`backend/ml/preprocess.py` converte o registro validado e enriquecido, ainda em memória, no vetor
+que o modelo espera, na ordem declarada em `models/features.json`, aplicando o encoder ajustado no
+treino.
+
+O ponto importante é que treino e inferência não podem divergir. Divergência de pré-processamento
+é a classe de bug que não aparece em teste unitário e envenena silenciosamente toda predição em
+produção. Na inferência, `preprocess_features()` é o único caminho: a API, o script de predições em
+lote e os testes passam por ela. O treino, que precisa **ajustar** o encoder e não só aplicá-lo,
+repete as mesmas etapas em `train.py` sem chamar a função. Hoje os dois caminhos produzem o mesmo
+vetor; unificá-los está previsto no ajuste final do modelo.
+
+#### 6. XGBoost → score ✅
+
+O modelo é carregado **uma vez no startup**, não a cada requisição, e devolve um score contínuo de
+0 a 100. A faixa vem de `derive_faixa()`: `≤33` baixo, `≤66` médio, acima disso alto, derivada do
+score cru e gravada junto com ele, já arredondado a duas casas. As rotas de consulta e o dashboard
+usam os mesmos limiares, mas reclassificam: a API sobre o score gravado, a tela sobre o inteiro
+mais próximo. Logo acima de um limiar (entre 33 e 33,5, ou entre 66 e 66,5) a faixa exibida pode
+diferir da gravada. A correção é o servidor ser a única fonte da faixa.
+
+#### 7. SHAP → explicação ✅
+
+Sobre a mesma predição, o SHAP decompõe o score em contribuições por feature, agregadas em seis
+grupos: ambiental, geográfico, operacional, equipamento, operador e manutenção.
+
+A soma preserva o **sinal**: contribuição positiva empurra o risco para cima, negativa puxa para
+baixo. É o que permite a leitura *"este equipamento pontuou alto apesar do operador, por causa da
+proximidade de água"* — que é a informação acionável, não o número sozinho.
+
+#### 8. Persistência da avaliação ✅
+
+Só com score e explicação calculados a leitura vira uma linha em `avaliacoes`, já com o
+`risco_score` e a `faixa_risco` que o modelo produziu. Se o modelo falhar, nada foi gravado.
 
 **Procedência** — duas colunas criadas em
 `supabase/migrations/20260824120000_entrega03.sql` tornam a origem auditável sem cruzar log com
@@ -464,33 +502,10 @@ banco:
 Sem elas, as 5.000 linhas do seed e as geradas pela API ficam indistinguíveis — e um score
 calculado com clima de fallback pareceria idêntico a um calculado com clima medido.
 
-> ⚠️ `backend/db/schema.sql` começa com `DROP TABLE`. Reexecutá-lo apaga os 10.280 registros já
-> carregados. Toda mudança de estrutura vai na migration em `supabase/migrations/`, que é
-> idempotente (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`) e não destrói nada.
-
-#### 6. Vetor de 30 features ✅
-
-`backend/ml/preprocess.py` converte a linha persistida no vetor que o modelo espera, na ordem
-declarada em `models/features.json`, aplicando o mesmo encoding do treino.
-
-O ponto importante é que **é a mesma função** — `preprocess_features()` foi extraída de `train.py`
-justamente para que treino e inferência não divirjam. Divergência de pré-processamento é a classe
-de bug que não aparece em teste unitário e envenena silenciosamente toda predição em produção.
-
-#### 7. XGBoost → score ✅
-
-O modelo é carregado **uma vez no startup**, não a cada requisição, e devolve um score contínuo de
-0 a 100. A faixa vem de `derive_faixa()`: `≤33` baixo, `≤66` médio, acima disso alto. O dashboard
-usa exatamente os mesmos limiares, então a classificação é a mesma nos dois lados.
-
-#### 8. SHAP → explicação ✅
-
-Sobre a mesma predição, o SHAP decompõe o score em contribuições por feature, agregadas em seis
-grupos: ambiental, geográfico, operacional, equipamento, operador e manutenção.
-
-A soma preserva o **sinal**: contribuição positiva empurra o risco para cima, negativa puxa para
-baixo. É o que permite a leitura *"este equipamento pontuou alto apesar do operador, por causa da
-proximidade de água"* — que é a informação acionável, não o número sozinho.
+> ⚠️ `backend/db/schema.sql` começa com `DROP TABLE` e não contém esta migration. Reexecutá-lo
+> apaga todos os registros, inclusive os de telemetria e a auditoria. Toda mudança de estrutura
+> vai na migration em `supabase/migrations/`, que é idempotente (`ADD COLUMN IF NOT EXISTS`,
+> `CREATE TABLE IF NOT EXISTS`) e não destrói nada.
 
 #### 9. Persistência da predição ✅
 
@@ -576,7 +591,7 @@ O modelo utiliza **XGBoost para regressão**, gerando um score contínuo de risc
 
 ### 6.2 Justificativa do XGBoost
 
-O XGBoost foi escolhido por três razões principais. Primeiro, lida bem com variáveis mistas (numéricas e categóricas) e dados tabulares, que é exatamente o formato do dataset do projeto. Segundo, é robusto a valores faltantes — importante porque equipamentos sem IoT terão campos como `vibracao_g` e `temperatura_motor` ausentes. Terceiro, tem excelente relação entre desempenho preditivo e custo computacional, viabilizando inferência rápida em uma API com recursos limitados (Railway/Render).
+O XGBoost foi escolhido por três razões principais. Primeiro, lida bem com variáveis mistas (numéricas e categóricas) e dados tabulares, que é exatamente o formato do dataset do projeto. Segundo, é robusto a valores faltantes — importante porque equipamentos sem IoT terão campos como `vibracao_g` e `temperatura_motor` ausentes. Terceiro, tem excelente relação entre desempenho preditivo e custo computacional, viabilizando inferência rápida em uma API com recursos limitados.
 
 ### 6.3 Entradas e Saídas
 
@@ -680,7 +695,7 @@ componentes já existiam isolados; o que mudou é que passaram a conversar.
 | Caminho do dado | dashboard lia o Supabase direto pelo SDK | toda leitura passa pela API; nenhum cliente fala com o banco |
 | Segurança | chave do Supabase embutida no bundle do browser; RLS sem policy | JWT por perfil, chave de banco fora do frontend, `service_role` só server-side |
 | Predição | batch offline, gravada por script | em processo, por requisição, com o modelo carregado no startup |
-| Pré-processamento | `preprocess_features()` dentro de `train.py` | extraída para `ml/preprocess.py`; treino e inferência usam a mesma função |
+| Pré-processamento | `preprocess_features()` dentro de `train.py` | extraída para `ml/preprocess.py`; toda inferência passa por ela |
 | Interface | 3 telas lendo o banco | as mesmas 3 telas lendo a API, mais agregação por tipo de operação |
 | Eixos de agregação | equipamento e região | equipamento, região **e operação** — os três que o enunciado pede |
 | Alertas | derivados em memória no cliente | `GET /alertas`, com regra no servidor e parametrizável |
@@ -703,9 +718,8 @@ operação `parado` implicando velocidade zero e `tem_iot=false` implicando `tem
 As faixas de cada campo são validadas, e campo desconhecido é recusado; o que falta é a validação
 entre campos. Está marcada como 🟡 na seção 5.7, em vez de descrita como pronta.
 
-Do lado do dashboard, dois campos aditivos ainda não expostos pela API deixam a Visão Geral
-incompleta: a série temporal que alimentava o gráfico de evolução do score, e `total_operadores`.
-Nenhum dos dois quebra a tela — o gráfico explica que aguarda o campo e o KPI é omitido.
+Do lado do dashboard, a série temporal do gráfico de evolução do score e o KPI
+`total_operadores`, que ficaram pendentes na revisão da tela, já são expostos por `GET /kpis`.
 
 ---
 
@@ -717,9 +731,11 @@ Nenhum dos dois quebra a tela — o gráfico explica que aguarda o campo e o KPI
 Documentação, estrutura do repositório, dataset v1, EDA inicial e primeira suíte de testes.
 
 **Entrega 2 — Modelo, Explicabilidade e Dados** ✅
-Dataset expandido para 37 colunas; XGBoost treinado e validado (MAE 4.72, R² 0.9466, acurácia de
-faixas 88.3%); SHAP por grupo de features; MLflow; Supabase com 4 tabelas e 10.280 registros;
-notebooks de EDA e treinamento; dashboard React com 3 telas.
+Dataset expandido para 37 colunas; XGBoost treinado e validado (na época, MAE 4.72, R² 0.9466,
+acurácia de faixas 88.3%; o retreino da Entrega 3 com versões atualizadas das bibliotecas, mesmo
+dataset e mesma semente, gerou os valores da seção 6.3); SHAP por grupo de features; MLflow;
+Supabase com 4 tabelas e 10.280 registros; notebooks de EDA e treinamento; dashboard React com 3
+telas.
 
 **Entrega 3 — Integração** (esta entrega)
 API integradora FastAPI, autenticação JWT, dashboard religado à API, agregação pelos três eixos e
@@ -730,8 +746,6 @@ documentação do caminho do dado. Estado detalhado na [seção 7](#7-evolução
 | Requisito | O que falta |
 |---|---|
 | RF-05 | Regras de consistência cruzada na validação (`parado` ⇒ velocidade 0, `tem_iot=false` ⇒ motor nulo) |
-| RF-09 | Série temporal e `total_operadores` em `GET /kpis` — dois campos aditivos |
-| RF-13 | Gravação do vídeo |
 | RF-14 | Compartilhar o repositório com `fiap-tutoria` |
 
 ### Próximas etapas
