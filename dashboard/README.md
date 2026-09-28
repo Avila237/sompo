@@ -53,7 +53,7 @@ estava ocupada, acrescente a nova origem lá ou libere a porta.
 | Sino de alertas (topo) | `GET /alertas` | ✅ API |
 | Simulador | `data/mock.ts` | 🔒 "Em breve" |
 | UBI · Prêmios | `data/mock.ts` | 🔒 "Em breve" |
-| Relatórios | `data/mock.ts` | 🔒 "Em breve" |
+| Relatórios (tendência por eixo) | `GET /tendencias` | ✅ API |
 | Persona Corretor | `data/mock.ts` | 🔒 "Em breve" |
 | Persona Técnico | `data/mock.ts` | 🔒 "Em breve" |
 
