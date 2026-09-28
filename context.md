@@ -110,7 +110,6 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 │   ├── seed_supabase.py           ← carga inicial do banco (⚠️ ver Armadilhas)
 │   ├── populate_predictions.py    ← predições do seed; append-only, --reset para limpar
 │   ├── demo.sh                    ← roteiro da demo (só Unix)
-│   └── generate_notebook_*.py, patch_notebook.py  ← one-off, candidatos a remoção (S4-32)
 ├── models/                  features.json · metrics.json versionados; *.joblib gerados localmente
 ├── data/                    figuras EDA/SHAP versionadas; *.parquet e *.csv gerados localmente
 ├── notebooks/               01_eda.ipynb · 02_treinamento.ipynb
@@ -153,7 +152,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
   | `test_api` | `.env` válido e `.joblib`; Supabase e Open-Meteo são mockados |
   | `test_supabase`, `test_predicoes` | Supabase real; são pulados sem `SUPABASE_URL` e a chave `service_role` |
 
-- ⚠️ `test_shap` hoje sobrescreve `models/shap_values.npy` e `data/shap_*.png` versionados. Rode `git status` depois da suíte (corrigido em S4-11).
+- A suíte não pode alterar arquivo versionado: a CI falha se `git diff` não sair vazio depois dos testes. Artefato gerado em teste vai para `tmp_path`.
 - Convenção: teste no mesmo passo da feature; teste de regressão antes do fix; nunca enfraquecer teste para passar.
 
 ## Configuração

@@ -16,6 +16,8 @@ models/*.pkl
 models/*.joblib
 # Metricas de um retreino local; a referencia versionada e models/metrics.json
 models/metrics.local.json
+# Gravado por shap_explainer.run_full_analysis; nada no runtime le
+models/shap_values.npy
 !data/.gitkeep
 !models/.gitkeep
 

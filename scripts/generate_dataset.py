@@ -4,7 +4,7 @@ Gera ~5.000 registros de avaliacoes de risco para equipamentos agricolas.
 Dataset v2: expandido com features de operador (secao 2.7), manutencao (secao 2.8)
 e metadados RAG (secao 2.9).
 
-Spec: docs/data_schema.md
+Spec: docs/data schema.md (secao 4 reproduz a formula abaixo)
 Execucao: python scripts/generate_dataset.py (a partir da raiz do projeto)
 
 === NOTA DE CALIBRACAO DOS PESOS ===
@@ -26,17 +26,18 @@ Calibracao v2 (novas features de operador e manutencao):
   horas_operacao:                   1.20 -> 0.82  (calibrado)
   pct_velocidade_acima_recomendada: 0.12 -> 0.02  (calibrado)
   freq_eventos_bruscos:             0.80 -> 0.10  (calibrado)
-  score_operador_historico:         0.05 -> 0.01  (calibrado)
+  score_operador_historico:         0.05 -> 0.02  (calibrado)
   atraso_manutencao_pct:            8.00 -> 0.60  (calibrado)
   noturno:                          5    -> 4     (calibrado)
   idade_equipamento:                0.40 -> 0.35  (calibrado)
   Interacoes 9/10/11:               10/12/8 -> 4/6/3 (calibrado)
+  ruido gaussiano (sigma):          3    -> 5     (calibrado)
 
 Distribuicao obtida (seed=42): ~39% baixo / ~36% medio / ~25% alto
 
 Adicionado: risco_acumulado = max(0, sinistros-3) * horas * 0.60
   Captura o risco composto: equipamentos acidentados + operacao prolongada.
-  Ex: sinistros=8, horas=12 -> bonus de +30 pontos.
+  Ex: sinistros=8, horas=12 -> bonus de +36 pontos.
 
 Adicionado: horas_operacao correlacionada com tipo_operacao:
   colheita/transporte: gamma(2,5) e gamma(1.5,6) -> media ~10h e ~9h
@@ -516,7 +517,7 @@ def generate_manutencao_features(df):
 
 def calculate_risk_score(df):
     """
-    Aplica a formula da secao 4 do data_schema.md com pesos recalibrados v2.
+    Aplica a formula da secao 4 de docs/data schema.md com pesos recalibrados v2.
     Ver docstring do modulo para detalhes dos ajustes.
     """
     df = df.copy()
@@ -611,7 +612,7 @@ def calculate_risk_score(df):
 # ---------------------------------------------------------------------------
 
 def validate_dataset(df):
-    """Imprime todas as validacoes da secao 5.4 do data_schema.md."""
+    """Imprime todas as validacoes da secao 5.4 de docs/data schema.md."""
 
     def ok(cond):
         return "OK" if cond else "FALHA"
