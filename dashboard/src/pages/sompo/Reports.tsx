@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { WTONE, scoreBand, scoreBandLabel } from '../../lib/risco'
+import { WTONE, faixaDaMedia, rotuloDaMedia } from '../../lib/risco'
 import { loadTendencias, type Eixo, type SerieTendencia } from '../../data/tendencias'
 import { Card, Chip, SectionHeader, Button, ErroCarga, Carregando, FilterSeg } from '../../components/shared'
 import { WIco } from '../../components/Icons'
@@ -96,7 +96,7 @@ export default function SompoReports() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-        <Destaque titulo="Maior score no último ponto" valor={maior ? fmt(maior.fim) : '—'} cor={maior ? WTONE[scoreBand(maior.fim!)].fg : undefined} legenda={maior?.s.rotulo ?? 'sem dados'} />
+        <Destaque titulo="Maior score no último ponto" valor={maior ? fmt(maior.fim) : '—'} cor={maior ? WTONE[faixaDaMedia(maior.fim!)].fg : undefined} legenda={maior?.s.rotulo ?? 'sem dados'} />
         <Destaque titulo="Maior alta no período" valor={alta ? `${alta.variacao! >= 0 ? '+' : '−'}${Math.abs(Math.round(alta.variacao!))}` : '—'} cor={alta && alta.variacao! > 0 ? 'var(--red)' : undefined} legenda={alta?.s.rotulo ?? 'precisa de 2 pontos'} />
         <Destaque titulo="Janela" valor={String(datas.length)} legenda={`dias com dados · ${janela}`} />
       </div>
@@ -119,7 +119,7 @@ export default function SompoReports() {
                   <div key={l.s.chave} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: !foco || foco === l.s.chave ? 1 : 0.4 }}>
                     <span style={{ width: 14, height: 3, borderRadius: 2, background: l.cor, flexShrink: 0 }} />
                     <span style={{ fontSize: 12, flexGrow: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: dados.eixo === 'operacao' ? 'capitalize' : 'none' }}>{l.s.rotulo}</span>
-                    <span className="tabular" style={{ fontSize: 12, fontWeight: 700, color: l.fim !== null ? WTONE[scoreBand(l.fim)].fg : 'var(--fg-mute)' }}>{fmt(l.fim)}</span>
+                    <span className="tabular" style={{ fontSize: 12, fontWeight: 700, color: l.fim !== null ? WTONE[faixaDaMedia(l.fim)].fg : 'var(--fg-mute)' }}>{fmt(l.fim)}</span>
                   </div>
                 ))}
                 <div style={{ marginTop: 'auto', fontSize: 11, color: 'var(--fg-mute)', lineHeight: 1.5 }}>
@@ -156,7 +156,7 @@ export default function SompoReports() {
                   <span className="tabular"><Variacao v={l.variacao} /></span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="tabular">{Math.round(l.s.scoreMedio)}</span>
-                    <Chip state={scoreBand(l.s.scoreMedio)} label={scoreBandLabel(l.s.scoreMedio)} size="sm" />
+                    <Chip state={faixaDaMedia(l.s.scoreMedio)} label={rotuloDaMedia(l.s.scoreMedio)} size="sm" />
                   </span>
                   <span className="tabular" style={{ color: 'var(--fg-dim)' }}>{fmt(l.pico)}</span>
                   <span className="tabular" style={{ color: 'var(--fg-dim)' }}>{l.s.avaliacoes.toLocaleString('pt-BR')}</span>

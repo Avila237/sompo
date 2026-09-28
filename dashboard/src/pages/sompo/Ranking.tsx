@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo } from 'react'
-import { WTONE, scoreBandLabel, SEM_AVALIACAO } from '../../lib/risco'
+import { WTONE, rotuloDaFaixa } from '../../lib/risco'
 import {
   loadEquipamentos,
   type EquipamentoView,
@@ -225,10 +225,10 @@ export default function SompoRanking({
               <div className="mono" style={{ fontSize: 12, color: 'var(--fg-dim)' }}>{eq.operador}</div>
 
               {/* Score */}
-              <ScoreBadge score={eq.score} size="sm" />
+              <ScoreBadge score={eq.score} tone={eq.faixa} size="sm" />
 
               {/* Band chip */}
-              <Chip state={eq.faixa} label={eq.score === null ? SEM_AVALIACAO : scoreBandLabel(eq.score)} size="sm" />
+              <Chip state={eq.faixa} label={rotuloDaFaixa(eq.faixa)} size="sm" />
 
               {/* Aval count */}
               <div className="tabular" style={{ fontSize: 12, color: 'var(--fg-dim)' }}>{eq.avaliacoes}</div>

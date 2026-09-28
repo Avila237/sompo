@@ -1,6 +1,6 @@
 ﻿import { type ReactNode, type CSSProperties } from 'react'
 import type { ToneKey } from '../types'
-import { WTONE, scoreBand } from '../lib/risco'
+import { WTONE, faixaDaMedia } from '../lib/risco'
 
 // Card wrapper
 export function Card({ title, action, children, style = {}, pad = 18 }: {
@@ -33,9 +33,10 @@ export function Chip({ state = 'neut', label, icon, size = 'md' }: {
   )
 }
 
-// Score badge — `null` = equipamento sem avaliação: mostra "—" em tom neutro
-export function ScoreBadge({ score, size = 'md' }: { score: number | null; size?: 'xl' | 'lg' | 'md' | 'sm' }) {
-  const band = score === null ? 'neut' : scoreBand(score)
+// Score badge — o tom vem da `faixa_risco` da API, nunca do número exibido.
+// `null` = equipamento sem avaliação: mostra "—" (passe tone 'neut').
+export function ScoreBadge({ score, tone, size = 'md' }: { score: number | null; tone: ToneKey; size?: 'xl' | 'lg' | 'md' | 'sm' }) {
+  const band = tone
   const color = WTONE[band].fg
   const S = size === 'xl' ? 80 : size === 'lg' ? 48 : size === 'sm' ? 28 : 36
   const FS = size === 'xl' ? 34 : size === 'lg' ? 22 : size === 'sm' ? 13 : 17
@@ -51,7 +52,7 @@ export function ScoreBadge({ score, size = 'md' }: { score: number | null; size?
 
 // Score bar
 export function ScoreBar({ score, height = 8, showLabel = false }: { score: number; height?: number; showLabel?: boolean }) {
-  const band = scoreBand(score)
+  const band = faixaDaMedia(score)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
       <div style={{ flex: 1, height, background: 'var(--bg-elev-2)', borderRadius: height / 2, overflow: 'hidden', position: 'relative' }}>

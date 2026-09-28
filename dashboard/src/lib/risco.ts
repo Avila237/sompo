@@ -1,6 +1,14 @@
 /**
  * Tons e faixas de risco usados pelas telas reais.
- * Limiares iguais ao `derive_faixa` do backend: <=33 baixo, <=66 medio, senao alto.
+ *
+ * Score de UMA avaliação/equipamento: use a `faixa_risco` que a API devolve
+ * (`faixaToTone` em data/api.ts + `rotuloDaFaixa`). Nunca reclassifique: a faixa
+ * vem do score cru e o score devolvido tem duas casas — 33,004 volta como 33.0
+ * com faixa "medio" (contrato-api.md, armadilha 4).
+ *
+ * `faixaDaMedia` / `rotuloDaMedia` existem só para MÉDIAS agregadas (KPIs,
+ * regiões, operações, séries), que não têm faixa gravada. Limiares iguais ao
+ * `derive_faixa` do backend: <=33 baixo, <=66 medio, senao alto.
  */
 import type { ToneKey, Tone } from '../types'
 
@@ -12,12 +20,17 @@ export const WTONE: Record<ToneKey, Tone> = {
   info: { fg: '#6EB9FF', bg: 'rgba(110,185,255,0.08)', ring: 'rgba(110,185,255,0.25)' },
 }
 
-export function scoreBand(s: number): ToneKey {
+export function faixaDaMedia(s: number): ToneKey {
   return s <= 33 ? 'safe' : s <= 66 ? 'warn' : 'crit'
 }
 
-export function scoreBandLabel(s: number): string {
+export function rotuloDaMedia(s: number): string {
   return s <= 33 ? 'BAIXO' : s <= 66 ? 'MÉDIO' : 'ALTO'
+}
+
+/** Rótulo da faixa que a API devolveu (já convertida em tom). */
+export function rotuloDaFaixa(tone: ToneKey): string {
+  return tone === 'safe' ? 'BAIXO' : tone === 'warn' ? 'MÉDIO' : tone === 'crit' ? 'ALTO' : SEM_AVALIACAO
 }
 
 /** Rótulo de equipamento sem nenhuma avaliação — nunca exibir como score 0 / "baixo". */
