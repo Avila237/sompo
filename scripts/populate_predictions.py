@@ -12,7 +12,6 @@ import argparse
 import os
 import sys
 
-import numpy as np
 import pandas as pd
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -147,18 +146,18 @@ def main():
 
     print("\n" + "=" * 60)
     print(f"Total inserido: {total_inserted}")
-    print(f"\nDistribuicao das faixas preditas:")
+    print("\nDistribuicao das faixas preditas:")
     for f in ("baixo", "medio", "alto"):
         pct = dist[f] / len(faixas) * 100
         print(f"  {f}: {dist[f]} ({pct:.1f}%)")
 
     example = records[0]
-    print(f"\nExemplo de registro (primeiro):")
+    print("\nExemplo de registro (primeiro):")
     print(f"  avaliacao_id: {example['avaliacao_id']}")
     print(f"  risco_score_predito: {example['risco_score_predito']}")
     print(f"  faixa_predita: {example['faixa_predita']}")
     print(f"  modelo_versao: {example['modelo_versao']}")
-    print(f"  top_fatores_shap:")
+    print("  top_fatores_shap:")
     for fator in example["top_fatores_shap"]:
         print(f"    {fator['feature']:<40} shap={fator['shap_value']:+.3f}  grupo={fator['group']}")
     print("=" * 60)

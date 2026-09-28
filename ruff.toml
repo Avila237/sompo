@@ -1,0 +1,13 @@
+# Lint do backend, scripts e testes. Conjunto enxuto de proposito: erros que
+# quebram (F: nome indefinido, import sem uso, redefinicao; E9: sintaxe) e um
+# teto de complexidade por funcao. Estilo nao e gate.
+target-version = "py313"
+extend-exclude = ["notebooks"]
+
+[lint]
+select = ["F", "E9", "C901"]
+
+[lint.mccabe]
+# 12 e o maximo atual (generate_operacionais). O teto impede crescer; baixar
+# para 10 exige quebrar as duas funcoes do gerador acima dele.
+max-complexity = 12

@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Um run por branch: um push novo cancela o anterior do mesmo PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      # Valores de teste: nenhum teste desta job toca o Supabase (os marcados
+      # com 'rede' sao excluidos) nem a Open-Meteo (mockada em test_api).
+      SUPABASE_URL: http://supabase.invalid
+      SUPABASE_SERVICE_ROLE_KEY: ci-fake-key
+      DEMO_USERS: analista:ci:analista
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Instalar dependencias
+        run: pip install -r backend/requirements.txt ruff==0.16.9 pip-audit==2.10.1
+
+      - name: Lint
+        run: ruff check backend scripts tests
+
+      - name: Auditoria de dependencias
+        run: pip-audit -r backend/requirements.txt
+
+      - name: Gerar dataset e treinar
+        # O treino grava em models/metrics.local.json; a referencia versionada nao muda.
+        run: |
+          python scripts/generate_dataset.py
+          python backend/ml/train.py
+
+      - name: Testes
+        run: |
+          export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+          pytest -m "not seed and not rede"
+
+      - name: Arvore limpa depois dos testes
+        # A suite nao pode sobrescrever arquivos versionados.
+        run: git diff --exit-code
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - name: Build (inclui tsc)
+        run: npm run build
+      - name: Auditoria de dependencias
+        run: npm audit --audit-level=high
