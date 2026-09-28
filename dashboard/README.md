@@ -51,7 +51,7 @@ estava ocupada, acrescente a nova origem lá ou libere a porta.
 | Equipamentos (ranking) | `GET /equipamentos` | ✅ API |
 | Detalhe do equipamento | `GET /equipamentos/{id}` | ✅ API |
 | Sino de alertas (topo) | `GET /alertas` | ✅ API |
-| Simulador | `data/mock.ts` | 🔒 "Em breve" |
+| Simulador | dados fixos no componente | 🔒 "Em breve" |
 | UBI · Prêmios | `data/mock.ts` | 🔒 "Em breve" |
 | Relatórios (tendência por eixo) | `GET /tendencias` | ✅ API |
 | Persona Corretor | `data/mock.ts` | 🔒 "Em breve" |
