@@ -317,6 +317,8 @@ export interface PredicaoRow {
   faixa_predita: string
   top_fatores_shap: ShapFactor[]
   modelo_versao: string
+  // Soma dos 30 SHAP por grupo; null nas predicoes do seed (anteriores a coluna)
+  contribuicoes_por_grupo?: Record<string, number> | null
 }
 
 export interface AvaliacaoFull {

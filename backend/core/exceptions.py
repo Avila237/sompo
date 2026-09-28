@@ -38,6 +38,16 @@ class LeituraInconsistente(SafeFieldError):
         super().__init__(self.mensagem)
 
 
+class LeituraReutilizada(SafeFieldError):
+    """Mesmo leitura_id reenviado com outro payload: nao e retry, e conflito."""
+
+    status_code = 409
+
+    def __init__(self, leitura_id: str | None):
+        self.mensagem = f"leitura_id {leitura_id} ja foi usado com outro payload."
+        super().__init__(self.mensagem)
+
+
 class ModeloIndisponivel(SafeFieldError):
     status_code = 503
     mensagem = "Modelo preditivo indisponivel. Verifique os artefatos em models/."

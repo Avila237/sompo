@@ -1,7 +1,8 @@
 ﻿"""
 Seed do Supabase — popula equipamentos, operadores e avaliacoes.
 
-PREREQUISITO: rode backend/db/schema.sql no SQL Editor do Supabase ANTES deste script.
+PREREQUISITO: no SQL Editor do Supabase, rode backend/db/schema.sql e depois
+cada arquivo de supabase/migrations/, em ordem de nome, ANTES deste script.
 
 Uso:
     python scripts/seed_supabase.py          # com confirmacao
@@ -107,8 +108,8 @@ def main():
     print("SafeField -- Seed do Supabase")
     print("=" * 60)
     print()
-    print("PREREQUISITO: Rode o SQL de backend/db/schema.sql no")
-    print("SQL Editor do Supabase ANTES de executar este script.")
+    print("PREREQUISITO: no SQL Editor do Supabase, rode backend/db/schema.sql")
+    print("e depois cada arquivo de supabase/migrations/, em ordem de nome.")
     print()
 
     if not args.force:

@@ -1,7 +1,7 @@
 ﻿import { useMemo } from 'react'
 import { WTONE, rotuloDaFaixa, SEM_AVALIACAO } from '../../lib/risco'
 import { loadEquipamentoDetail, faixaToTone, type ShapFactor } from '../../data/api'
-import { aggregateShapByGroup, featureLabel, SHAP_GROUP_META, type GrupoShap } from '../../data/shap'
+import { gruposDaPredicao, featureLabel, SHAP_GROUP_META, type GrupoShap } from '../../data/shap'
 import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga, Carregando } from '../../components/shared'
 import { useCarga } from '../../lib/useCarga'
 import { fmtData } from '../../lib/formato'
@@ -55,7 +55,7 @@ export default function SompoDetail({ equipId, onBack }: { equipId: string | nul
   const detail = carga.dados
 
   const shapGroups = useMemo<GrupoShap[]>(
-    () => (detail?.predicao ? aggregateShapByGroup(detail.predicao.top_fatores_shap) : []),
+    () => (detail?.predicao ? gruposDaPredicao(detail.predicao) : []),
     [detail],
   )
   const topFactors = useMemo<ShapFactor[]>(
