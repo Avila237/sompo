@@ -57,7 +57,10 @@ export function TrendChart({ pontos }: { pontos: TendenciaPonto[] }) {
 
         {/* Eixo com a data real do ponto: os pontos são dias com dados, não dias corridos */}
         <text x={PAD.l} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight">{fmtDiaIso(pontos[0].dia)}</text>
-        <text x={PAD.l + cw / 2} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="middle">{fmtDiaIso(pontos[Math.floor((pontos.length - 1) / 2)].dia)}</text>
+        {/* com 2 pontos o "meio" é o primeiro: o rótulo se sobreporia */}
+        {pontos.length >= 3 && (
+          <text x={PAD.l + cw / 2} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="middle">{fmtDiaIso(pontos[Math.floor((pontos.length - 1) / 2)].dia)}</text>
+        )}
         <text x={W - PAD.r} y={H - 4} fill="var(--fg-mute)" fontSize="9" fontFamily="Inter Tight" textAnchor="end">{fmtDiaIso(pontos[pontos.length - 1].dia)}</text>
       </svg>
 
