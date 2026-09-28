@@ -18,7 +18,6 @@ jobs:
       # com 'rede' sao excluidos) nem a Open-Meteo (mockada em test_api).
       SUPABASE_URL: http://supabase.invalid
       SUPABASE_SERVICE_ROLE_KEY: ci-fake-key
-      DEMO_USERS: analista:ci:analista
       MLFLOW_DISABLE_AGENT_HINT: "1"
     steps:
       - uses: actions/checkout@v4
@@ -71,5 +70,8 @@ jobs:
       - run: npm run lint
       - name: Build (inclui tsc)
         run: npm run build
+        env:
+          # O build exige a variavel: e dela que sai o connect-src da CSP.
+          VITE_API_BASE_URL: http://localhost:8000
       - name: Auditoria de dependencias
         run: npm audit --audit-level=high

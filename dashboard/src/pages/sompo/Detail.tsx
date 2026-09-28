@@ -1,7 +1,7 @@
 ﻿import { useMemo } from 'react'
 import { WTONE, rotuloDaFaixa, SEM_AVALIACAO } from '../../lib/risco'
 import { loadEquipamentoDetail, faixaToTone, type ShapFactor } from '../../data/api'
-import { aggregateShapByGroup, featureLabel, SHAP_GROUP_META, type GrupoShap } from '../../data/shap'
+import { gruposDaPredicao, featureLabel, SHAP_GROUP_META, type GrupoShap } from '../../data/shap'
 import { Card, Chip, ScoreBadge, Trend, Sparkline, Button, ErroCarga, Carregando } from '../../components/shared'
 import { useCarga } from '../../lib/useCarga'
 import { fmtData } from '../../lib/formato'
@@ -61,7 +61,7 @@ export default function SompoDetail({ equipId, onBack, publico = null }: {
   const detail = carga.dados
 
   const shapGroups = useMemo<GrupoShap[]>(
-    () => (detail?.predicao ? aggregateShapByGroup(detail.predicao.top_fatores_shap) : []),
+    () => (detail?.predicao ? gruposDaPredicao(detail.predicao) : []),
     [detail],
   )
   const topFactors = useMemo<ShapFactor[]>(
@@ -153,7 +153,7 @@ export default function SompoDetail({ equipId, onBack, publico = null }: {
             <span style={{ textTransform: 'capitalize' }}>{equipamento.tipo_equipamento}</span>
             <span>{equipamento.idade_equipamento} anos</span>
             <span>{equipamento.historico_sinistros} sinistro(s)</span>
-            {ultima && <span className="mono">{ultima.operador_id}</span>}
+            {ultima && <span className="mono">{ultima.operador_id ?? '—'}</span>}
             {ultima && <span>última aval. {fmtData(ultima.timestamp)}</span>}
           </div>
         </div>
@@ -190,7 +190,11 @@ export default function SompoDetail({ equipId, onBack, publico = null }: {
                 <div style={{ fontSize: 12, color: 'var(--fg-dim)', marginBottom: 14 }}>
                   Score real <strong style={{ color: WTONE[band].fg }}>{score === null ? '—' : Math.round(score)}</strong>
                   {' · '}predito <strong style={{ color: 'var(--fg)' }}>{Math.round(predicao.risco_score_predito)}</strong>
-                  {'  ·  '}+ aumenta risco / − reduz (soma dos top 5 fatores por grupo)
+                  {'  ·  '}+ aumenta risco / − reduz
+                  {/* Predicoes do seed nao tem a decomposicao completa gravada: ali o grupo e aproximado pelos top 5. */}
+                  {predicao.contribuicoes_por_grupo
+                    ? ' (todos os fatores, somados por grupo)'
+                    : ' (aproximação: soma dos top 5 fatores por grupo)'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {shapGroups.map((g) => (
@@ -314,10 +318,10 @@ export default function SompoDetail({ equipId, onBack, publico = null }: {
             <Card title="Operador atual">
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--bg-elev-2)', border: '2px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: 'var(--fg-dim)' }}>
-                  {ultima.operador_id.slice(-2)}
+                  {(ultima.operador_id ?? '—').slice(-2)}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>{ultima.operador_id}</div>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>{ultima.operador_id ?? 'outro operador'}</div>
                   <div style={{ fontSize: 12, color: 'var(--fg-dim)' }}>Score histórico {Math.round(ultima.score_operador_historico)}</div>
                 </div>
                 {noturno && <Chip state="warn" label="operação noturna" size="sm" />}

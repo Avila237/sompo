@@ -61,39 +61,10 @@ JWT_SECRET_KEY = validar_segredo_jwt(os.getenv("JWT_SECRET_KEY"))
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "480"))
 
-PERFIS_VALIDOS = ("operador", "gestor", "analista")
-
-
-def _parse_demo_users(bruto: str) -> dict[str, dict[str, str]]:
-    """
-    Formato: usuario:senha:perfil,usuario:senha:perfil
-
-    Divida 14: credenciais em variavel de ambiente, sem tabela de usuarios com
-    hash. Registrado como divida D1 em docs/spec-implementacao-entrega-03.md.
-    """
-    usuarios: dict[str, dict[str, str]] = {}
-    for entrada in bruto.split(","):
-        entrada = entrada.strip()
-        if not entrada:
-            continue
-        partes = entrada.split(":")
-        if len(partes) != 3:
-            raise ValueError(
-                f"DEMO_USERS malformado em '{entrada}': esperado usuario:senha:perfil"
-            )
-        usuario, senha, perfil = (p.strip() for p in partes)
-        if perfil not in PERFIS_VALIDOS:
-            raise ValueError(
-                f"Perfil invalido '{perfil}' para o usuario '{usuario}'. "
-                f"Validos: {', '.join(PERFIS_VALIDOS)}"
-            )
-        usuarios[usuario] = {"senha": senha, "perfil": perfil}
-    if not usuarios:
-        raise ValueError("DEMO_USERS nao definiu nenhum usuario.")
-    return usuarios
-
-
-DEMO_USERS = _parse_demo_users(_req("DEMO_USERS"))
+# Usuarios e senhas vivem na tabela `usuarios` (S4-18), nao em variavel de
+# ambiente. Cadastro: scripts/criar_usuario.py. O que cada perfil acessa esta
+# em docs/contrato-api.md (matriz perfil x rota).
+PERFIS_VALIDOS = ("analista", "gestor", "tecnico", "operador")
 
 # --- API externa ----------------------------------------------------------
 OPENMETEO_BASE_URL = os.getenv("OPENMETEO_BASE_URL", "https://api.open-meteo.com/v1")

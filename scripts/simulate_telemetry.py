@@ -10,20 +10,24 @@ Uso:
     python scripts/simulate_telemetry.py --n 10
     python scripts/simulate_telemetry.py --n 5 --intervalo 2 --cenario critico
     python scripts/simulate_telemetry.py --n 3 --sem-clima-externo
+
+A senha do usuario e pedida no terminal, sem eco. Para rodar sem pergunta
+(ex.: scripts/demo.sh), defina SAFEFIELD_SENHA so no ambiente do processo.
 """
 
 import argparse
+import getpass
 import os
 import random
 import sys
 import time
+import uuid
 
 import requests
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
-from backend.core import config  # noqa: E402
 from backend.db import repository as repo  # noqa: E402
 from backend.services.clima import derivar_condicao_clima, derivar_umidade_solo  # noqa: E402
 
@@ -129,8 +133,9 @@ def main() -> None:
     p.add_argument("--n", type=int, default=5, help="quantidade de leituras")
     p.add_argument("--intervalo", type=float, default=1.0, help="segundos entre envios")
     p.add_argument("--api", default="http://localhost:8000")
-    p.add_argument("--usuario", default="operador")
-    p.add_argument("--senha", default=None, help="por padrao, le do .env")
+    # analista: pela matriz de perfis (S4-18), e quem envia por qualquer
+    # operador. Um usuario operador so enviaria em nome proprio.
+    p.add_argument("--usuario", default="analista")
     p.add_argument(
         "--cenario", choices=["normal", "critico"], default="normal",
         help="'critico' gera operacao noturna, perto de agua e manutencao atrasada",
@@ -145,9 +150,8 @@ def main() -> None:
     if args.seed is not None:
         random.seed(args.seed)
 
-    senha = args.senha or config.DEMO_USERS.get(args.usuario, {}).get("senha")
-    if not senha:
-        raise SystemExit(f"Usuario '{args.usuario}' nao esta em DEMO_USERS.")
+    # Nunca por argumento: ficaria no historico do shell e na lista de processos.
+    senha = os.getenv("SAFEFIELD_SENHA") or getpass.getpass(f"Senha de {args.usuario}: ")
 
     print("=" * 62)
     print("SafeField — Simulador de Telemetria")
@@ -181,16 +185,23 @@ def main() -> None:
                 "condicao_clima": derivar_condicao_clima(chuva),
             })
 
-        try:
-            r = requests.post(
-                f"{args.api}/avaliacoes", json=leitura, headers=cabecalho, timeout=30
-            )
-        except requests.RequestException as e:
+        # Chave gerada antes do primeiro envio e reusada no retry: se a rede
+        # cair depois de a API gravar, o reenvio nao duplica a leitura.
+        leitura["leitura_id"] = str(uuid.uuid4())
+        r = None
+        for tentativa in (1, 2):
+            try:
+                r = requests.post(
+                    f"{args.api}/avaliacoes", json=leitura, headers=cabecalho, timeout=30
+                )
+                break
+            except requests.RequestException as e:
+                print(f"  [{i}/{args.n}] falha de rede (tentativa {tentativa}): {e}")
+        if r is None:
             falhas += 1
-            print(f"  [{i}/{args.n}] FALHA de rede: {e}")
             continue
 
-        if r.status_code == 201:
+        if r.status_code in (200, 201):
             d = r.json()
             enviadas += 1
             marca = {"baixo": "  ", "medio": "! ", "alto": "!!"}[d["faixa_risco"]]

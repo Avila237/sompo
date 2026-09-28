@@ -2,7 +2,7 @@
 import TopBar from './components/TopBar'
 import SideNav from './components/SideNav'
 import { WIco } from './components/Icons'
-import { loadEquipamentos, logout } from './data/api'
+import { assinarEquipamentos, loadEquipamentos, logout } from './data/api'
 import { getSessao, assinarSessao, type Sessao } from './lib/auth'
 import Login from './components/Login'
 import { ComingSoon } from './components/ComingSoon'
@@ -53,15 +53,15 @@ function Shell({ perfil, usuario }: { perfil: Perfil; usuario?: string }) {
   const [equipCount, setEquipCount] = useState<number | undefined>(undefined)
 
   useEffect(() => {
-    let ativo = true
-    loadEquipamentos()
-      .then((eqs) => { if (ativo) setEquipCount(eqs.length) })
-      .catch((e) => {
-        // O contador do menu fica vazio; a mensagem para o usuario sai na
-        // propria tela, que faz a mesma chamada.
-        console.error('Falha ao carregar contagem de equipamentos:', e)
-      })
-    return () => { ativo = false }
+    // Qualquer carga bem-sucedida da lista atualiza o contador, inclusive a de um
+    // "Tentar de novo" depois de a API voltar
+    const cancelar = assinarEquipamentos((eqs) => setEquipCount(eqs.length))
+    loadEquipamentos().catch((e) => {
+      // O contador fica vazio até a próxima carga; a mensagem para o usuário
+      // sai na própria tela, que faz a mesma chamada.
+      console.error('Falha ao carregar contagem de equipamentos:', e)
+    })
+    return cancelar
   }, [])
 
   const menu = cfg.menu.map((k) => ({

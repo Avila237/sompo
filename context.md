@@ -36,13 +36,14 @@ Fluxo de `POST /avaliacoes` (`backend/services/scoring.py`):
 
 1. JWT
 2. Validação Pydantic (`extra="forbid"`)
-3. Busca do equipamento e do operador no cadastro (404 se não existem)
-4. Clima via Open-Meteo, com o payload como fallback
-5. Derivação da manutenção (Regra 14)
-6. Predição e SHAP
-7. Gravação da avaliação
-8. Gravação da predição (se falhar, a avaliação é removida)
-9. Auditoria
+3. Autorização por perfil (403)
+4. Reenvio por `leitura_id`: mesmo payload devolve o resultado original (200); outro payload, 409
+5. Busca do equipamento e do operador no cadastro (404 se não existem)
+6. Clima via Open-Meteo, com o payload como fallback
+7. Derivação da manutenção (Regra 14)
+8. Predição e SHAP
+9. Gravação atômica de avaliação e predição, numa transação só (`registrar_avaliacao`)
+10. Auditoria
 
 A predição acontece **antes** de gravar.
 
@@ -68,7 +69,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 |---|---|---|
 | Backend / API | FastAPI + Uvicorn, Python **3.13** | em uso |
 | Validação | Pydantic 2 | em uso |
-| Autenticação | JWT próprio (`python-jose`), perfis `operador` · `gestor` · `analista` | em uso |
+| Autenticação | JWT próprio (PyJWT) + tabela `usuarios` com hash scrypt; perfis `analista` · `gestor` · `tecnico` · `operador`, com recorte por rota | em uso |
 | Modelo | XGBoost (regressão) + SHAP | em uso |
 | Rastreabilidade ML | MLflow, experimento `safefield-xgboost`, store local `mlruns/` | em uso |
 | Banco | Supabase (PostgreSQL + RLS), projeto `sompo` | em uso |
@@ -91,10 +92,10 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 │   ├── api/                 main.py · deps.py · schemas.py · routers/{auth,avaliacoes,consultas,health}.py
 │   ├── services/            scoring.py · consultas.py · clima.py · auditoria.py
 │   ├── ml/                  preprocess.py · predictor.py · shap_explainer.py · train.py · mlflow_tracking.py
-│   ├── db/                  repository.py · supabase_client.py · schema.sql (⚠️ ver Armadilhas)
+│   ├── db/                  repository.py · supabase_client.py
 │   ├── core/                config.py · security.py · logging.py · exceptions.py
 │   └── requirements.txt
-├── supabase/migrations/     ← toda mudança de estrutura do banco entra aqui
+├── supabase/migrations/     ← o banco inteiro: aplicadas em ordem (a primeira é a migration de base); toda mudança de estrutura entra aqui
 ├── dashboard/
 │   ├── .env.example         ← só VITE_API_BASE_URL
 │   └── src/
@@ -161,7 +162,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY` (aceita `SUPABASE_KEY` como fallback)
   - `JWT_SECRET_KEY`
-  - `DEMO_USERS` (`usuario:senha:perfil,...`)
+- Usuários: tabela `usuarios` (migration `20260928130000`), cadastro por `scripts/criar_usuario.py`. Nenhuma credencial no `.env`.
 - Dashboard: `dashboard/.env.local` com `VITE_API_BASE_URL` apenas.
 - `JWT_SECRET_KEY` com menos de 32 bytes impede a API de subir, de propósito: os placeholders do `.env.example` são curtos para que copiar o exemplo sem trocar falhe alto.
 - `service_role` é superusuário do banco: só no servidor, nunca no frontend, nunca versionada.
@@ -170,8 +171,8 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 
 | Estado | Neutralização |
 |---|---|
-| Vontade de rodar `backend/db/schema.sql` | **Não.** Começa com `DROP TABLE` e não contém a migration da E3. Toda mudança de estrutura vai em `supabase/migrations/`, aditiva e idempotente |
-| `seed_supabase.py` manda rodar `schema.sql` primeiro | Mesmo caso. Não seguir até a S4-13 corrigir |
+| Vontade de criar ou alterar tabela com SQL avulso | **Não.** O banco sai de `supabase/migrations/` aplicadas em ordem (a primeira é a migration de base). Toda mudança de estrutura vai numa migration nova, aditiva e idempotente |
+| Rodar `seed_supabase.py` num banco vazio | Antes, `supabase/migrations/` aplicadas em ordem (a primeira é a migration de base) |
 | Supabase não responde | O projeto pausa por inatividade. Reative no painel antes de diagnosticar código |
 | Python 3.14 | `xgboost`/`shap`/`numpy` sem wheel. Use 3.13 (`.python-version`) |
 | Retreino dá métricas diferentes do `metrics.json` | Esperado entre plataformas. Não sobrescreva a referência sem `--referencia` deliberado |

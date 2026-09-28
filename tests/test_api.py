@@ -20,8 +20,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from backend.api.main import app  # noqa: E402
-from backend.core import config  # noqa: E402
 from backend.core.security import criar_token  # noqa: E402
+from tests.conftest import SENHAS  # noqa: E402
 
 # raise_server_exceptions=False: queremos observar o 500 que o handler produz,
 # nao a excecao crua propagada pelo TestClient.
@@ -116,12 +116,11 @@ class TestAutenticacao:
         assert r.status_code == 401
 
     def test_credencial_correta_devolve_token(self):
-        usuario, dados = next(iter(config.DEMO_USERS.items()))
-        r = client.post("/auth/token", json={"usuario": usuario, "senha": dados["senha"]})
+        r = client.post("/auth/token", json={"usuario": "analista", "senha": SENHAS["analista"]})
         assert r.status_code == 200
         corpo = r.json()
         assert corpo["token_type"] == "bearer"
-        assert corpo["perfil"] == dados["perfil"]
+        assert corpo["perfil"] == "analista"
         assert corpo["access_token"]
 
 
@@ -145,7 +144,7 @@ class TestValidacao:
         ],
     )
     def test_payload_invalido_rejeitado_sem_persistir(self, auth, campo, valor):
-        with patch("backend.db.repository.inserir_avaliacao") as inserir:
+        with patch("backend.db.repository.registrar_avaliacao") as inserir:
             r = client.post("/avaliacoes", json={**LEITURA_VALIDA, campo: valor}, headers=auth)
         assert r.status_code == 422, f"{campo}={valor} deveria ser rejeitado"
         inserir.assert_not_called()
@@ -153,7 +152,7 @@ class TestValidacao:
     def test_campo_derivado_e_recusado(self, auth):
         """faixa_risco e atraso_manutencao_pct sao derivados: o cliente nao os define."""
         for campo, valor in (("faixa_risco", "baixo"), ("atraso_manutencao_pct", 0.1)):
-            with patch("backend.db.repository.inserir_avaliacao") as inserir:
+            with patch("backend.db.repository.registrar_avaliacao") as inserir:
                 r = client.post(
                     "/avaliacoes", json={**LEITURA_VALIDA, campo: valor}, headers=auth
                 )
@@ -178,7 +177,7 @@ def _post_com_cadastro(auth, leitura, equipamento=EQUIPAMENTO_FALSO):
     with patch("backend.services.scoring.repo") as repo_mock,          patch("backend.services.clima.buscar", return_value=CLIMA_FALSO),          patch("backend.services.auditoria.registrar"):
         repo_mock.buscar_equipamento.return_value = equipamento
         repo_mock.operador_existe.return_value = True
-        repo_mock.inserir_avaliacao.return_value = 1
+        repo_mock.registrar_avaliacao.return_value = (1, False)
         r = client.post("/avaliacoes", json=leitura, headers=auth)
     return r, repo_mock
 
@@ -190,7 +189,7 @@ class TestConsistenciaCruzada:
         r, repo_mock = _post_com_cadastro(auth, leitura)
         assert r.status_code == 422
         assert "parado" in r.text
-        repo_mock.inserir_avaliacao.assert_not_called()
+        repo_mock.registrar_avaliacao.assert_not_called()
 
     def test_parado_com_velocidade_zero_e_aceito(self, auth):
         leitura = {**LEITURA_VALIDA, "tipo_operacao": "parado", "velocidade_kmh": 0.0}
@@ -217,7 +216,7 @@ class TestConsistenciaCruzada:
         r, repo_mock = _post_com_cadastro(auth, leitura)
         assert r.status_code == 422, f"{precipitacao} mm + {condicao} deveria ser recusado"
         assert "condicao_clima" in r.text
-        repo_mock.inserir_avaliacao.assert_not_called()
+        repo_mock.registrar_avaliacao.assert_not_called()
 
     @pytest.mark.parametrize(
         "precipitacao,condicao",
@@ -255,7 +254,7 @@ class TestConsistenciaCruzada:
         r, repo_mock = _post_com_cadastro(auth, LEITURA_VALIDA, equipamento=cadastro)
         assert r.status_code == 422
         assert "temperatura_motor" in r.json()["detail"]
-        repo_mock.inserir_avaliacao.assert_not_called()
+        repo_mock.registrar_avaliacao.assert_not_called()
 
     def test_equipamento_sem_iot_sem_temperatura_motor_e_aceito(self, auth):
         leitura = {k: v for k, v in LEITURA_VALIDA.items() if k != "temperatura_motor"}
@@ -275,7 +274,7 @@ class TestScoring:
              patch("backend.services.auditoria.registrar"):
             repo_mock.buscar_equipamento.return_value = EQUIPAMENTO_FALSO
             repo_mock.operador_existe.return_value = True
-            repo_mock.inserir_avaliacao.return_value = 4242
+            repo_mock.registrar_avaliacao.return_value = (4242, False)
             r = client.post("/avaliacoes", json=LEITURA_VALIDA, headers=auth)
         assert r.status_code == 201, r.text
         return r.json()
@@ -314,15 +313,20 @@ class TestScoring:
              patch("backend.services.auditoria.registrar"):
             repo_mock.buscar_equipamento.return_value = EQUIPAMENTO_FALSO
             repo_mock.operador_existe.return_value = True
-            repo_mock.inserir_avaliacao.return_value = 4242
+            repo_mock.registrar_avaliacao.return_value = (4242, False)
             client.post("/avaliacoes", json=LEITURA_VALIDA, headers=auth)
 
-            repo_mock.inserir_avaliacao.assert_called_once()
-            repo_mock.inserir_predicao.assert_called_once()
-            predicao = repo_mock.inserir_predicao.call_args[0][0]
-            assert predicao["avaliacao_id"] == 4242
+            # Avaliacao e predicao numa chamada so: a funcao SQL grava as duas
+            # na mesma transacao e liga a predicao ao avaliacao_id gerado.
+            repo_mock.registrar_avaliacao.assert_called_once()
+            avaliacao, predicao = repo_mock.registrar_avaliacao.call_args[0]
+            assert avaliacao["equipamento_id"] == LEITURA_VALIDA["equipamento_id"]
+            assert "avaliacao_id" not in predicao
             assert predicao["modelo_versao"]
             assert len(predicao["top_fatores_shap"]) == 5
+            assert set(predicao["contribuicoes_por_grupo"]) == {
+                "ambiental", "geografico", "operacional", "equipamento", "operador", "manutencao",
+            }
 
     def test_grava_procedencia_do_dado(self, auth):
         with patch("backend.services.scoring.repo") as repo_mock, \
@@ -330,9 +334,9 @@ class TestScoring:
              patch("backend.services.auditoria.registrar"):
             repo_mock.buscar_equipamento.return_value = EQUIPAMENTO_FALSO
             repo_mock.operador_existe.return_value = True
-            repo_mock.inserir_avaliacao.return_value = 1
+            repo_mock.registrar_avaliacao.return_value = (1, False)
             client.post("/avaliacoes", json=LEITURA_VALIDA, headers=auth)
-            linha = repo_mock.inserir_avaliacao.call_args[0][0]
+            linha = repo_mock.registrar_avaliacao.call_args[0][0]
         assert linha["fonte"] == "telemetria"
         assert linha["clima_origem"] == "open-meteo"
 
@@ -343,9 +347,9 @@ class TestScoring:
              patch("backend.services.auditoria.registrar"):
             repo_mock.buscar_equipamento.return_value = EQUIPAMENTO_FALSO
             repo_mock.operador_existe.return_value = True
-            repo_mock.inserir_avaliacao.return_value = 1
+            repo_mock.registrar_avaliacao.return_value = (1, False)
             client.post("/avaliacoes", json=LEITURA_VALIDA, headers=auth)
-            linha = repo_mock.inserir_avaliacao.call_args[0][0]
+            linha = repo_mock.registrar_avaliacao.call_args[0][0]
         assert linha["atraso_manutencao_pct"] == pytest.approx(0.667, abs=0.001)
         assert linha["manutencao_atrasada"] is False
 
@@ -361,7 +365,7 @@ class TestResilienciaClima:
              patch("backend.services.auditoria.registrar"):
             repo_mock.buscar_equipamento.return_value = EQUIPAMENTO_FALSO
             repo_mock.operador_existe.return_value = True
-            repo_mock.inserir_avaliacao.return_value = 1
+            repo_mock.registrar_avaliacao.return_value = (1, False)
             r = client.post(
                 "/avaliacoes",
                 json={**LEITURA_VALIDA, **CLIMA_FALSO},
@@ -379,17 +383,19 @@ class TestResilienciaClima:
             repo_mock.operador_existe.return_value = True
             r = client.post("/avaliacoes", json=LEITURA_VALIDA, headers=auth)
         assert r.status_code == 502
-        repo_mock.inserir_avaliacao.assert_not_called()
+        repo_mock.registrar_avaliacao.assert_not_called()
 
-    def test_predicao_falha_reverte_avaliacao(self, auth):
-        """RF-03: o registro nao pode ficar orfao, sem predicao."""
+    def test_falha_na_gravacao_audita_e_nao_compensa_na_mao(self, auth):
+        """
+        RF-03: a funcao SQL grava avaliacao e predicao numa transacao; se ela
+        falhar, o banco desfaz tudo. A API nao tenta mais apagar nada.
+        """
         with patch("backend.services.scoring.repo") as repo_mock, \
              patch("backend.services.clima.buscar", return_value=CLIMA_FALSO), \
-             patch("backend.services.auditoria.registrar"):
+             patch("backend.services.auditoria.registrar") as auditoria:
             repo_mock.buscar_equipamento.return_value = EQUIPAMENTO_FALSO
             repo_mock.operador_existe.return_value = True
-            repo_mock.inserir_avaliacao.return_value = 999
-            repo_mock.inserir_predicao.side_effect = RuntimeError("banco caiu")
+            repo_mock.registrar_avaliacao.side_effect = RuntimeError("banco caiu")
             r = client.post("/avaliacoes", json=LEITURA_VALIDA, headers=auth)
         assert r.status_code == 500
-        repo_mock.remover_avaliacao.assert_called_once_with(999)
+        assert [c.args[3] for c in auditoria.call_args_list] == ["erro"]

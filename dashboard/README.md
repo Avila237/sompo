@@ -5,7 +5,7 @@ com o banco: toda leitura passa pela API do backend (FastAPI), autenticada por J
 
 ## Pré-requisitos
 
-- **Node.js** `20.19+` ou `22.12+` (exigência do Vite 8)
+- **Node.js** `20.19+`, `22.13+` ou `24+` (a faixa mais estreita entre o Vite 8 e o ESLint 10)
 - **API no ar.** Sem ela o dashboard abre só a tela de login e acusa que não consegue falar com a
   API. Para subir a API, veja "Como rodar o projeto" no [README da raiz](../README.md).
 

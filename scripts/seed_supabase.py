@@ -1,7 +1,13 @@
 ﻿"""
 Seed do Supabase — popula equipamentos, operadores e avaliacoes.
 
-PREREQUISITO: rode backend/db/schema.sql no SQL Editor do Supabase ANTES deste script.
+PREREQUISITO: aplique as migrations de supabase/migrations/ em ordem de nome,
+no SQL Editor do Supabase, ANTES deste script.
+
+So carrega um banco VAZIO e nunca apaga nada. Se equipamentos, operadores,
+avaliacoes ou predicoes ja tiverem linhas, recusa e sai com codigo 1 sem gravar.
+Se a carga falhar no meio, o banco fica com parte dela e o proximo seed recusa:
+a limpeza e manual, decisao de quem opera o banco.
 
 Uso:
     python scripts/seed_supabase.py          # com confirmacao
@@ -30,6 +36,11 @@ EQUIP_STATIC_COLS = [
 ]
 
 AVAL_EXCLUDE = set(EQUIP_STATIC_COLS) - {"equipamento_id"}
+
+# Linha em qualquer uma bloqueia o seed. predicoes nao e carregada aqui (e do
+# populate_predictions.py), mas linha nela tambem prova que o banco esta em uso.
+TABELAS_VERIFICADAS = ["equipamentos", "operadores", "avaliacoes", "predicoes"]
+EXIT_BANCO_OCUPADO = 1
 
 
 def sanitize_record(record: dict) -> dict:
@@ -69,6 +80,8 @@ def derive_avaliacoes(df: pd.DataFrame) -> list[dict]:
     aval["timestamp"] = aval["timestamp"].dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
     aval["faixa_risco"] = aval["faixa_risco"].astype(str)
     aval["risco_score"] = aval["risco_score"].round(2)
+    # Explicito em vez do DEFAULT da coluna: populate_predictions.py so pareia fonte='seed'.
+    aval["fonte"] = "seed"
     records = aval.to_dict(orient="records")
     return [sanitize_record(r) for r in records]
 
@@ -82,20 +95,33 @@ def insert_batch(client, table: str, records: list[dict]):
         print(f"  {table}: {inserted}/{total}")
 
 
-def clear_tables(client):
-    print("Limpando tabelas existentes...")
-    client.table("predicoes").delete().gte("predicao_id", 0).execute()
-    client.table("avaliacoes").delete().gte("avaliacao_id", 0).execute()
-    client.table("operadores").delete().neq("operador_id", "").execute()
-    client.table("equipamentos").delete().neq("equipamento_id", "").execute()
-
-
 def get_counts(client) -> dict:
     counts = {}
-    for table in ["equipamentos", "operadores", "avaliacoes", "predicoes"]:
+    for table in TABELAS_VERIFICADAS:
         result = client.table(table).select("*", count="exact").limit(0).execute()
         counts[table] = result.count
     return counts
+
+
+def tabelas_ocupadas(counts: dict) -> dict:
+    """Contagem ausente conta como ocupada: sem prova de tabela vazia, nao grava."""
+    return {t: n for t, n in counts.items() if n is None or n > 0}
+
+
+def recusar_se_ocupado(client):
+    ocupadas = tabelas_ocupadas(get_counts(client))
+    if not ocupadas:
+        return
+    print("\nRECUSADO: o seed so carrega um banco vazio e nunca apaga dados.", file=sys.stderr)
+    for table, count in ocupadas.items():
+        linhas = "contagem indisponivel" if count is None else f"{count} linhas"
+        print(f"  {table}: {linhas}", file=sys.stderr)
+    print(
+        "Nada foi gravado. Recarregar exige limpar essas tabelas antes, a mao,\n"
+        "com as contagens acima em maos.",
+        file=sys.stderr,
+    )
+    sys.exit(EXIT_BANCO_OCUPADO)
 
 
 def main():
@@ -107,12 +133,12 @@ def main():
     print("SafeField -- Seed do Supabase")
     print("=" * 60)
     print()
-    print("PREREQUISITO: Rode o SQL de backend/db/schema.sql no")
-    print("SQL Editor do Supabase ANTES de executar este script.")
+    print("PREREQUISITO: aplique as migrations de supabase/migrations/ em ordem")
+    print("de nome, no SQL Editor do Supabase.")
     print()
 
     if not args.force:
-        resp = input("Isto vai LIMPAR as tabelas e repopular. Continuar? [s/N] ")
+        resp = input("Isto vai INSERIR o dataset, se o banco estiver vazio. Continuar? [s/N] ")
         if resp.lower() not in ("s", "sim", "y", "yes"):
             print("Abortado.")
             sys.exit(0)
@@ -131,7 +157,8 @@ def main():
 
     client = get_supabase_client()
 
-    clear_tables(client)
+    # Logo antes da primeira escrita, para a janela entre conferir e gravar ser minima.
+    recusar_se_ocupado(client)
 
     print("\nInserindo equipamentos...")
     insert_batch(client, "equipamentos", equipamentos)

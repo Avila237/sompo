@@ -61,12 +61,21 @@ export default function SompoOverview({
 
   // A API devolve equipamento_id no alerta, entao nao e mais preciso extrair
   // o id da mensagem por regex.
+  // Abre o Detalhe direto: exigir o id na lista fazia o alerta não abrir, em
+  // silêncio, quando /equipamentos tinha falhado. Id inexistente o Detalhe diz.
   const handleAlertClick = (equipamentoId: string) => {
-    if (views.some((e) => e.id === equipamentoId)) onPickEquip(equipamentoId)
+    onPickEquip(equipamentoId)
   }
 
   const handleClearFilters = () => { setRiskFilter('all'); setTypeFilter('all') }
   const filtersActive = riskFilter !== 'all' || typeFilter !== 'all'
+
+  // "Tentar de novo" da página refaz as duas cargas: refazer só /kpis deixava o
+  // Top 5 em erro depois de a API voltar
+  const tentarTudo = () => {
+    visaoC.tentarDeNovo()
+    if (equipC.erro) equipC.tentarDeNovo()
+  }
 
   // Com dados na tela, recarga (período, tentar de novo) não troca a página por "Carregando"
   if (visaoC.carregando && !kpis) return <Carregando msg="Carregando dados da API…" />
@@ -76,7 +85,7 @@ export default function SompoOverview({
       <ErroCarga
         titulo="Não foi possível carregar a visão geral."
         msg={visaoC.erro ?? 'A API não devolveu dados.'}
-        onTentar={visaoC.tentarDeNovo}
+        onTentar={tentarTudo}
       />
     )
   }
@@ -104,7 +113,7 @@ export default function SompoOverview({
       {/* Já havia dados e a recarga (ex.: troca de período) falhou: mantém a tela e avisa */}
       {visaoC.erro && (
         <Card pad={0} style={{ padding: '0 18px' }}>
-          <ErroCarga compacto titulo="Falha ao atualizar os indicadores; exibindo os últimos carregados." msg={visaoC.erro} onTentar={visaoC.tentarDeNovo} />
+          <ErroCarga compacto titulo="Falha ao atualizar os indicadores; exibindo os últimos carregados." msg={visaoC.erro} onTentar={tentarTudo} />
         </Card>
       )}
 

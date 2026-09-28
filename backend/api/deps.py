@@ -3,7 +3,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from backend.core.exceptions import CredenciaisInvalidas
+from backend.core.exceptions import AcessoNegado, CredenciaisInvalidas
 from backend.core.security import decodificar_token
 
 _bearer = HTTPBearer(auto_error=False)
@@ -30,3 +30,14 @@ def usuario_atual(
             detail="Token invalido ou expirado.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def perfil_entre(*permitidos: str):
+    """Dependencia que exige um dos perfis. Autenticado fora da lista: 403."""
+
+    def _exigir(usuario: dict = Depends(usuario_atual)) -> dict:
+        if usuario["perfil"] not in permitidos:
+            raise AcessoNegado(f"Perfil '{usuario['perfil']}' nao acessa este recurso.")
+        return usuario
+
+    return _exigir

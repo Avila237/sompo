@@ -71,7 +71,26 @@ export function aggregateShapByGroup(factors: ShapFactor[]): GrupoShap[] {
   for (const f of factors) {
     sums.set(f.grupo, (sums.get(f.grupo) ?? 0) + Number(f.shap_value))
   }
-  return [...sums.entries()]
+  return paraGrupos([...sums.entries()])
+}
+
+/**
+ * Decomposicao por grupo de uma predicao. Usa a gravada pela API, a soma dos
+ * 30 SHAP, identica a do POST que gerou a predicao (S4-15). As predicoes do
+ * seed, anteriores a essa coluna, vem sem ela e caem na soma dos top 5, que e
+ * so uma aproximacao.
+ */
+export function gruposDaPredicao(p: {
+  top_fatores_shap: ShapFactor[]
+  contribuicoes_por_grupo?: Record<string, number> | null
+}): GrupoShap[] {
+  return p.contribuicoes_por_grupo
+    ? paraGrupos(Object.entries(p.contribuicoes_por_grupo))
+    : aggregateShapByGroup(p.top_fatores_shap)
+}
+
+function paraGrupos(somas: [string, number][]): GrupoShap[] {
+  return somas
     .map(([group, value]) => ({
       group,
       label: SHAP_GROUP_META[group]?.label ?? group,
