@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 from backend.core import config
 from backend.core.exceptions import (
+    AcessoNegado,
     ClimaIndisponivel,
     EquipamentoNaoEncontrado,
     LeituraInconsistente,
@@ -24,7 +25,7 @@ from backend.core.exceptions import (
 )
 from backend.db import repository as repo
 from backend.ml.predictor import get_predictor
-from backend.services import auditoria, clima
+from backend.services import auditoria, clima, consultas
 from backend.services.recomendacoes import recomendar
 
 logger = logging.getLogger("safefield.scoring")
@@ -58,6 +59,31 @@ def hash_do_payload(leitura: dict) -> str:
     sem_chave = {k: v for k, v in leitura.items() if k != "leitura_id" and v is not None}
     canonico = json.dumps(sem_chave, sort_keys=True, default=str, separators=(",", ":"))
     return hashlib.sha256(canonico.encode("utf-8")).hexdigest()
+
+
+def autorizar_envio(quem: dict, leitura: dict) -> AcessoNegado | None:
+    """
+    Matriz perfil x rota (S4-18): o analista envia por qualquer operador
+    (integracao, simulador); o operador so em nome proprio; gestor e tecnico
+    so leem.
+    """
+    if quem["perfil"] == "analista":
+        return None
+    if quem["perfil"] == "operador":
+        if leitura["operador_id"] != quem.get("operador_id"):
+            return AcessoNegado(
+                f"Operador {quem.get('operador_id')} so envia leituras em nome proprio, "
+                f"nao de {leitura['operador_id']}."
+            )
+        # So para equipamento que ja esta no recorte: senao, uma leitura num
+        # equipamento alheio o poria no recorte. Vem antes de buscar o
+        # equipamento, para inexistente e alheio responderem igual.
+        # ponytail: o primeiro vinculo de um operador novo entra pelo analista
+        #   (integracao); tabela de alocacao operador x equipamento se isso pesar.
+        if leitura["equipamento_id"] not in consultas.equipamentos_do_operador(quem["operador_id"]):
+            return AcessoNegado(f"Equipamento '{leitura['equipamento_id']}' fora do seu recorte.")
+        return None
+    return AcessoNegado(f"Perfil '{quem['perfil']}' nao envia leituras.")
 
 
 def _recusar(quem: dict, leitura: dict, erro: SafeFieldError) -> SafeFieldError:
@@ -186,7 +212,7 @@ def resolver_clima(leitura: dict) -> tuple[dict, str]:
     return leitura, ("misto" if medidos else "open-meteo")
 
 
-def processar_leitura(leitura: dict, usuario: dict | None = None) -> tuple[dict, bool]:
+def processar_leitura(leitura: dict, usuario: dict) -> tuple[dict, bool]:
     """
     Executa o fluxo completo e devolve (payload da resposta, reenvio).
 
@@ -194,7 +220,13 @@ def processar_leitura(leitura: dict, usuario: dict | None = None) -> tuple[dict,
     quando o leitura_id ja estava gravado com o mesmo payload: nada e gravado
     e a resposta e a original.
     """
-    quem = usuario or {"usuario": "-", "perfil": "-"}
+    quem = usuario
+    # Autorizacao antes do reenvio: sem isto, gestor e tecnico receberiam 200
+    # com o resultado gravado, e um operador leria a leitura de outro.
+    negado = autorizar_envio(quem, leitura)
+    if negado:
+        raise _recusar(quem, leitura, negado)
+
     payload_hash = hash_do_payload(leitura)
 
     # Reenvio decidido antes de qualquer trabalho: o retry chega justamente

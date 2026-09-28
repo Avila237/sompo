@@ -876,10 +876,15 @@
         "properties": {
           "usuario": {
             "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$",
             "title": "Usuario"
           },
           "senha": {
             "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
             "title": "Senha"
           }
         },
@@ -904,6 +909,17 @@
           "perfil": {
             "type": "string",
             "title": "Perfil"
+          },
+          "operador_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operador Id"
           },
           "expira_em_minutos": {
             "type": "integer",

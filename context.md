@@ -68,7 +68,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 |---|---|---|
 | Backend / API | FastAPI + Uvicorn, Python **3.13** | em uso |
 | Validação | Pydantic 2 | em uso |
-| Autenticação | JWT próprio (`python-jose`), perfis `operador` · `gestor` · `analista` | em uso |
+| Autenticação | JWT próprio (PyJWT) + tabela `usuarios` com hash scrypt; perfis `analista` · `gestor` · `tecnico` · `operador`, com recorte por rota | em uso |
 | Modelo | XGBoost (regressão) + SHAP | em uso |
 | Rastreabilidade ML | MLflow, experimento `safefield-xgboost`, store local `mlruns/` | em uso |
 | Banco | Supabase (PostgreSQL + RLS), projeto `sompo` | em uso |
@@ -161,7 +161,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY` (aceita `SUPABASE_KEY` como fallback)
   - `JWT_SECRET_KEY`
-  - `DEMO_USERS` (`usuario:senha:perfil,...`)
+- Usuários: tabela `usuarios` (migration `20260928130000`), cadastro por `scripts/criar_usuario.py`. Nenhuma credencial no `.env`.
 - Dashboard: `dashboard/.env.local` com `VITE_API_BASE_URL` apenas.
 - `JWT_SECRET_KEY` com menos de 32 bytes impede a API de subir, de propósito: os placeholders do `.env.example` são curtos para que copiar o exemplo sem trocar falhe alto.
 - `service_role` é superusuário do banco: só no servidor, nunca no frontend, nunca versionada.
