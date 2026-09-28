@@ -14,7 +14,7 @@ Este arquivo descreve o que é estável. Números e estado mudam; leia-os na fon
 |---|---|
 | O que a entrega atual exige e o estado de cada requisito | `docs/spec-sprint-04.md` |
 | O que está em andamento, com quem, bloqueado por quê | Linear, projeto SafeField, milestone **SPRINT 4** |
-| Métricas atuais do modelo | `models/metrics.json` |
+| Métricas de referência do modelo | `models/metrics.json` (com plataforma e versões); um retreino local grava em `models/metrics.local.json` |
 | Contrato da API (rotas, campos, erros) | `docs/contrato-api.md` · `docs/openapi.json` |
 | Schema do dataset, regras de consistência, fórmula de score | `docs/data schema.md` |
 | Como rodar do zero | `README.md`, seção "Como rodar o projeto" |
@@ -174,7 +174,9 @@ A direção nunca se inverte. Hoje há desvios conhecidos: `api/main.py` e `api/
 | Vontade de rodar `backend/db/schema.sql` | **Não.** Começa com `DROP TABLE` e não contém a migration da E3. Toda mudança de estrutura vai em `supabase/migrations/`, aditiva e idempotente |
 | `seed_supabase.py` manda rodar `schema.sql` primeiro | Mesmo caso. Não seguir até a S4-13 corrigir |
 | Supabase não responde | O projeto pausa por inatividade. Reative no painel antes de diagnosticar código |
-| Python 3.14 | `xgboost`/`shap`/`numpy` sem wheel. Use 3.13 |
+| Python 3.14 | `xgboost`/`shap`/`numpy` sem wheel. Use 3.13 (`.python-version`) |
+| Retreino dá métricas diferentes do `metrics.json` | Esperado entre plataformas. Não sobrescreva a referência sem `--referencia` deliberado |
+| Atualizar dependência | Versões exatas em `backend/requirements.txt`. Mudança deliberada, em commit próprio, com `pip_audit` e suíte verdes |
 | macOS: `libxgboost.dylib could not be loaded` | `brew install libomp` |
 | Reexecutar `populate_predictions.py` | Duplica predições (sem unique em `avaliacao_id`). Não rodar até a S4-13 |
 | `top_fatores_shap` com `group` vs `grupo` | O seed gravou `group`, a API grava `grupo`; `services/consultas.py` normaliza na leitura |

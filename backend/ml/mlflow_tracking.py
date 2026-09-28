@@ -36,6 +36,7 @@ MODEL_ARTIFACTS = [
     "encoder.joblib",
     "features.json",
     "metrics.json",
+    "metrics.local.json",
 ]
 
 

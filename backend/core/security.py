@@ -9,7 +9,8 @@ secrets.compare_digest para nao vazar informacao por tempo de resposta.
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 
 from backend.core import config
 from backend.core.exceptions import CredenciaisInvalidas
@@ -40,7 +41,7 @@ def decodificar_token(token: str) -> dict:
         dados = jwt.decode(
             token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM]
         )
-    except JWTError as e:
+    except InvalidTokenError as e:
         raise CredenciaisInvalidas() from e
     if "sub" not in dados or "perfil" not in dados:
         raise CredenciaisInvalidas()

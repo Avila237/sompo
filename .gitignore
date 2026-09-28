@@ -14,6 +14,8 @@ data/*.csv
 data/*.parquet
 models/*.pkl
 models/*.joblib
+# Metricas de um retreino local; a referencia versionada e models/metrics.json
+models/metrics.local.json
 !data/.gitkeep
 !models/.gitkeep
 
