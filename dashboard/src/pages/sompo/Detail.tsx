@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useMemo } from 'react'
-import { WTONE, scoreBand, scoreBandLabel } from '../../data/mock'
+import { WTONE, scoreBand, scoreBandLabel, SEM_AVALIACAO } from '../../data/mock'
 import {
   loadEquipamentoDetail,
   aggregateShapByGroup,
@@ -60,14 +60,6 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [reportState, setReportState] = useState<null | 'generating' | 'done'>(null)
-  const [showCallPanel, setShowCallPanel] = useState(false)
-  const [callState, setCallState] = useState<null | 'connected'>(null)
-  const [showAlertPanel, setShowAlertPanel] = useState(false)
-  const [alertSeverity, setAlertSeverity] = useState<'yellow' | 'red'>('red')
-  const [alertMsg, setAlertMsg] = useState('Condições adversas detectadas. Retorne à base.')
-  const [alertState, setAlertState] = useState<null | 'sent'>(null)
-
   useEffect(() => {
     if (!equip) { setLoading(false); return }
     let active = true
@@ -116,9 +108,10 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
   }
 
   const { equipamento, ultima, predicao, historico } = detail
-  const score = ultima ? ultima.risco_score : 0
-  const band = scoreBand(score)
-  const bandLabel = scoreBandLabel(score)
+  // Sem avaliação não há score: exibir 0/"baixo" transformaria ausência de dado em risco baixo
+  const score = ultima ? ultima.risco_score : null
+  const band = score === null ? 'neut' : scoreBand(score)
+  const bandLabel = score === null ? SEM_AVALIACAO : scoreBandLabel(score)
   const trend =
     historico.length >= 2
       ? Math.round(historico[historico.length - 1].score - historico[historico.length - 2].score)
@@ -133,19 +126,6 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
   const fmtDate = (ts: string) => (ts ? new Date(ts).toLocaleDateString('pt-BR') : '—')
 
   const noturno = ultima ? ultima.horario_operacao >= 20 || ultima.horario_operacao <= 5 : false
-
-  const handleReport = () => {
-    setReportState('generating')
-    setTimeout(() => { setReportState('done'); setTimeout(() => setReportState(null), 2000) }, 1500)
-  }
-  const handleCall = () => {
-    setCallState('connected')
-    setTimeout(() => { setCallState(null); setShowCallPanel(false) }, 2000)
-  }
-  const handleAlert = () => {
-    setAlertState('sent')
-    setTimeout(() => { setAlertState(null); setShowAlertPanel(false) }, 2000)
-  }
 
   return (
     <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -181,79 +161,19 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
             {ultima && <span>última aval. {fmtDate(ultima.timestamp)}</span>}
           </div>
         </div>
+        {/* Ações sem endpoint na API: ficam bloqueadas, sem handler e sem mensagem de sucesso */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <ComingSoon inline><Button kind="ghost" onClick={handleReport}>
-            {WIco.doc()}  {reportState === 'generating' ? 'Gerando...' : reportState === 'done' ? 'Pronto ✓' : 'Relatório'}
+          <ComingSoon inline><Button kind="ghost">
+            {WIco.doc()}  Relatório
           </Button></ComingSoon>
-          <ComingSoon inline><Button kind="ghost" onClick={() => setShowCallPanel((v) => !v)}>
+          <ComingSoon inline><Button kind="ghost">
             {WIco.phone()}  Ligar operador
           </Button></ComingSoon>
-          <ComingSoon inline><Button kind="primary" tone="crit" onClick={() => setShowAlertPanel((v) => !v)}>
+          <ComingSoon inline><Button kind="primary" tone="crit">
             {WIco.alert()}  Disparar alerta
           </Button></ComingSoon>
         </div>
       </div>
-
-      {/* Call operator panel */}
-      {showCallPanel && ultima && (
-        <div style={{ background: 'var(--bg-elev)', border: '1px solid var(--line)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>Ligar para operador</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontSize: 13, color: 'var(--fg-dim)' }}>
-              <strong style={{ color: 'var(--fg)' }}>Operador:</strong> {ultima.operador_id}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--fg-dim)' }}>
-              <strong style={{ color: 'var(--fg)' }}>Score comportamental:</strong> {Math.round(ultima.score_operador_historico)}
-            </div>
-          </div>
-          <div>
-            <Button kind="primary" tone="info" onClick={handleCall}>
-              {callState === 'connected' ? 'Conectado ✓' : 'Confirmar ligação'}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Alert panel */}
-      {showAlertPanel && (
-        <div style={{ background: 'var(--bg-elev)', border: '1px solid var(--line)', borderLeft: '3px solid var(--red)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>Disparar alerta</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-dim)' }}>Severidade</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => setAlertSeverity('yellow')}
-                style={{ padding: '8px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  border: alertSeverity === 'yellow' ? '1px solid var(--amber)' : '1px solid var(--line)',
-                  background: alertSeverity === 'yellow' ? 'rgba(245,190,80,0.15)' : 'var(--bg)',
-                  color: alertSeverity === 'yellow' ? 'var(--amber)' : 'var(--fg-dim)' }}
-              >
-                Atenção (amarelo)
-              </button>
-              <button
-                onClick={() => setAlertSeverity('red')}
-                style={{ padding: '8px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  border: alertSeverity === 'red' ? '1px solid var(--red)' : '1px solid var(--line)',
-                  background: alertSeverity === 'red' ? 'rgba(255,100,100,0.15)' : 'var(--bg)',
-                  color: alertSeverity === 'red' ? 'var(--red)' : 'var(--fg-dim)' }}
-              >
-                Parada (vermelho)
-              </button>
-            </div>
-          </div>
-          <textarea
-            value={alertMsg}
-            onChange={(e) => setAlertMsg(e.target.value)}
-            rows={3}
-            style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--bg)', color: 'var(--fg)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
-          />
-          <div>
-            <Button kind="primary" tone="crit" onClick={handleAlert}>
-              {alertState === 'sent' ? 'Alerta enviado ✓' : 'Enviar alerta'}
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Two-column grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 14, alignItems: 'start' }}>
@@ -269,7 +189,7 @@ export default function SompoDetail({ equip, onBack }: { equip: Equipment | null
             {predicao ? (
               <>
                 <div style={{ fontSize: 12, color: 'var(--fg-dim)', marginBottom: 14 }}>
-                  Score real <strong style={{ color: WTONE[band].fg }}>{Math.round(score)}</strong>
+                  Score real <strong style={{ color: WTONE[band].fg }}>{score === null ? '—' : Math.round(score)}</strong>
                   {' · '}predito <strong style={{ color: 'var(--fg)' }}>{Math.round(predicao.risco_score_predito)}</strong>
                   {'  ·  '}+ aumenta risco / − reduz (soma dos top 5 fatores por grupo)
                 </div>

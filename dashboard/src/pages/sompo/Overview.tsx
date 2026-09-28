@@ -236,7 +236,6 @@ export default function SompoOverview({
   const [showFilters, setShowFilters] = useState(false)
   const [riskFilter, setRiskFilter] = useState<'all' | 'safe' | 'warn' | 'crit'>('all')
   const [typeFilter, setTypeFilter] = useState<'all' | 'colheitadeira' | 'trator' | 'implemento'>('all')
-  const [exporting, setExporting] = useState<null | 'working' | 'done'>(null)
 
   // A lista de equipamentos alimenta o Top 5 e nao depende do periodo.
   useEffect(() => {
@@ -272,26 +271,13 @@ export default function SompoOverview({
     let list = [...views]
     if (riskFilter !== 'all') list = list.filter((e) => e.faixa === riskFilter)
     if (typeFilter !== 'all') list = list.filter((e) => e.tipo === typeFilter)
-    return list.sort((a, b) => b.score - a.score).slice(0, 5)
+    return list.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, 5)
   }, [views, riskFilter, typeFilter])
 
   const filteredAlerts = useMemo(() => {
     if (riskFilter === 'all') return alertas
     return alertas.filter((a) => a.sev === riskFilter)
   }, [alertas, riskFilter])
-
-  const handleExport = () => { if (exporting === null) setExporting('working') }
-
-  useEffect(() => {
-    if (exporting === 'working') {
-      const t = setTimeout(() => setExporting('done'), 1500)
-      return () => clearTimeout(t)
-    }
-    if (exporting === 'done') {
-      const t = setTimeout(() => setExporting(null), 1500)
-      return () => clearTimeout(t)
-    }
-  }, [exporting])
 
   // A API devolve equipamento_id no alerta, entao nao e mais preciso extrair
   // o id da mensagem por regex.
@@ -302,7 +288,6 @@ export default function SompoOverview({
 
   const handleClearFilters = () => { setRiskFilter('all'); setTypeFilter('all') }
   const filtersActive = riskFilter !== 'all' || typeFilter !== 'all'
-  const exportLabel = exporting === 'working' ? 'Exportando...' : exporting === 'done' ? 'Pronto ✓' : 'Exportar'
 
   if (loading) {
     return (
@@ -331,12 +316,9 @@ export default function SompoOverview({
         actions={
           <>
             <Button kind="ghost" onClick={() => setShowFilters((v) => !v)}>{WIco.filter()} Filtros</Button>
-            <ComingSoon inline><Button
-              kind="ghost"
-              onClick={handleExport}
-              style={exporting === 'done' ? { color: '#5AE06B', borderColor: '#5AE06B' } : {}}
-            >
-              {WIco.download()} {exportLabel}
+            {/* Sem endpoint de exportação: bloqueado e sem confirmação simulada */}
+            <ComingSoon inline><Button kind="ghost">
+              {WIco.download()} Exportar
             </Button></ComingSoon>
             <ComingSoon inline><Button kind="primary" tone="safe" onClick={() => onNav('simulator')}>Nova análise</Button></ComingSoon>
           </>

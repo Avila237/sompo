@@ -14,7 +14,7 @@ export interface Equipment {
   opName: string
   client: string
   region: string
-  score: number
+  score: number | null // null = equipamento sem avaliação
   trend: number
   lastAlert: string
   hours: number
