@@ -10,7 +10,8 @@
 ## Autenticação
 
 Todas as rotas exigem `Authorization: Bearer <token>`, exceto `POST /auth/token` e `GET /health`.
-O Swagger (`/docs`, `/redoc`, `/openapi.json`) também é público.
+O Swagger (`/docs`, `/redoc`, `/openapi.json`) também é público, por decisão: descreve o contrato,
+não expõe dado, e é por ele que o avaliador explora a API.
 
 Token expira em `JWT_EXPIRE_MINUTES` (default 480). Perfis: `operador`, `gestor`, `analista`. Nesta
 versão os três enxergam os mesmos dados; o perfil vai no token, mas nenhuma rota o usa para filtrar.
@@ -38,6 +39,7 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 | Sem token | `401` | `"Token ausente."` |
 | Token inválido ou expirado | `401` | `"Token invalido ou expirado."` |
 | Credencial errada em `/auth/token` | `401` | `"Usuario ou senha invalidos."` |
+| 5 credenciais erradas do mesmo IP em 60 s (`/auth/token`) | `429` | `"Muitas tentativas de login. Tente novamente mais tarde."` + header `Retry-After` em segundos |
 | Equipamento inexistente | `404` | `"Equipamento 'EQ-9999' nao encontrado."` |
 | Operador inexistente (`POST /avaliacoes`) | `404` | `"Operador 'OP-9999' nao encontrado."` |
 | Payload fora de faixa ou de tipo | `422` | lista do Pydantic: campo em `loc`, motivo em `msg` |

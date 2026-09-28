@@ -21,7 +21,9 @@ def autenticar(usuario: str, senha: str) -> str:
     registro = config.DEMO_USERS.get(usuario)
     # Compara mesmo com usuario inexistente, para nao revelar quais existem.
     esperado = registro["senha"] if registro else ""
-    confere = secrets.compare_digest(senha, esperado)
+    # Em bytes: compare_digest com str so aceita ASCII e levantaria TypeError
+    # (500) para uma senha com acento, em vez de recusar com 401.
+    confere = secrets.compare_digest(senha.encode("utf-8"), esperado.encode("utf-8"))
     if not registro or not confere:
         raise CredenciaisInvalidas()
     return registro["perfil"]

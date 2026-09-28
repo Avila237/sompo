@@ -43,7 +43,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.API_CORS_ORIGINS,
-    allow_credentials=True,
+    # A autenticacao vai no header Authorization, nao em cookie: nao ha
+    # credencial de navegador para liberar.
+    allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
