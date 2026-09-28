@@ -49,7 +49,7 @@ estava ocupada, acrescente a nova origem lá ou libere a porta.
 |---|---|---|
 | Visão geral | `GET /kpis`, `GET /alertas`, `GET /equipamentos` | ✅ API |
 | Equipamentos (ranking) | `GET /equipamentos` | ✅ API |
-| Detalhe do equipamento | `GET /equipamentos/{id}` | ✅ API |
+| Detalhe do equipamento (com recomendações preventivas) | `GET /equipamentos/{id}` | ✅ API |
 | Sino de alertas (topo) | `GET /alertas` | ✅ API |
 | Simulador | dados fixos no componente | 🔒 "Em breve" |
 | UBI · Prêmios | `data/mock.ts` | 🔒 "Em breve" |
