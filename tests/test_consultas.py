@@ -97,3 +97,62 @@ class TestSemAvaliacao:
         assert item["total_avaliacoes"] == 0
         assert item["risco_score"] == 0.0
         assert item["faixa_risco"] == "baixo"
+
+
+# ---------------------------------------------------------------------------
+# Manutenção da última avaliação em GET /equipamentos (S4-36 · BRA-469)
+# ---------------------------------------------------------------------------
+
+def _aval_manut(aid, ts, atrasada, pct, dias):
+    return {
+        **AVALIACAO_NA_FRONTEIRA, "avaliacao_id": aid, "timestamp": ts,
+        "manutencao_atrasada": atrasada, "atraso_manutencao_pct": pct, "ultima_manutencao_dias": dias,
+    }
+
+
+class TestManutencaoNaLista:
+    """A tela do técnico ordena a frota pelo atraso de manutenção da última avaliação."""
+
+    def test_campos_vem_da_avaliacao_mais_recente(self):
+        antiga = _aval_manut(1, "2026-01-01T10:00:00+00:00", False, 0.4, 60)
+        recente = _aval_manut(2, "2026-03-01T10:00:00+00:00", True, 1.38, 208)
+        with patch.object(consultas.repo, "listar_equipamentos", return_value=[EQUIPAMENTO]), \
+             patch.object(consultas.repo, "listar_avaliacoes_resumo", return_value=[antiga, recente]):
+            (item,) = consultas.listar_equipamentos()
+        assert item["manutencao_atrasada"] is True
+        assert item["atraso_manutencao_pct"] == 1.38
+        assert item["ultima_manutencao_dias"] == 208
+
+    def test_sem_avaliacao_os_tres_campos_sao_nulos(self):
+        with patch.object(consultas.repo, "listar_equipamentos", return_value=[EQUIPAMENTO]), \
+             patch.object(consultas.repo, "listar_avaliacoes_resumo", return_value=[]):
+            (item,) = consultas.listar_equipamentos()
+        assert item["manutencao_atrasada"] is None
+        assert item["atraso_manutencao_pct"] is None
+        assert item["ultima_manutencao_dias"] is None
+
+    def test_avaliacao_sem_os_campos_nao_quebra(self):
+        """Linha antiga sem as colunas (ou valor nulo no banco): campo nulo, sem KeyError."""
+        with patch.object(consultas.repo, "listar_equipamentos", return_value=[EQUIPAMENTO]), \
+             patch.object(consultas.repo, "listar_avaliacoes_resumo", return_value=[AVALIACAO_NA_FRONTEIRA]):
+            (item,) = consultas.listar_equipamentos()
+        assert item["manutencao_atrasada"] is None
+        assert item["atraso_manutencao_pct"] is None
+        assert item["ultima_manutencao_dias"] is None
+
+    def test_resumo_seleciona_as_colunas_de_manutencao(self):
+        from backend.db import repository
+        capturado = {}
+
+        def falso_paginado(tabela, colunas, ordem):
+            capturado["colunas"] = colunas
+            return []
+
+        repository._cache.pop("avaliacoes", None)
+        try:
+            with patch.object(repository, "_paginado", side_effect=falso_paginado):
+                repository.listar_avaliacoes_resumo()
+        finally:
+            repository._cache.pop("avaliacoes", None)
+        for coluna in ("manutencao_atrasada", "atraso_manutencao_pct", "ultima_manutencao_dias"):
+            assert coluna in capturado["colunas"]

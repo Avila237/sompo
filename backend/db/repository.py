@@ -115,7 +115,9 @@ def listar_avaliacoes_resumo() -> list[dict]:
     if "avaliacoes" not in _cache:
         colunas = (
             "avaliacao_id,equipamento_id,operador_id,risco_score,faixa_risco,"
-            "timestamp,latitude,longitude,tipo_operacao"
+            "timestamp,latitude,longitude,tipo_operacao,"
+            # estado de manutencao da leitura: a lista da frota ordena por ele (S4-36)
+            "manutencao_atrasada,atraso_manutencao_pct,ultima_manutencao_dias"
         )
         _cache["avaliacoes"] = _paginado("avaliacoes", colunas, "avaliacao_id")
     return _cache["avaliacoes"]
