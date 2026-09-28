@@ -40,20 +40,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config.API_CORS_ORIGINS,
-    # A autenticacao vai no header Authorization, nao em cookie: nao ha
-    # credencial de navegador para liberar.
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-    # Sem isto o navegador esconde o X-Request-ID do front, e um erro sem
-    # request_id no corpo (503, 4xx) chega a tela sem o codigo para suporte.
-    expose_headers=["X-Request-ID"],
-)
-
-
 @app.middleware("http")
 async def correlacionar(request: Request, call_next):
     """Um request_id por requisicao, presente em toda linha de log e nos erros."""
@@ -66,6 +52,24 @@ async def correlacionar(request: Request, call_next):
         resposta = _resposta_500(request)
     resposta.headers["X-Request-ID"] = rid
     return resposta
+
+
+# Registrado DEPOIS do middleware de correlacao de proposito: no Starlette o
+# ultimo registrado fica por fora. Assim o CORS envolve tambem o 500 que o
+# `correlacionar` monta; antes, esse 500 saia sem Access-Control-Allow-Origin
+# e o navegador o descartava ("Nao foi possivel falar com a API").
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.API_CORS_ORIGINS,
+    # A autenticacao vai no header Authorization, nao em cookie: nao ha
+    # credencial de navegador para liberar.
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    # Sem isto o navegador esconde o X-Request-ID do front, e um erro sem
+    # request_id no corpo (o 503) chega a tela sem o codigo para suporte.
+    expose_headers=["X-Request-ID"],
+)
 
 
 def _resposta_500(request: Request) -> JSONResponse:

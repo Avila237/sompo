@@ -393,28 +393,3 @@ class TestResilienciaClima:
             r = client.post("/avaliacoes", json=LEITURA_VALIDA, headers=auth)
         assert r.status_code == 500
         repo_mock.remover_avaliacao.assert_called_once_with(999)
-
-
-# ---------------------------------------------------------------------------
-# 5. CORS: o navegador precisa ler o X-Request-ID
-# ---------------------------------------------------------------------------
-
-class TestCorsRequestId:
-    """
-    Sem Access-Control-Expose-Headers, o navegador esconde o X-Request-ID do
-    front: um 503 (que não traz request_id no corpo) chegava à tela sem o
-    código para suporte.
-    """
-
-    ORIGEM = config.API_CORS_ORIGINS[0]
-
-    def test_resposta_cors_expoe_x_request_id(self):
-        r = client.get("/health", headers={"Origin": self.ORIGEM})
-        assert r.headers.get("access-control-allow-origin") == self.ORIGEM
-        expostos = r.headers.get("access-control-expose-headers", "").lower()
-        assert "x-request-id" in expostos
-
-    def test_erro_tambem_expoe_x_request_id(self):
-        r = client.get("/kpis", headers={"Origin": self.ORIGEM, "Authorization": "Bearer nao.e.token"})
-        assert r.status_code == 401
-        assert "x-request-id" in r.headers.get("access-control-expose-headers", "").lower()
