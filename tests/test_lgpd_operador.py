@@ -89,6 +89,10 @@ def _resumo(avaliacao_id, equipamento_id, operador_id, dia, pos, score=80.0):
         "latitude": pos[0],
         "longitude": pos[1],
         "tipo_operacao": "colheita",
+        # Como na linha real: se o servico passar a espalhar a linha, a
+        # idempotencia vaza e test_idempotencia_nao_sai_nas_listas falha.
+        "leitura_id": f"00000000-0000-0000-0000-{avaliacao_id:012d}",
+        "payload_hash": "a" * 64,
     }
 
 
