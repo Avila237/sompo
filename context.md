@@ -151,7 +151,7 @@ A direção nunca se inverte. Hoje há desvios conhecidos: `api/main.py` e `api/
   | `test_dataset` | parquet local |
   | `test_model`, `test_shap`, `test_mlflow` | parquet + `.joblib` |
   | `test_api` | `.env` válido e `.joblib`; Supabase e Open-Meteo são mockados |
-  | `test_supabase`, `test_predicoes` | Supabase real; são pulados sem `SUPABASE_URL`/`SUPABASE_KEY` |
+  | `test_supabase`, `test_predicoes` | Supabase real; são pulados sem `SUPABASE_URL` e a chave `service_role` |
 
 - ⚠️ `test_shap` hoje sobrescreve `models/shap_values.npy` e `data/shap_*.png` versionados. Rode `git status` depois da suíte (corrigido em S4-11).
 - Convenção: teste no mesmo passo da feature; teste de regressão antes do fix; nunca enfraquecer teste para passar.
@@ -164,7 +164,7 @@ A direção nunca se inverte. Hoje há desvios conhecidos: `api/main.py` e `api/
   - `JWT_SECRET_KEY`
   - `DEMO_USERS` (`usuario:senha:perfil,...`)
 - Dashboard: `dashboard/.env.local` com `VITE_API_BASE_URL` apenas.
-- ⚠️ O `.env.example` atual está incompleto (falta `DEMO_USERS`) e traz um segredo JWT placeholder utilizável. Corrigido em S4-07.
+- `JWT_SECRET_KEY` com menos de 32 bytes impede a API de subir, de propósito: os placeholders do `.env.example` são curtos para que copiar o exemplo sem trocar falhe alto.
 - `service_role` é superusuário do banco: só no servidor, nunca no frontend, nunca versionada.
 
 ## Armadilhas

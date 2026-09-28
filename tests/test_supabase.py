@@ -14,7 +14,10 @@ SKIP_MSG = "Credenciais Supabase nao configuradas no .env"
 
 
 def has_credentials():
-    return bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_KEY"))
+    return bool(
+        os.getenv("SUPABASE_URL")
+        and (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY"))
+    )
 
 
 pytestmark = pytest.mark.skipif(not has_credentials(), reason=SKIP_MSG)
