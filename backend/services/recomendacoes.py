@@ -141,13 +141,26 @@ def _fator_dominante(registro: dict, faixa: str, top_fatores: list[dict]) -> dic
     feature = fator["feature"]
     publico, acao = _POR_GRUPO.get(fator.get("grupo"), ("gestor", "Revisar o fator de maior peso no risco."))
     # O valor legivel vem da leitura; o de top_fatores e o codificado para o modelo.
-    valor = registro.get(feature, fator.get("valor"))
-    return {
-        "id": "fator_dominante",
-        "publico": publico,
-        "acao": acao,
-        "criterio": f"maior contribuição para o risco: {feature}={valor} (+{fator['shap_value']:.1f} pontos)",
-    }
+    valor = registro.get(feature)
+    if valor is None:
+        valor = fator.get("valor")
+    pontos = f"(+{fator['shap_value']:.1f} pontos)"
+    if valor is None:
+        # Predicao do seed sem 'valor' e feature fora da leitura: melhor omitir
+        # que escrever "None" para o usuario.
+        criterio = f"maior contribuição para o risco: {feature} {pontos}"
+    else:
+        criterio = f"maior contribuição para o risco: {feature}={_formatar(valor)} {pontos}"
+    return {"id": "fator_dominante", "publico": publico, "acao": acao, "criterio": criterio}
+
+
+def _formatar(valor) -> str:
+    """Mesmo formato dos criterios das regras: bool minusculo, numero com :g."""
+    if isinstance(valor, bool):
+        return "true" if valor else "false"
+    if isinstance(valor, float):
+        return f"{valor:g}"
+    return str(valor)
 
 
 def recomendar(registro: dict, faixa: str, top_fatores: list[dict]) -> list[dict]:
