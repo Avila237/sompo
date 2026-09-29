@@ -1,0 +1,12 @@
+# Trecho do log da API (uvicorn, formato de producao de backend.core.logging), 28/09/2026
+# Cada linha leva o request_id entre colchetes; o mesmo valor volta no header X-Request-ID.
+
+## Resposta perdida e reenvio (leitura bb9edbaa..., avaliacao 5049)
+2026-09-28T21:39:50 INFO    [6ea4e3570c81] safefield.scoring: avaliacao 5049: EQ-0104 score=29.86 faixa=baixo usuario=analista
+2026-09-28T21:39:51 INFO    [824f05f9ef8a] safefield.scoring: reenvio avaliacao 5049: EQ-0104 leitura_id=bb9edbaa-bcc8-4198-a1b8-0b521a61dad3 usuario=analista
+
+## Recusa por perfil (gestor tentando enviar leitura)
+2026-09-28T21:40:32 WARNING [d59987601c02] safefield.api: AcessoNegado em /avaliacoes: Perfil 'gestor' nao envia leituras.
+
+## Operador fora do recorte
+2026-09-28T21:40:31 WARNING [ea6da345ca61] safefield.api: AcessoNegado em /equipamentos/EQ-0017: Equipamento 'EQ-0017' fora do seu recorte.
