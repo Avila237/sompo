@@ -30,6 +30,7 @@ com o modelo `xgboost-v1.1`. Os dados são sintéticos: nenhum dado real de segu
 | 7 | **Integridade dos dados gravados** (distribuição de faixas, SHAP completo, versão do modelo, integridade referencial), contra o banco real | [`backend/pytest-rede.txt`](backend/pytest-rede.txt) | `tests/test_predicoes.py`, `tests/test_supabase.py` (marker `rede`) |
 | 8 | **O simulador não perde leitura** quando a Open-Meteo ou o banco caem: repete 502/503 com o mesmo `leitura_id` | [`backend/pytest-confiabilidade.txt`](backend/pytest-confiabilidade.txt) | `TestSimuladorNaoPerdeLeitura`, `TestEnviarComRetry` |
 | 9 | **Dashboard sob falhas da API** (fora do ar, lenta, resposta malformada, 500 com código de suporte, sessão expirada) | [`front/README.md`](front/README.md) | cenários reproduzíveis com `front/api-simulada.mjs` |
+| 10 | **Telas reais por perfil**, contra a API e o banco: Visão geral, ranking, Detalhe com SHAP completo e recomendações, Relatórios nos 3 eixos, "Meus equipamentos" do operador com a avaliação alheia mascarada, e Manutenção do técnico | [`front/README.md`](front/README.md), seção "Telas reais" | leitura por perfil em `tests/test_autorizacao.py` e `tests/test_lgpd_operador.py`; negações demonstradas em [`backend/casos_de_uso.txt`](backend/casos_de_uso.txt) |
 
 ## Casos de uso por persona
 

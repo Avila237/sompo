@@ -1,8 +1,8 @@
-# Evidências do front · falhas da API
+# Evidências do front · falhas da API e telas reais
 
 Parte front da S4-28 e o "pronto quando" da S4-23 (BRA-456): *API derrubada com a tela aberta, API
 lenta e resposta malformada produzem mensagem legível e recuperável*. Aqui estão os cenários de
-falha da BRA-466. As telas com dados reais ficam na BRA-470, que depende da API com banco.
+falha da BRA-466. As telas com dados reais (BRA-470) estão no fim deste arquivo.
 
 ## Como foi feito
 
@@ -57,3 +57,38 @@ também a lista de equipamentos e o contador do menu. Antes dele, só os KPIs vo
   Por isso o ✅ do cenário 4 vale para a API real **a partir do #37**.
 - O cenário "lenta" usa uma rota que nunca responde. Com resposta que chega depois de 15 s o
   resultado é o mesmo, porque o limite cobre a requisição inteira, leitura do corpo incluída.
+
+## Telas reais contra a API com banco (BRA-470)
+
+Capturadas em 28/09/2026. Setup:
+- build de produção do dashboard (`npm run build` + `vite preview`, com a CSP ativa), na `main` em `5618c81`;
+- API local ligada ao **Supabase real**, com o modelo `xgboost-v1.1`;
+- uma sessão por perfil, em janela de 1440 px de largura;
+- altura da página inteira (o dashboard rola o `<main>`, não a página), com o limite de 1500 px nas listas longas.
+
+Os dados são sintéticos (dataset do projeto e avaliações de telemetria enviadas pela API).
+
+| # | Perfil | Tela | O que mostra | Print |
+|---|---|---|---|---|
+| 10 | analista | Visão geral | KPIs da frota inteira (200 equipamentos, 5.000+ avaliações), mapa, tendência e risco por tipo de operação | [10](10-analista-visao-geral.png) |
+| 11 | analista | Equipamentos (ranking) | frota ordenada por risco, com operador e número de avaliações | [11](11-analista-ranking.png) |
+| 12 | analista | Detalhe do EQ-0042 | recomendações preventivas com o critério de cada uma (filtro por público); decomposição SHAP **completa** por grupo (`xgboost-v1.1`); top 5 fatores; histórico; manutenção; operador | [12](12-analista-detalhe-eq-0042.png) |
+| 13 | analista | Relatórios · Equipamento | tendência do score por equipamento, com datas reais | [13](13-analista-relatorios-equipamento.png) |
+| 14 | analista | Relatórios · Região | a mesma leitura por região | [14](14-analista-relatorios-regiao.png) |
+| 15 | analista | Relatórios · Operação | a mesma leitura por tipo de operação | [15](15-analista-relatorios-operacao.png) |
+| 20 | operador (`OP-0015`) | Meus equipamentos | só os 7 equipamentos que ele operou e só os alertas deles; menu reduzido | [20](20-operador-meus-equipamentos.png) |
+| 21 | operador | Detalhe do EQ-0106 | última avaliação de **outro** operador: identidade como "outro operador" e nenhuma coordenada (LGPD, PR #46); sem ações de frota; decomposição rotulada como aproximação (predição do seed) | [21](21-operador-detalhe-avaliacao-de-outro-operador.png) |
+| 22 | técnico | Manutenção da frota | equipamentos ordenados pelo atraso de manutenção; contagem de atrasados e em dia | [22](22-tecnico-manutencao-da-frota.png) |
+| 23 | gestor | Visão geral | a leitura da frota para o gestor, sem Simulador, UBI nem Manutenção no menu | [23](23-gestor-visao-geral.png) |
+
+**Reproduzir.** Com a API ligada ao banco e os usuários cadastrados (`scripts/criar_usuario.py`),
+entre com cada perfil no build de produção e abra as telas da tabela. As negações do operador
+(`/kpis`, `/tendencias` e equipamento fora do recorte → 403) estão demonstradas em
+[`../backend/casos_de_uso.txt`](../backend/casos_de_uso.txt).
+
+**Limites.**
+- As sessões foram abertas com token assinado localmente pela própria API (`criar_token`), sem
+  digitar senha. O login em si está coberto pelos testes do backend.
+- O relatório por região ordena pelo maior score no último ponto. Com o dado de hoje, as 5
+  primeiras regiões têm score 100 e 1 ou 2 avaliações. É o recorte real, e o print o mostra como está.
+
