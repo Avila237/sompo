@@ -45,6 +45,32 @@ def operador_existe(operador_id: str) -> bool:
     return bool(r.data)
 
 
+# Grupo 0 do PostgREST: ele esta de pe, mas sem conexao com o Postgres
+# (PGRST000-002 respondem 503; PGRST003, fila do pool esgotada, 504).
+_POSTGREST_SEM_BANCO = frozenset({"PGRST000", "PGRST001", "PGRST002", "PGRST003"})
+# SQLSTATE: classe 08 (conexao) e 57P01-03 (Postgres desligando ou subindo).
+_SQLSTATE_SEM_BANCO = ("08", "57P01", "57P02", "57P03")
+
+
+def banco_indisponivel(erro: APIError) -> bool:
+    """
+    True quando o APIError e falta de banco, nao erro de dado.
+
+    O postgrest-py (2.31) poe em `code` o codigo do PostgREST ou o SQLSTATE,
+    como texto, quando o corpo e o JSON de erro do PostgREST; o status HTTP
+    dessa resposta nao chega ao APIError. Quando o corpo e outro (o gateway na
+    frente do PostgREST devolvendo HTML ou JSON sem `code`), `code` e o
+    status HTTP, como int. Erro de dado (23505, PT409, constraint, 4xx) fica
+    de fora: repetir nao resolve.
+    """
+    codigo = erro.code
+    if isinstance(codigo, int):
+        return 500 <= codigo <= 599
+    if not isinstance(codigo, str):
+        return False
+    return codigo in _POSTGREST_SEM_BANCO or codigo.startswith(_SQLSTATE_SEM_BANCO)
+
+
 def _chamar_registrar(avaliacao: dict, predicao: dict) -> tuple[int, bool]:
     try:
         r = get_client().rpc(

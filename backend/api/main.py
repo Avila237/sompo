@@ -12,10 +12,12 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from postgrest.exceptions import APIError
 
 from backend.core import config
 from backend.core.exceptions import BancoIndisponivel, SafeFieldError
 from backend.core.logging import configurar as configurar_logging, novo_request_id, request_id_atual
+from backend.db.repository import banco_indisponivel
 
 logger = logging.getLogger("safefield.api")
 
@@ -98,6 +100,21 @@ async def tratar_banco_inacessivel(request: Request, exc: httpx.TransportError):
     """
     logger.error("banco inacessivel em %s: %s", request.url.path, exc)
     return JSONResponse(status_code=503, content={"detail": BancoIndisponivel.mensagem})
+
+
+@app.exception_handler(APIError)
+async def tratar_erro_do_postgrest(request: Request, exc: APIError):
+    """
+    PostgREST de pe e Postgres fora chega como APIError, nao como erro de
+    transporte: responde o mesmo 503. Qualquer outro APIError e erro de dado
+    ou bug e segue para o 500 generico, como antes.
+    """
+    if banco_indisponivel(exc):
+        # So codigo e mensagem: `details` pode trazer valor de coluna.
+        logger.error("banco inacessivel em %s: PostgREST %s: %s",
+                     request.url.path, exc.code, exc.message)
+        return JSONResponse(status_code=503, content={"detail": BancoIndisponivel.mensagem})
+    return _resposta_500(request)
 
 
 @app.exception_handler(Exception)
