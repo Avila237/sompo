@@ -96,7 +96,7 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 | `leitura_id` já gravado com outro payload (`POST /avaliacoes`) | `409` | `"leitura_id <uuid> ja foi usado com outro payload."` |
 | Open-Meteo fora **e** payload sem clima completo | `502` | mensagem com os campos climáticos ausentes |
 | Artefatos do modelo ausentes ou ilegíveis (`POST /avaliacoes`) | `503` | `"Modelo preditivo indisponivel. Verifique os artefatos em models/."` |
-| Supabase inacessível: conexão recusada, sem rota ou timeout (qualquer rota de dado) | `503` | `"Banco de dados indisponivel."` |
+| Supabase inacessível: conexão recusada, sem rota ou timeout, ou PostgREST de pé sem conexão com o Postgres (`PGRST000`–`PGRST003`, SQLSTATE `08xxx`/`57P01`–`57P03`, `5xx` do gateway) (qualquer rota de dado) | `503` | `"Banco de dados indisponivel."` |
 | Qualquer outra falha | `500` | `"Erro interno. Consulte os logs do servidor."` + campo `request_id` |
 
 **Campo desconhecido é recusado, não ignorado.** Vale para os campos que o servidor deriva
