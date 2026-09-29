@@ -16,6 +16,7 @@ A senha do usuario e pedida no terminal, sem eco. Para rodar sem pergunta
 """
 
 import argparse
+import functools
 import getpass
 import os
 import random
@@ -57,6 +58,13 @@ VIBRACAO = {
     "pulverizacao": (0.3, 1.0),
     "transporte": (0.4, 2.0),
 }
+
+# Retry com a mesma chave (leitura_id): repetir nunca duplica, porque a API
+# devolve o resultado gravado (200) quando a chave ja existe. Repete falha de
+# rede e as respostas sem resultado que passam sozinhas: 502 (Open-Meteo fora
+# e payload sem clima) e 503 (banco ou modelo fora). 4xx e recusa, nao repete.
+TENTATIVAS = 2
+RETENTAVEIS = frozenset({502, 503})
 
 
 def gerar_leitura(equipamentos: list[dict], cenario: str) -> tuple[dict, str]:
@@ -117,6 +125,52 @@ _OPERADORES: list[str] = []
 def operadores_de(equipamento: dict) -> list[str]:
     """Qualquer operador cadastrado — o vinculo real vive no historico."""
     return _OPERADORES
+
+
+def enviar_com_retry(
+    post,
+    url: str,
+    leitura: dict,
+    cabecalho: dict,
+    tentativas: int = TENTATIVAS,
+    timeout: float = 30,
+    ao_falhar=None,
+):
+    """
+    Envia a leitura ate `tentativas` vezes, sempre com a MESMA leitura_id.
+
+    `post` tem a assinatura de requests.post (injetavel: o teste passa o
+    TestClient). Repete em requests.RequestException e em RETENTAVEIS; para
+    na primeira resposta fora delas. Devolve a resposta da ultima tentativa,
+    ou None se ela nao teve resposta. `ao_falhar(numero, erro_ou_resposta)`,
+    se dado, e chamado a cada tentativa que falhou, para o chamador registrar.
+    """
+    if not leitura.get("leitura_id"):
+        # Sem chave, a API grava cada tentativa como leitura nova.
+        raise ValueError("leitura sem leitura_id: repetir o envio duplicaria a leitura")
+    if tentativas < 1:
+        raise ValueError(f"tentativas precisa ser >= 1, veio {tentativas}")
+    resposta = None
+    for numero in range(1, tentativas + 1):
+        try:
+            resposta = post(url, json=leitura, headers=cabecalho, timeout=timeout)
+        except requests.RequestException as e:
+            resposta = None
+            if ao_falhar:
+                ao_falhar(numero, e)
+            continue
+        if resposta.status_code not in RETENTAVEIS:
+            return resposta
+        if ao_falhar:
+            ao_falhar(numero, resposta)
+    return resposta
+
+
+def _relatar_falha(prefixo: str, tentativa: int, falha) -> None:
+    if isinstance(falha, requests.RequestException):
+        print(f"{prefixo} falha de rede (tentativa {tentativa}): {falha}")
+    else:
+        print(f"{prefixo} HTTP {falha.status_code} (tentativa {tentativa}): {falha.text[:160]}")
 
 
 def obter_token(api: str, usuario: str, senha: str) -> str:
@@ -188,15 +242,10 @@ def main() -> None:
         # Chave gerada antes do primeiro envio e reusada no retry: se a rede
         # cair depois de a API gravar, o reenvio nao duplica a leitura.
         leitura["leitura_id"] = str(uuid.uuid4())
-        r = None
-        for tentativa in (1, 2):
-            try:
-                r = requests.post(
-                    f"{args.api}/avaliacoes", json=leitura, headers=cabecalho, timeout=30
-                )
-                break
-            except requests.RequestException as e:
-                print(f"  [{i}/{args.n}] falha de rede (tentativa {tentativa}): {e}")
+        r = enviar_com_retry(
+            requests.post, f"{args.api}/avaliacoes", leitura, cabecalho,
+            ao_falhar=functools.partial(_relatar_falha, f"  [{i}/{args.n}]"),
+        )
         if r is None:
             falhas += 1
             continue
@@ -215,7 +264,8 @@ def main() -> None:
             print(f"          fator principal: {topo['feature']} ({topo['shap_value']:+.2f})")
         else:
             falhas += 1
-            print(f"  [{i}/{args.n}] HTTP {r.status_code}: {r.text[:160]}")
+            if r.status_code not in RETENTAVEIS:  # as retentaveis ja sairam em _relatar_falha
+                print(f"  [{i}/{args.n}] HTTP {r.status_code}: {r.text[:160]}")
 
         if i < args.n:
             time.sleep(args.intervalo)
