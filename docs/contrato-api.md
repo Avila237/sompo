@@ -136,6 +136,10 @@ sem sobrescrever nada.
 | `xgboost-v1-baseline` | modelo que gerou o seed, em 24/08/2026 | as 5.000 predições do seed |
 | `xgboost-v1.1` | mesmo XGBoost, treinado pelo `preprocess_features` da inferência (`739e70f`) | predições da API a partir de 28/09/2026 |
 
+Exceção conhecida: as avaliações 5040–5044, dos smokes de 28/09 feitos antes do #48, foram
+geradas pelo modelo `xgboost-v1.1` mas gravadas como `xgboost-v1-baseline`. Elas não foram
+reescritas, para manter a trilha de auditoria intacta.
+
 ## GET /equipamentos
 
 Query params: `faixa` (`baixo|medio|alto`), `busca` (1–60 caracteres, casa com id ou modelo).
