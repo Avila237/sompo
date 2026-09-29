@@ -357,7 +357,7 @@ echo
 nota "cada leitura: valida -> clima Open-Meteo -> deriva manutencao -> persiste"
 nota "              -> XGBoost + SHAP -> grava predicao -> grava auditoria"
 echo
-SAFEFIELD_SENHA="$SENHA" "$PY" scripts/simulate_telemetry.py --n "$LEITURAS" --intervalo 2 --cenario critico
+SAFEFIELD_SENHA="$SENHA" "$PY" scripts/simulate_telemetry.py --api "$API" --n "$LEITURAS" --intervalo 2 --cenario critico
 
 DEPOIS=$("$PY" -c "from backend.db.repository import contar; print(contar('avaliacoes'))")
 echo
