@@ -55,6 +55,7 @@ Recomendações: todos os perfis recebem todas no detalhe, e cada uma traz o seu
 (`operador`, `gestor` ou `tecnico`). A API não filtra nem reordena por perfil. No dashboard, o
 card de recomendações **abre filtrado no `publico` do perfil logado** (gestor → Gestor, técnico →
 Técnico, operador → Operador; analista → Todos), e o usuário pode trocar o filtro para ver todas.
+Sem nenhuma recomendação para o `publico` do perfil, o card abre em Todos.
 
 ### POST /auth/token
 

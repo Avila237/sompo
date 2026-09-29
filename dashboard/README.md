@@ -45,7 +45,7 @@ estava ocupada, acrescente a nova origem lá ou libere a porta.
 
 ## Telas
 
-O perfil vem do login (`perfil` e `operador_id` de `POST /auth/token`) e define o menu e a tela
+O perfil vem do login (`perfil` de `POST /auth/token`) e define o menu e a tela
 inicial (`src/lib/perfis.ts`). O **recorte dos dados é da API** (matriz perfil × rota da BRA-451):
 o front só evita abrir tela que a API recusaria. Perfil fora da matriz vê uma mensagem, sem menu.
 
@@ -61,7 +61,8 @@ o front só evita abrir tela que a API recusaria. Perfil fora da matriz vê uma 
 | Simulador · UBI · Prêmios | dados fixos / `data/mock.ts` | 🔒 "Em breve" | | | |
 
 No Detalhe, o card de recomendações abre filtrado no público do perfil (gestor → Gestor, técnico
-→ Técnico, operador → Operador; analista → Todos). Um `403` da API (fora do recorte) mostra o
+→ Técnico, operador → Operador; analista → Todos). Sem nenhuma recomendação para esse público, abre
+em Todos. Um `403` da API (fora do recorte) mostra o
 motivo e "Voltar", no lugar de "Tentar de novo".
 
 As telas "Em breve" ficam atrás de um overlay com `inert`: não recebem clique nem foco por
