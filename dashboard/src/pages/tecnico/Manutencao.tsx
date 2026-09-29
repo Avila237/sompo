@@ -45,6 +45,8 @@ export default function Manutencao({ onPickEquip }: { onPickEquip: (equipamentoI
   const emDia = ordenados.filter((e) => e.manutAtrasada === false)
   // Só entre os atrasados: sem nenhum, uma razão < 1 aparecia como "maior atraso"
   const maior = atrasadas.find((e) => e.atrasoPct != null)
+  // Frota inteira sem avaliação: não dá para afirmar que ninguém está atrasado
+  const semDado = ordenados.every((e) => e.manutAtrasada == null)
   const visiveis = filtro === 'atrasadas' ? atrasadas : ordenados
 
   return (
@@ -63,7 +65,7 @@ export default function Manutencao({ onPickEquip }: { onPickEquip: (equipamentoI
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
         <KPITile label="Manutenção atrasada" value={atrasadas.length} accent="crit" sub="equipamentos" subTone="crit" />
-        <KPITile label="Maior atraso" value={maior?.atrasoPct != null ? fmtAtraso(maior.atrasoPct) : '—'} sub={maior ? `${maior.id} · do intervalo recomendado` : 'nenhum equipamento atrasado'} />
+        <KPITile label="Maior atraso" value={maior?.atrasoPct != null ? fmtAtraso(maior.atrasoPct) : '—'} sub={maior ? `${maior.id} · do intervalo recomendado` : semDado ? 'sem dado de manutenção' : 'nenhum equipamento atrasado'} />
         <KPITile label="Em dia" value={emDia.length} accent="safe" sub="equipamentos" subTone="safe" />
       </div>
 
