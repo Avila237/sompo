@@ -7,7 +7,9 @@
 
 ## Sumário
 
-0. [Como Rodar o Projeto](#como-rodar-o-projeto)
+- [Estrutura do Repositório](#estrutura-do-repositório)
+- [Como Rodar o Projeto](#como-rodar-o-projeto)
+
 1. [Descrição do Problema](#1-descrição-do-problema)
 2. [Solução Proposta](#2-solução-proposta)
 3. [Personas e Necessidades](#3-personas-e-necessidades)
@@ -18,6 +20,33 @@
 8. [Estado Final, Decisões de Escopo e Dívidas](#8-estado-final-decisões-de-escopo-e-dívidas)
 9. [Vídeo de Apresentação](#9-vídeo-de-apresentação)
 10. [Equipe](#10-equipe)
+
+---
+
+## Estrutura do repositório
+
+```
+backend/
+├── api/              rotas FastAPI, schemas Pydantic e dependência de autenticação
+├── services/         regras do fluxo: scoring, clima, recomendações, consultas, auditoria, login
+├── ml/               treino, pré-processamento único, predição, SHAP e MLflow
+├── db/               cliente Supabase e repositório
+└── core/             configuração, segurança (JWT, scrypt), exceções e log
+dashboard/            React + TypeScript + Vite; consome só a API (ver dashboard/README.md)
+scripts/              dataset, seed, predições do seed, usuários, simulador e demo.sh
+├── evidencias/       scripts que geram as evidências de docs/evidencias/
+└── ensaios/          ensaios SQL das migrations, só para Postgres local descartável
+supabase/migrations/  estrutura do banco, aplicada em ordem de nome
+tests/                suíte pytest
+notebooks/            notebooks de EDA e de treinamento
+models/               features.json e métricas de referência; os .joblib são gerados pelo treino
+data/                 figuras de EDA e SHAP; o dataset é gerado localmente (passo 5)
+docs/                 contrato da API, OpenAPI, schema de dados e specs das sprints
+├── evidencias/       evidências de validação do MVP: backend e telas por perfil
+└── references/       enunciados e especificação do hardware IoT
+.github/workflows/    CI: lint, testes, build e auditoria de dependências
+firmware/, mobile/    placeholders vazios: ESP32 e app móvel estão fora de escopo (seção 8)
+```
 
 ---
 
@@ -91,7 +120,8 @@ saúde em **http://localhost:8000/health**.
 
 ```bash
 cd dashboard
-cp .env.example .env.local     # VITE_API_BASE_URL=http://localhost:8000
+cp .env.example .env.local     # Windows: copy .env.example .env.local
+#     traz VITE_API_BASE_URL=http://localhost:8000, a base da API
 npm install
 npm run dev
 # Abrir o endereço que o Vite imprimir (por padrão http://localhost:5173)
@@ -123,6 +153,38 @@ funcionam: a suíte do passo 7, a API subindo com `/health` respondendo e o dash
 tela de login. **Login e rotas de dado dependem do banco** e respondem `503 Banco de dados
 indisponível`; o teste de ponta a ponta exige as credenciais reais.
 
+#### Banco (primeira vez)
+
+Para montar um projeto Supabase novo e vazio, com o `.env` já apontando para ele. Rode depois dos
+passos 5 e 6 do Terminal 1: o seed lê o dataset gerado, e as predições usam o modelo treinado.
+
+```bash
+# 1. Estrutura: as migrations de supabase/migrations/, em ordem de nome.
+#    Pela CLI (instalada e logada uma vez com `supabase login`),
+#    o link vem antes do push (sem ele o push falha):
+supabase link --project-ref <ref-do-projeto>
+supabase db push --linked
+#    ou cole cada arquivo no SQL Editor do Supabase, em ordem de nome.
+
+# 2. Carga inicial: equipamentos, operadores e avaliações do dataset
+python scripts/seed_supabase.py
+
+# 3. Predições das avaliações do seed (modelo + SHAP)
+python scripts/populate_predictions.py
+
+# 4. Primeiro usuário (a senha é pedida no terminal, sem eco)
+python scripts/criar_usuario.py analista --perfil analista
+```
+
+O seed pede confirmação e só carrega banco vazio: se `equipamentos`, `operadores`, `avaliacoes` ou
+`predicoes` já tiverem linhas, ele recusa e sai sem gravar nada. Não use `--reset` no
+`populate_predictions.py` num banco em uso: ele apaga todas as predições, inclusive as da API,
+antes de gravar.
+
+Este caminho, de banco vazio a sistema no ar, ainda não foi ensaiado de ponta a ponta: o ensaio da
+migration de base num Postgres vazio (`scripts/ensaios/base_migration.sql`) não rodou. O banco da
+equipe foi montado pelo caminho anterior e está no mesmo estado final.
+
 #### Notas de ambiente
 
 Se `pytest` falhar reclamando de artefato de modelo ausente, o passo 6 não rodou — os `.joblib`
@@ -153,7 +215,8 @@ sozinho, e `--sem-web` roda só a API.
 
 #### Onde as instruções foram testadas
 
-- **macOS:** clone limpo seguindo só esta seção (BRA-467).
+- **macOS:** clone limpo seguindo só esta seção, com o banco da equipe já provisionado (BRA-467). A
+  subseção [Banco (primeira vez)](#banco-primeira-vez) não entrou nesse ensaio.
 - **CI:** o job de backend roda em **Ubuntu, Windows e macOS** a cada PR.
 - **Windows, manualmente:** o setup completo não tinha validação manual registrada até a entrega
   (BRA-442); no Windows, o backend é coberto pela CI.
@@ -235,7 +298,7 @@ O produtor rural ou gestor da operação agrícola precisa de um painel simples 
 
 ## 4. Estruturação dos Dados
 
-A solução integra dados de quatro categorias principais:
+A solução integra dados de seis categorias principais:
 
 ### 4.1 Variáveis
 
@@ -303,7 +366,7 @@ A solução integra dados de quatro categorias principais:
 | Variável | Tipo | Descrição |
 |---|---|---|
 | `risco_score` | 0–100 | Score contínuo de risco calculado pelo modelo |
-| `faixa_risco` | categórico | Baixo (0–33), médio (34–66), alto (67–100) |
+| `faixa_risco` | categórico | Baixo ≤ 33 < médio ≤ 66 < alto (sobre o score contínuo, sem lacuna entre as faixas) |
 
 ### 4.2 Dataset Simulado (exemplo)
 
@@ -333,7 +396,7 @@ A API é a única porta. O browser não carrega chave de banco; o acesso ao Post
 server-side com `service_role`, e a RLS está ativa sem policy para `anon` — leitura anônima
 retorna zero linhas. Tudo o mais nesta seção decorre disso.
 
-Na entrega anterior o dashboard lia o Supabase direto, com a chave embutida no bundle do browser.
+Na Entrega 2 o dashboard lia o Supabase direto, com a chave embutida no bundle do browser.
 Quem abrisse a página conseguia ler e escrever as tabelas. Com dado sintético o dano ficava
 contido; com dado de segurado real, seria exposição de dado pessoal sob a LGPD.
 
@@ -357,8 +420,10 @@ A entrada acontece por `POST /avaliacoes`, autenticada. Duas origens estão prev
 - **App móvel + ESP32 via BLE** — evolução futura; o hardware está especificado em
   [`docs/references/`](docs/references/), fora do escopo desta entrega
 
-Fontes externas: **Open-Meteo** para clima pela coordenada da leitura, com fallback para o payload
-e recusa explícita (`502`) se ambos faltarem. O enriquecimento geográfico via shapefiles do IBGE
+Fonte externa: **Open-Meteo**, para o clima. O clima medido em campo prevalece; sem ele, a
+Open-Meteo completa o que falta pela coordenada da leitura; sem os dois, a leitura é recusada com
+`502`. A coluna `clima_origem` registra de onde veio: `payload` · `open-meteo` · `misto` (e `seed`
+nas linhas da carga inicial). O enriquecimento geográfico via shapefiles do IBGE
 saiu de escopo — solo, distância de água e declividade já vêm
 no dataset.
 
@@ -381,7 +446,8 @@ O percurso completo, salto a salto e com o estado real de cada um, está em
 Usuários vivem na tabela `usuarios`, com senha em hash **scrypt** (parâmetros da OWASP gravados no
 próprio hash); o cadastro é feito por `scripts/criar_usuario.py`, que pede a senha sem eco. O login
 limita tentativas antes de calcular o hash e responde igual, no mesmo tempo, para usuário
-inexistente, inativo ou senha errada. Só `/auth/token` e `/health` são públicas.
+inexistente, inativo ou senha errada. Só `/auth/token`, `/health` e o Swagger (`/docs`, `/redoc`,
+`/openapi.json`) são públicos; o Swagger descreve o contrato e não expõe dado.
 
 **Controle de acesso por perfil.** Há uma frota só; os perfis diferem no **recorte**, aplicado na
 API (o front só evita abrir tela que a API recusaria):
@@ -406,9 +472,12 @@ aplica **CSP** estrita (`script-src 'self'`, `connect-src` só para a API). O se
 32 bytes impede a API de subir. Localização precisa não vai para o log.
 
 **Rastreabilidade.** Toda requisição tem um `request_id` (header `X-Request-ID`, também no corpo do
-`500`), presente em cada linha de log; o dashboard mostra esse código em erros 5xx. Toda decisão e
-recusa de `POST /avaliacoes` grava uma linha em `auditoria`, com usuário, ação, status, score e
-versão do modelo. Falhas previsíveis respondem `503` (banco ou modelo indisponível), não `500`.
+`500`), presente em cada linha de log; o dashboard mostra esse código em erros 5xx. Em
+`POST /avaliacoes`, cada avaliação gravada, cada reenvio e cada recusa do serviço (`403`, `404`,
+`409`, `422` de cadastro, `502` e `503` do modelo) grava uma linha em `auditoria`, com usuário,
+perfil, ação e status, e, no sucesso, score e versão do modelo. Com o banco fora, a auditoria não
+tem onde gravar e a falha fica só no log. Falhas previsíveis respondem `503` (banco ou modelo
+indisponível), não `500`.
 
 **Limitações declaradas.** O token vale até expirar: desativar ou rebaixar um usuário só vale no
 próximo login.
@@ -440,7 +509,8 @@ cenários de falha em [`docs/evidencias/front/`](docs/evidencias/front/). Simula
 ### 5.6.1 Diagrama de arquitetura
 
 A API como orquestradora entre entrada, banco, modelo e interface. A aresta tracejada para a
-Open-Meteo marca a dependência externa, que tem fallback; a aresta cortada marca o caminho fechado.
+Open-Meteo marca a dependência externa, consultada só quando o payload não traz o clima completo
+(sem os dois, `502`); a aresta cortada marca o caminho fechado.
 
 ```mermaid
 flowchart TB
@@ -451,17 +521,20 @@ flowchart TB
     subgraph API["API FastAPI — unica porta"]
         direction TB
         AUTH["Login + JWT<br/>perfil e operador_id"]
-        ESC["Escopo por perfil<br/>403 fora do recorte"]
         VAL["Validacao Pydantic<br/>faixas e consistencia cruzada"]
+        ESC["Escopo por perfil<br/>403 fora do recorte"]
+        IDEM["Reenvio por leitura_id<br/>devolve o resultado original"]
+        CAD["Cadastro do equipamento<br/>404 e consistencia com o cadastro"]
         ENR["Clima<br/>medido em campo prevalece"]
         PRE["preprocess_features<br/>vetor de 30 features"]
         MOD["XGBoost + SHAP<br/>carregado no startup"]
-        REC["Recomendacoes<br/>regras deterministicas"]
-        PERS["Grava avaliacao + predicao<br/>+ auditoria"]
+        PERS["Grava avaliacao + predicao<br/>numa transacao, depois auditoria"]
+        REC["Recomendacoes na resposta<br/>regras deterministicas, nao gravadas"]
         CON["Consultas<br/>kpis, alertas, tendencias"]
-        AUTH --> ESC
-        ESC --> VAL --> ENR --> PRE --> MOD --> REC --> PERS
-        ESC --> CON
+        AUTH -->|POST| VAL --> ESC
+        AUTH -->|GET| ESC
+        ESC -->|POST| IDEM --> CAD --> ENR --> PRE --> MOD --> PERS --> REC
+        ESC -->|GET| CON
     end
 
     subgraph DB["Supabase — PostgreSQL + RLS"]
@@ -492,8 +565,9 @@ sistema e como são utilizados para alimentar o modelo preditivo"*. O percurso �
 qualquer leitura, do momento em que ela é emitida até aparecer na tela.
 
 ```
-origem → validação → complemento cadastral → enriquecimento climático → vetor de 30 features →
-XGBoost → SHAP → persistência da avaliação → persistência da predição → API → interface
+origem → validação → autorização → reenvio (leitura_id) → complemento cadastral →
+enriquecimento climático → vetor de 30 features → XGBoost → SHAP →
+gravação atômica (avaliação + predição) → auditoria → API → interface
 ```
 
 Legenda de estado: **✅ implementado** · **🟡 parcial**
@@ -505,7 +579,7 @@ envia **apenas o que observa em campo** — posição, telemetria, tipo de opera
 e da última manutenção. Não envia nada que possa forjar o resultado: o cadastro do equipamento e a
 faixa de risco são resolvidos pelo servidor.
 
-Na Entrega 3 a origem é o simulador de telemetria (`scripts/simulate_telemetry.py`), que emite
+Nesta entrega a origem é o simulador de telemetria (`scripts/simulate_telemetry.py`), que emite
 leituras contra a API. O app móvel com ESP32 via BLE permanece como evolução futura — o enunciado
 aceita explicitamente *"por simulação ou por dispositivos reais"*.
 
@@ -536,6 +610,10 @@ da Regra 4 **não** são impostas: descrevem a distribuição do dataset simulad
 9 km/h é plausível no campo.
 
 #### 3. Complemento cadastral ✅
+
+Antes do cadastro vêm duas checagens. A **autorização por perfil** (5.5) recusa com `403` quem não
+pode enviar aquela leitura. Depois, o **reenvio**: um `leitura_id` já gravado com o mesmo payload
+devolve o resultado original, sem passar pelos saltos seguintes; com outro payload, `409` (ver 8).
 
 O servidor busca no banco o que não vem no payload: tipo, modelo, idade, histórico de sinistros,
 `tem_iot` e os intervalos de manutenção recomendados pelo fabricante. A partir disso **deriva**
@@ -605,15 +683,16 @@ banco:
 | Coluna | Valores | Responde a |
 |---|---|---|
 | `fonte` | `seed` · `telemetria` | O registro veio da carga inicial ou de uma leitura real? |
-| `clima_origem` | `seed` · `open-meteo` · `payload` | O clima foi buscado na API, ou é o fallback? |
+| `clima_origem` | `payload` · `open-meteo` · `misto` · `seed` | O clima foi medido em campo, buscado na Open-Meteo, ou medido em parte e completado por ela? |
 
 Sem elas, as 5.000 linhas do seed e as geradas pela API ficam indistinguíveis — e um score
-calculado com clima de fallback pareceria idêntico a um calculado com clima medido.
+calculado com clima da Open-Meteo pareceria idêntico a um calculado com clima medido em campo.
 
 > A estrutura do banco vive só em `supabase/migrations/`, aplicadas em ordem de nome a partir de
 > `20260527000000_base.sql`, que substituiu o antigo `backend/db/schema.sql` (removido porque
 > começava com `DROP TABLE`). Todas são aditivas e idempotentes e não destroem nada. Com a CLI
-> logada: `supabase db push --linked`.
+> logada, o projeto é ligado antes (`supabase link --project-ref <ref>`) e só então
+> `supabase db push --linked`; passo a passo em [Banco (primeira vez)](#banco-primeira-vez).
 
 #### 9. Persistência da predição ✅
 
@@ -631,7 +710,9 @@ append-only — reprocessar não sobrescreve predição anterior.
 
 #### 10. Registro de uso ✅
 
-Duas trilhas paralelas, atendendo ao RF-08.
+Duas trilhas paralelas, atendendo em parte ao R4-09 (registros de uso) da
+[spec da Sprint 4](docs/spec-sprint-04.md): a recusa no schema (`422` do Pydantic) não grava
+auditoria, só aparece no access log do servidor.
 
 **Log estruturado** (`backend/core/logging.py`) — cada linha carrega um `request_id` propagado por
 `ContextVar`, correlacionando a entrada da requisição, a decisão do modelo e a resposta. Um erro
@@ -646,7 +727,8 @@ uso de IA exige a segunda.
 
 #### 11. API → interface ✅
 
-O dashboard nunca toca o banco. Ele lê três rotas, todas autenticadas:
+O dashboard nunca toca o banco. Além do login (`POST /auth/token`), ele lê cinco rotas, todas
+autenticadas:
 
 | Rota | Alimenta |
 |---|---|
@@ -654,6 +736,7 @@ O dashboard nunca toca o banco. Ele lê três rotas, todas autenticadas:
 | `GET /kpis` | KPIs, distribuição geográfica e agregação por tipo de operação |
 | `GET /alertas` | Alertas recentes, filtráveis por faixa mínima |
 | `GET /equipamentos/{id}` | Detalhe: última avaliação, predição, decomposição SHAP e histórico |
+| `GET /tendencias` | Relatórios: série do score por equipamento, região ou tipo de operação |
 
 O contrato completo, capturado da API em execução, está em
 [`docs/contrato-api.md`](docs/contrato-api.md); o schema OpenAPI, em
@@ -695,7 +778,7 @@ passar por autenticação.
 
 ### 6.1 Abordagem
 
-O modelo utiliza **XGBoost para regressão**, gerando um score contínuo de risco de 0 a 100 por equipamento e contexto operacional. A partir desse score, são derivadas três faixas categóricas (baixo, médio, alto) que determinam o tipo de resposta do sistema — informativo, alerta ou recomendação de ação.
+O modelo utiliza **XGBoost para regressão**, gerando um score contínuo de risco de 0 a 100 por equipamento e contexto operacional. A partir desse score é derivada a faixa (baixo, médio, alto). Avaliação de faixa média ou alta entra nos alertas (`GET /alertas`, filtrável por faixa mínima) e traz ao menos uma recomendação. As recomendações vêm das regras determinísticas de `backend/services/recomendacoes.py`, que testam os valores da leitura (sem regra disparada, entra o fator SHAP dominante), e não da faixa sozinha.
 
 ### 6.2 Justificativa do XGBoost
 
@@ -730,15 +813,15 @@ decisão de prioridade; está registrada, não escondida.
 
 ### 6.4 Explicabilidade com SHAP
 
-O SHAP (SHapley Additive exPlanations) é aplicado sobre cada predição individual para decompor o score nos fatores que o geraram. Isso atende diretamente às user stories da Sompo, que exigem resultados explicáveis para sustentar conversas técnicas com clientes e áreas internas, e trilha de auditoria para governança do uso de IA. A decomposição por grupo (ambiental, geográfico, operacional, equipamento, operador, manutenção) permite exibir "dos 74 pontos, 45 vêm do ambiente, 18 do operador e 11 da manutenção".
+O SHAP (SHapley Additive exPlanations) é aplicado sobre cada predição individual para decompor o score nos fatores que o geraram. Isso atende diretamente às user stories da Sompo, que exigem resultados explicáveis para sustentar conversas técnicas com clientes e áreas internas, e trilha de auditoria para governança do uso de IA. A decomposição por grupo (ambiental, geográfico, operacional, equipamento, operador, manutenção) permite ler, no exemplo da [6.5](#65-exemplo-de-saída), que o score 69.47 subiu pelos grupos ambiental (+17.76) e geográfico (+12.06), enquanto equipamento (−4.99), operacional (−2.06) e operador (−0.90) o puxaram para baixo.
 
-**Importância global das features.** Cada ponto é um registro do test set; a posição no eixo X é o quanto aquela feature empurrou o score daquele registro para cima (direita) ou para baixo (esquerda). O driver dominante é `historico_sinistros` (mean |SHAP| = 18.58), seguido por horas de operação e distância do corpo d'água.
+**Importância global das features.** Cada ponto é um de 500 registros sorteados do dataset inteiro (`df.sample(500, random_state=42)` em `backend/ml/shap_explainer.py`); a posição no eixo X é o quanto aquela feature empurrou o score daquele registro para cima (direita) ou para baixo (esquerda). O driver dominante é `historico_sinistros` (mean |SHAP| = 18.08), seguido por horas de operação e distância do corpo d'água.
 
 <p align="center">
   <img src="data/shap_summary_beeswarm.png" alt="SHAP beeswarm — importância global das features" width="700">
 </p>
 
-**Decomposição de uma predição individual.** O mesmo mecanismo aplicado a um único equipamento classificado como risco alto: partindo da média do dataset (E[f(X)] = 47.6), o histórico de sinistros sozinho adiciona +41.5 pontos, levando o score final a 87.3. É essa cadeia que a API devolve — em `POST /avaliacoes` e em `GET /equipamentos/{id}` — não apenas o número.
+**Decomposição de uma predição individual.** O mesmo mecanismo aplicado a um único equipamento classificado como risco alto: partindo da média do dataset (E[f(X)] = 47.6), o histórico de sinistros sozinho adiciona +40.71 pontos; somadas as demais features, o score final fica em 85.85. É essa cadeia que a API devolve — em `POST /avaliacoes` e em `GET /equipamentos/{id}` — não apenas o número.
 
 <p align="center">
   <img src="data/shap_waterfall_alto.png" alt="SHAP waterfall — decomposição de uma predição de risco alto" width="800">
@@ -746,8 +829,10 @@ O SHAP (SHapley Additive exPlanations) é aplicado sobre cada predição individ
 
 ### 6.5 Exemplo de Saída
 
-Resposta real de `POST /avaliacoes`, capturada da API em execução. O contrato completo está em
-[`docs/contrato-api.md`](docs/contrato-api.md).
+Formato de uma resposta `201` de `POST /avaliacoes`, copiado do exemplo do contrato em
+[`docs/contrato-api.md`](docs/contrato-api.md#post-avaliacoes), com `top_fatores` abreviado em
+`"..."`. Os valores são ilustrativos. Uma resposta real, com a trilha até o banco, está em
+[`docs/evidencias/backend/coleta_real.txt`](docs/evidencias/backend/coleta_real.txt).
 
 ```json
 {
@@ -755,6 +840,7 @@ Resposta real de `POST /avaliacoes`, capturada da API em execução. O contrato 
   "equipamento_id": "EQ-0042",
   "risco_score": 69.47,
   "faixa_risco": "alto",
+  "clima_origem": "open-meteo",
   "contribuicoes_por_grupo": {
     "ambiental": 17.7577,
     "geografico": 12.0574,
@@ -765,20 +851,30 @@ Resposta real de `POST /avaliacoes`, capturada da API em execução. O contrato 
   },
   "top_fatores": [
     { "feature": "distancia_agua_m", "valor": 120.0, "shap_value": 11.5357, "grupo": "geografico" },
-    { "feature": "precipitacao_mm",  "valor": 42.0,  "shap_value": 11.3671, "grupo": "ambiental" }
+    { "feature": "precipitacao_mm",  "valor": 42.0,  "shap_value": 11.3671, "grupo": "ambiental" },
+    "..."
   ],
-  "modelo_versao": "xgboost-v1-baseline",
+  "recomendacoes": [
+    {
+      "id": "margem_alagavel",
+      "publico": "gestor",
+      "acao": "Afastar a operação da margem até o solo secar: área alagável após chuva.",
+      "criterio": "distancia_agua_m=120 < 200 e precipitacao_mm=42 > 25"
+    }
+  ],
+  "modelo_versao": "xgboost-v1.1",
   "timestamp": "2026-08-24T13:02:53.465989+00:00"
 }
 ```
 
-O exemplo é uma predição do seed, gravada como `xgboost-v1-baseline`. As predições da API a partir
-de 28/09/2026 saem como `xgboost-v1.1`: o mesmo XGBoost, com as mesmas métricas, treinado pelo
-pré-processamento da inferência. As versões estão em
+`modelo_versao` diz qual modelo gerou a predição: as 5.000 predições do seed estão gravadas como
+`xgboost-v1-baseline`, e as da API, a partir de 28/09/2026, saem como `xgboost-v1.1`, o mesmo
+XGBoost, com as mesmas métricas, treinado pelo pré-processamento da inferência. As versões estão em
 [`docs/contrato-api.md`](docs/contrato-api.md#get-health).
 
-**O score nunca vem sozinho** (RF-10): sempre acompanhado da faixa, da decomposição por grupo e dos
-fatores que o produziram, rotulados em português na interface.
+**O score nunca vem sozinho**: sempre acompanhado da faixa, da decomposição por grupo, dos fatores
+que o produziram, rotulados em português na interface, e das recomendações com o critério que as
+disparou.
 
 As contribuições somam **com sinal** — positivo empurra o risco para cima, negativo puxa para
 baixo. No exemplo, o equipamento pontuou alto por geografia e clima *apesar* do perfil do operador
@@ -787,23 +883,27 @@ número isolado.
 
 ### 6.6 Rastreabilidade com MLflow
 
-Cada treinamento e cada versão do modelo são registrados no MLflow com: parâmetros (hiperparâmetros do XGBoost), métricas (RMSE, MAE, distribuição de erros por faixa), artefatos (modelo serializado, gráficos SHAP globais) e dataset utilizado. Isso permite auditoria completa e rollback para versões anteriores se necessário.
+Cada execução de `python backend/ml/train.py` registra um run no experimento `safefield-xgboost` do MLflow com: hiperparâmetros do XGBoost e tamanhos de treino e teste, métricas (MAE, RMSE, R², acurácia por faixa e F1 de cada faixa) e artefatos (modelo, encoder, lista de features, métricas e as figuras SHAP de `data/`). Do dataset, o run guarda só a etiqueta de versão (`dataset_version`), não os dados. Isso permite comparar runs e recuperar o modelo de um run anterior.
+
+O store é local, em `mlruns/`, que não vai para o Git: cada máquina vê só os próprios runs. Para abrir, da raiz do repositório: `mlflow ui --backend-store-uri file:./mlruns`.
 
 ### 6.7 Explicação Contextual (RAG) — fora de escopo
 
 A proposta inicial previa usar os top fatores SHAP para buscar trechos em uma base de conhecimento
 técnico simulada e sintetizar recomendações em linguagem natural via LLM, num endpoint `/explain`.
 
-**Isso foi retirado do escopo.** O enunciado desta entrega não menciona RAG, LLM nem geração de
-linguagem natural, e restringe a solução às disciplinas do primeiro ano. Construir o componente
-consumiria esforço em algo não avaliado.
+**Isso foi retirado do escopo.** O enunciado da Sprint 3 restringia a solução às disciplinas do
+primeiro ano, e o desta entrega não menciona RAG, LLM nem geração de linguagem natural. Mantivemos a
+restrição por coerência e porque recomendação precisa de critério explícito, não de texto gerado.
+Construir o componente consumiria esforço em algo não avaliado.
 
-A explicabilidade exigida pelo RF-10 é atendida pelo SHAP, que já entrega a decomposição por grupo
-e os fatores rotulados. A camada de linguagem natural permanece como evolução possível.
+A explicabilidade do score, que o enunciado cobra junto com os registros de uso (R4-09), é atendida
+pelo SHAP, que já entrega a decomposição por grupo e os fatores rotulados. A camada de linguagem
+natural permanece como evolução possível.
 
 ### 6.8 Evolução Futura
 
-Na fase de protótipo, o modelo será treinado com dados simulados (~5.000 registros). Conforme dados reais forem coletados via app e IoT, o modelo poderá ser retreinado incrementalmente. A arquitetura também permite substituir ou complementar o XGBoost com outros modelos (LightGBM, redes neurais) sem alterar a interface da API.
+O modelo atual foi treinado com dados simulados (dataset de 5.000 registros, 4.000 no treino). Conforme dados reais forem coletados via app e IoT, o modelo poderá ser retreinado incrementalmente. A arquitetura também permite substituir ou complementar o XGBoost com outros modelos (LightGBM, redes neurais) sem alterar a interface da API.
 
 ---
 
@@ -827,7 +927,8 @@ cada perfil**:
   `503` com `request_id`; o dashboard trata API fora do ar, lenta, resposta malformada e sessão
   expirada com mensagem e recuperação.
 - **Segurança e rastreabilidade.** Credenciais fora do `.env`, perfis com recorte real nas rotas e
-  uma linha de auditoria por decisão.
+  uma linha de auditoria por avaliação gravada, reenvio ou recusa do serviço (com o banco fora, a
+  falha fica no log).
 - **Valor ao usuário.** Recomendações com critério explícito, tendência de risco nos três eixos que o
   enunciado pede e uma tela de entrada para cada perfil (analista, gestor, técnico, operador).
 - **Reprodutibilidade.** Versões fixadas, CI em todo PR com o backend testado em Ubuntu, Windows
