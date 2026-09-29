@@ -1,0 +1,15 @@
+# Consulta a tabela auditoria (somente leitura), 28/09/2026 - ultimas 12 decisoes
+# mesma consulta do roteiro do video: backend.db.repository.get_client().table('auditoria')
+auditoria_id  timestamp (UTC)      usuario   perfil    acao       status   equip     aval  score  modelo_versao  detalhe
+          79  2026-09-29T00:40:11  analista  analista  avaliacao  sucesso  EQ-0119   5059  13.35  xgboost-v1.1   
+          80  2026-09-29T00:40:11  analista  analista  avaliacao  sucesso  EQ-0194   5060   97.7  xgboost-v1.1   
+          81  2026-09-29T00:40:13  analista  analista  avaliacao  sucesso  EQ-0026   5061  26.07  xgboost-v1.1   
+          82  2026-09-29T00:40:14  analista  analista  avaliacao  reenvio  EQ-0026   5061  26.07  xgboost-v1.1   reenvio da leitura_id c86a9bb6-3370-47b2-872e-6c4932c39350
+          83  2026-09-29T00:40:15  analista  analista  avaliacao  sucesso  EQ-0101   5062  25.24  xgboost-v1.1   
+          84  2026-09-29T00:40:16  analista  analista  avaliacao  sucesso  EQ-0088   5063  66.21  xgboost-v1.1   
+          85  2026-09-29T00:40:18  analista  analista  avaliacao  sucesso  EQ-0074   5064   21.8  xgboost-v1.1   
+          86  2026-09-29T00:40:20  analista  analista  avaliacao  sucesso  EQ-0062   5065  44.81  xgboost-v1.1   
+          87  2026-09-29T00:40:20  analista  analista  avaliacao  reenvio  EQ-0062   5065  44.81  xgboost-v1.1   reenvio da leitura_id afe31371-e572-47ee-b334-73eb10896bee
+          88  2026-09-29T00:40:31  operador  operador  avaliacao  sucesso  EQ-0014   5066  97.25  xgboost-v1.1   
+          89  2026-09-29T00:40:32  gestor    gestor    avaliacao  erro     EQ-0017      -      -  -              Perfil 'gestor' nao envia leituras.
+          90  2026-09-29T00:40:32  tecnico   tecnico   avaliacao  erro     EQ-0017      -      -  -              Perfil 'tecnico' nao envia leituras.

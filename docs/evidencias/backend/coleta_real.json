@@ -1,0 +1,559 @@
+{
+  "gerado_em": "2026-09-29T00:40:20.859787+00:00",
+  "api": "http://127.0.0.1:8001",
+  "autenticacao": {
+    "modo": "token-local",
+    "usuario": "analista",
+    "como": "criar_token('analista', 'analista') com o JWT_SECRET_KEY do .env; sem login"
+  },
+  "parametros": {
+    "n": 20,
+    "k": 4,
+    "seed": 461,
+    "log_api": "<log da API (uvicorn)>"
+  },
+  "resumo": {
+    "leituras_enviadas": 20,
+    "respostas_descartadas": 5,
+    "respostas_por_status": {
+      "200": 5,
+      "201": 20
+    },
+    "status_final": {
+      "200": 5,
+      "201": 15
+    },
+    "avaliacoes_por_leitura": {
+      "1": 20
+    },
+    "predicoes_por_avaliacao": {
+      "1": 20
+    },
+    "orfas": [],
+    "duplicatas": []
+  },
+  "checagens": [
+    {
+      "nome": "conjunto_nao_vazio",
+      "ok": true,
+      "detalhe": "20 leituras enviadas, 20 avaliacoes lidas"
+    },
+    {
+      "nome": "chaves_distintas",
+      "ok": true,
+      "detalhe": "20 leitura_id distintos em 20 envios"
+    },
+    {
+      "nome": "uma_avaliacao_por_leitura",
+      "ok": true,
+      "detalhe": "faltando=[] duplicadas=[]"
+    },
+    {
+      "nome": "uma_predicao_por_avaliacao",
+      "ok": true,
+      "detalhe": "orfas (avaliacao sem predicao)=[] com mais de uma=[]"
+    },
+    {
+      "nome": "toda_leitura_terminou_com_resultado",
+      "ok": true,
+      "detalhe": "sem 200/201 na ultima tentativa: []"
+    },
+    {
+      "nome": "resposta_aponta_para_a_avaliacao_gravada",
+      "ok": true,
+      "detalhe": "avaliacao_id da resposta diferente do gravado: []"
+    },
+    {
+      "nome": "retry_apos_resposta_perdida_e_reenvio",
+      "ok": true,
+      "detalhe": "5 respostas descartadas; sem 200 no reenvio: []"
+    },
+    {
+      "nome": "auditoria_sucesso_ou_reenvio_por_avaliacao",
+      "ok": true,
+      "detalhe": "sem exatamente um 'sucesso' e sem 'reenvio': []"
+    },
+    {
+      "nome": "auditoria_bate_com_as_respostas",
+      "ok": true,
+      "detalhe": "'sucesso' {5046: 1, 5047: 1, 5048: 1, 5049: 1, 5050: 1, 5051: 1, 5052: 1, 5053: 1, 5054: 1, 5055: 1, 5056: 1, 5057: 1, 5058: 1, 5059: 1, 5060: 1, 5061: 1, 5062: 1, 5063: 1, 5064: 1, 5065: 1} x respostas 201 {5046: 1, 5047: 1, 5048: 1, 5049: 1, 5050: 1, 5051: 1, 5052: 1, 5053: 1, 5054: 1, 5055: 1, 5056: 1, 5057: 1, 5058: 1, 5059: 1, 5060: 1, 5061: 1, 5062: 1, 5063: 1, 5064: 1, 5065: 1}; 'reenvio' {5049: 1, 5053: 1, 5057: 1, 5061: 1, 5065: 1} x respostas 200 {5049: 1, 5053: 1, 5057: 1, 5061: 1, 5065: 1}"
+    },
+    {
+      "nome": "auditoria_do_usuario_autenticado",
+      "ok": true,
+      "detalhe": "25 linhas de sucesso/reenvio; de outro usuario que nao 'analista', ou sem perfil: []"
+    },
+    {
+      "nome": "modelo_versao_da_predicao_na_auditoria",
+      "ok": true,
+      "detalhe": "modelo_versao da auditoria diferente do da predicao: []"
+    },
+    {
+      "nome": "entrada_gravada_confere",
+      "ok": true,
+      "detalhe": "20 avaliacoes comparadas com a leitura enviada; divergentes: []"
+    },
+    {
+      "nome": "procedencia_gravada",
+      "ok": true,
+      "detalhe": "fonte != telemetria ou clima_origem inesperado: []"
+    },
+    {
+      "nome": "log_correlacionado_por_request_id",
+      "ok": true,
+      "detalhe": "25 respostas 200/201, 25 com a linha do seu avaliacao_id; sem linha ou com linha divergente: []"
+    }
+  ],
+  "trilhas": [
+    {
+      "leitura_id": "bb9edbaa-bcc8-4198-a1b8-0b521a61dad3",
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "6ea4e3570c81",
+          "descartada": true,
+          "linha_de_log": "2026-09-28T21:39:50 INFO    [6ea4e3570c81] safefield.scoring: avaliacao 5049: EQ-0104 score=29.86 faixa=baixo usuario=analista"
+        },
+        {
+          "tentativa": 2,
+          "status": 200,
+          "request_id": "824f05f9ef8a",
+          "descartada": false,
+          "linha_de_log": "2026-09-28T21:39:51 INFO    [824f05f9ef8a] safefield.scoring: reenvio avaliacao 5049: EQ-0104 leitura_id=bb9edbaa-bcc8-4198-a1b8-0b521a61dad3 usuario=analista"
+        }
+      ],
+      "avaliacao_id": 5049,
+      "equipamento_id": "EQ-0104",
+      "clima_origem": "open-meteo",
+      "timestamp_avaliacao": "2026-09-29T00:39:50.66038+00:00",
+      "modelo_versao": "xgboost-v1.1",
+      "auditoria": [
+        {
+          "status": "sucesso",
+          "usuario": "analista",
+          "perfil": "analista",
+          "modelo_versao": "xgboost-v1.1",
+          "timestamp": "2026-09-29T00:39:50.828592+00:00"
+        },
+        {
+          "status": "reenvio",
+          "usuario": "analista",
+          "perfil": "analista",
+          "modelo_versao": "xgboost-v1.1",
+          "timestamp": "2026-09-29T00:39:51.327215+00:00"
+        }
+      ]
+    },
+    {
+      "leitura_id": "d4aacaa1-f3e3-40b0-be5a-fe10c51ea9c8",
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "94bfec9b9ce2",
+          "descartada": false,
+          "linha_de_log": "2026-09-28T21:39:49 INFO    [94bfec9b9ce2] safefield.scoring: avaliacao 5048: EQ-0029 score=33.57 faixa=medio usuario=analista"
+        }
+      ],
+      "avaliacao_id": 5048,
+      "equipamento_id": "EQ-0029",
+      "clima_origem": "payload",
+      "timestamp_avaliacao": "2026-09-29T00:39:49.02061+00:00",
+      "modelo_versao": "xgboost-v1.1",
+      "auditoria": [
+        {
+          "status": "sucesso",
+          "usuario": "analista",
+          "perfil": "analista",
+          "modelo_versao": "xgboost-v1.1",
+          "timestamp": "2026-09-29T00:39:49.210609+00:00"
+        }
+      ]
+    },
+    {
+      "leitura_id": "c98aa926-22f5-40c2-9bf4-779d7e10370f",
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "36978f083ec6",
+          "descartada": false,
+          "linha_de_log": "2026-09-28T21:39:47 INFO    [36978f083ec6] safefield.scoring: avaliacao 5046: EQ-0094 score=27.19 faixa=baixo usuario=analista"
+        }
+      ],
+      "avaliacao_id": 5046,
+      "equipamento_id": "EQ-0094",
+      "clima_origem": "open-meteo",
+      "timestamp_avaliacao": "2026-09-29T00:39:46.884398+00:00",
+      "modelo_versao": "xgboost-v1.1",
+      "auditoria": [
+        {
+          "status": "sucesso",
+          "usuario": "analista",
+          "perfil": "analista",
+          "modelo_versao": "xgboost-v1.1",
+          "timestamp": "2026-09-29T00:39:47.116212+00:00"
+        }
+      ]
+    }
+  ],
+  "envios": [
+    {
+      "leitura_id": "c98aa926-22f5-40c2-9bf4-779d7e10370f",
+      "equipamento_id": "EQ-0094",
+      "operador_id": "OP-0020",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "36978f083ec6",
+          "avaliacao_id": 5046,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "4e0aec55-f0e6-4f1d-86ef-ca061c4b50c6",
+      "equipamento_id": "EQ-0023",
+      "operador_id": "OP-0049",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "1d57155d2f5a",
+          "avaliacao_id": 5047,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "d4aacaa1-f3e3-40b0-be5a-fe10c51ea9c8",
+      "equipamento_id": "EQ-0029",
+      "operador_id": "OP-0046",
+      "clima_no_payload": true,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "94bfec9b9ce2",
+          "avaliacao_id": 5048,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "bb9edbaa-bcc8-4198-a1b8-0b521a61dad3",
+      "equipamento_id": "EQ-0104",
+      "operador_id": "OP-0054",
+      "clima_no_payload": false,
+      "descartar_primeira": true,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "6ea4e3570c81",
+          "avaliacao_id": 5049,
+          "descartada": true
+        },
+        {
+          "tentativa": 2,
+          "status": 200,
+          "request_id": "824f05f9ef8a",
+          "avaliacao_id": 5049,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "a40d6490-2107-4607-999e-79ac28294b35",
+      "equipamento_id": "EQ-0121",
+      "operador_id": "OP-0002",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "52a74fe300e6",
+          "avaliacao_id": 5050,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "72d991ed-c549-4207-be97-f4ae8844646c",
+      "equipamento_id": "EQ-0053",
+      "operador_id": "OP-0036",
+      "clima_no_payload": true,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "265ee96050e7",
+          "avaliacao_id": 5051,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "4122a4f2-4632-4a4c-8dab-15299010c3fc",
+      "equipamento_id": "EQ-0074",
+      "operador_id": "OP-0042",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "9e2fe21f87f7",
+          "avaliacao_id": 5052,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "6fe52f27-5079-4b1f-8510-f27a1253e2e0",
+      "equipamento_id": "EQ-0181",
+      "operador_id": "OP-0035",
+      "clima_no_payload": false,
+      "descartar_primeira": true,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "c9f5d7680e7a",
+          "avaliacao_id": 5053,
+          "descartada": true
+        },
+        {
+          "tentativa": 2,
+          "status": 200,
+          "request_id": "a48eb40f7df9",
+          "avaliacao_id": 5053,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "6c19200c-4e36-4740-a771-36c9ec862e30",
+      "equipamento_id": "EQ-0114",
+      "operador_id": "OP-0041",
+      "clima_no_payload": true,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "f76292fedce3",
+          "avaliacao_id": 5054,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "aa95c940-14c5-46c5-aa46-8e38d7f21940",
+      "equipamento_id": "EQ-0132",
+      "operador_id": "OP-0075",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "839a928e5c73",
+          "avaliacao_id": 5055,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "54064cd2-8248-4d7e-aedc-072a168585c3",
+      "equipamento_id": "EQ-0014",
+      "operador_id": "OP-0015",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "56ae63ba410c",
+          "avaliacao_id": 5056,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "bac58e56-1f09-4a43-b3e2-fb26aed2397e",
+      "equipamento_id": "EQ-0029",
+      "operador_id": "OP-0046",
+      "clima_no_payload": true,
+      "descartar_primeira": true,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "6aae34060f5a",
+          "avaliacao_id": 5057,
+          "descartada": true
+        },
+        {
+          "tentativa": 2,
+          "status": 200,
+          "request_id": "ddb648e5ed96",
+          "avaliacao_id": 5057,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "9eb68351-7a0c-4aef-928e-a2bfe19b4537",
+      "equipamento_id": "EQ-0074",
+      "operador_id": "OP-0019",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "788c11195f2d",
+          "avaliacao_id": 5058,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "37e9a504-2c41-4295-8700-b24413698676",
+      "equipamento_id": "EQ-0119",
+      "operador_id": "OP-0038",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "25ef715438fe",
+          "avaliacao_id": 5059,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "dcbfbdf2-bc52-435a-89f7-bec43c390af8",
+      "equipamento_id": "EQ-0194",
+      "operador_id": "OP-0035",
+      "clima_no_payload": true,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "6547c2d97d86",
+          "avaliacao_id": 5060,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "c86a9bb6-3370-47b2-872e-6c4932c39350",
+      "equipamento_id": "EQ-0026",
+      "operador_id": "OP-0043",
+      "clima_no_payload": false,
+      "descartar_primeira": true,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "398be2416cc8",
+          "avaliacao_id": 5061,
+          "descartada": true
+        },
+        {
+          "tentativa": 2,
+          "status": 200,
+          "request_id": "39cbf8186886",
+          "avaliacao_id": 5061,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "f6c288c5-1060-43b7-a262-746475161456",
+      "equipamento_id": "EQ-0101",
+      "operador_id": "OP-0039",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "147370f4a3ab",
+          "avaliacao_id": 5062,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "296b9a9f-5a08-4c92-8d8d-b60714a08fd3",
+      "equipamento_id": "EQ-0088",
+      "operador_id": "OP-0050",
+      "clima_no_payload": true,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "2e4fd0395cae",
+          "avaliacao_id": 5063,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "e127534c-933d-4400-98c8-a5f3abb885af",
+      "equipamento_id": "EQ-0074",
+      "operador_id": "OP-0042",
+      "clima_no_payload": false,
+      "descartar_primeira": false,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "a03bc956eaa1",
+          "avaliacao_id": 5064,
+          "descartada": false
+        }
+      ]
+    },
+    {
+      "leitura_id": "afe31371-e572-47ee-b334-73eb10896bee",
+      "equipamento_id": "EQ-0062",
+      "operador_id": "OP-0071",
+      "clima_no_payload": false,
+      "descartar_primeira": true,
+      "tentativas": [
+        {
+          "tentativa": 1,
+          "status": 201,
+          "request_id": "96ea752825ef",
+          "avaliacao_id": 5065,
+          "descartada": true
+        },
+        {
+          "tentativa": 2,
+          "status": 200,
+          "request_id": "fb9cc30960d3",
+          "avaliacao_id": 5065,
+          "descartada": false
+        }
+      ]
+    }
+  ],
+  "ok": true
+}

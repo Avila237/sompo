@@ -52,9 +52,10 @@ recebem tudo.
 só tem efeito no próximo login, até `JWT_EXPIRE_MINUTES` depois.
 
 Recomendações: todos os perfis recebem todas no detalhe, e cada uma traz o seu `publico`
-(`operador`, `gestor` ou `tecnico`). A API não filtra nem reordena por perfil. O destaque das
-recomendações do perfil logado no dashboard é escopo da BRA-460; hoje o card só filtra por
-`publico` quando o usuário escolhe.
+(`operador`, `gestor` ou `tecnico`). A API não filtra nem reordena por perfil. No dashboard, o
+card de recomendações **abre filtrado no `publico` do perfil logado** (gestor → Gestor, técnico →
+Técnico, operador → Operador; analista → Todos), e o usuário pode trocar o filtro para ver todas.
+Sem nenhuma recomendação para o `publico` do perfil, o card abre em Todos.
 
 ### POST /auth/token
 
@@ -95,7 +96,7 @@ Todo erro tratado responde `{"detail": "<mensagem>"}`, sem stack trace.
 | `leitura_id` já gravado com outro payload (`POST /avaliacoes`) | `409` | `"leitura_id <uuid> ja foi usado com outro payload."` |
 | Open-Meteo fora **e** payload sem clima completo | `502` | mensagem com os campos climáticos ausentes |
 | Artefatos do modelo ausentes ou ilegíveis (`POST /avaliacoes`) | `503` | `"Modelo preditivo indisponivel. Verifique os artefatos em models/."` |
-| Supabase inacessível: conexão recusada, sem rota ou timeout (qualquer rota de dado) | `503` | `"Banco de dados indisponivel."` |
+| Supabase inacessível: conexão recusada, sem rota ou timeout, ou PostgREST de pé sem conexão com o Postgres (`PGRST000`–`PGRST003`, SQLSTATE `08xxx`/`57P01`–`57P03`, `5xx` do gateway) (qualquer rota de dado) | `503` | `"Banco de dados indisponivel."` |
 | Qualquer outra falha | `500` | `"Erro interno. Consulte os logs do servidor."` + campo `request_id` |
 
 **Campo desconhecido é recusado, não ignorado.** Vale para os campos que o servidor deriva
@@ -117,14 +118,27 @@ Público. Diz se a API subiu e se o modelo carregou.
 
 ```json
 // resposta 200, modelo carregado
-{"status": "ok", "modelo": {"carregado": true, "n_features": 30}, "modelo_versao": "xgboost-v1-baseline"}
+{"status": "ok", "modelo": {"carregado": true, "n_features": 30}, "modelo_versao": "xgboost-v1.1"}
 // resposta 200, modelo ausente
-{"status": "degradado", "modelo": {"carregado": false}, "modelo_versao": "xgboost-v1-baseline"}
+{"status": "degradado", "modelo": {"carregado": false}, "modelo_versao": "xgboost-v1.1"}
 ```
 
 Responde `200` mesmo degradado; quem monitora deve ler `status`. A rota é pública, então não diz
 **por que** o modelo não carregou: o motivo vai para o log. Com o modelo ausente, cada chamada
 tenta carregá-lo de novo.
+
+**Versões do modelo.** `modelo_versao` vem de `MODELO_VERSAO` no `.env` e identifica qual modelo
+gerou cada predição. Com a unicidade `(avaliacao_id, modelo_versao)`, versões diferentes convivem
+sem sobrescrever nada.
+
+| Versão | O que é | Onde aparece |
+|---|---|---|
+| `xgboost-v1-baseline` | modelo que gerou o seed, em 24/08/2026 | as 5.000 predições do seed |
+| `xgboost-v1.1` | mesmo XGBoost, treinado pelo `preprocess_features` da inferência (`739e70f`) | predições da API a partir de 28/09/2026 |
+
+Exceção conhecida: as avaliações 5040–5044, dos smokes de 28/09 feitos antes do #48, foram
+geradas pelo modelo `xgboost-v1.1` mas gravadas como `xgboost-v1-baseline`. Elas não foram
+reescritas, para manter a trilha de auditoria intacta.
 
 ## GET /equipamentos
 
@@ -268,7 +282,7 @@ posição (minimização, em Perfis).
       },
       "..."
     ],
-    "modelo_versao": "xgboost-v1-baseline",
+    "modelo_versao": "xgboost-v1.1",
     "contribuicoes_por_grupo": {
       "ambiental": 17.7577,
       "geografico": 12.0574,
@@ -541,7 +555,7 @@ opcional `null` como o mesmo payload.
       "criterio": "distancia_agua_m=120 < 200 e precipitacao_mm=42 > 25"
     }
   ],
-  "modelo_versao": "xgboost-v1-baseline",
+  "modelo_versao": "xgboost-v1.1",
   "timestamp": "2026-08-24T13:02:53.465989+00:00"
 }
 ```

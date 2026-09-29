@@ -28,7 +28,7 @@ from backend.ml.train import derive_faixa, preprocess_features
 BATCH_SIZE = 500
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "dataset_safefield.parquet")
 # Mesma fonte que a API (backend/core/config.py): uma versao so no .env.
-MODELO_VERSAO = os.getenv("MODELO_VERSAO", "xgboost-v1-baseline")
+MODELO_VERSAO = os.getenv("MODELO_VERSAO", "xgboost-v1.1")
 
 
 def fetch_avaliacao_ids(client) -> list[int]:

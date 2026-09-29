@@ -1,0 +1,77 @@
+==============================================================
+SafeField - confiabilidade da coleta (API e banco reais)
+==============================================================
+  API: http://127.0.0.1:8001   N=20   k=4   seed=461
+  autenticacao: token local   log da API: <log da API (uvicorn)>
+  [  1/20] EQ-0094 OP-0020 clima=open-meteo  201
+  [  2/20] EQ-0023 OP-0049 clima=open-meteo  201
+  [  3/20] EQ-0029 OP-0046 clima=payload  201
+  [  4/20] EQ-0104 OP-0054 clima=open-meteo  201 (descartada) -> 200
+  [  5/20] EQ-0121 OP-0002 clima=open-meteo  201
+  [  6/20] EQ-0053 OP-0036 clima=payload  201
+  [  7/20] EQ-0074 OP-0042 clima=open-meteo  201
+  [  8/20] EQ-0181 OP-0035 clima=open-meteo  201 (descartada) -> 200
+  [  9/20] EQ-0114 OP-0041 clima=payload  201
+  [ 10/20] EQ-0132 OP-0075 clima=open-meteo  201
+  [ 11/20] EQ-0014 OP-0015 clima=open-meteo  201
+  [ 12/20] EQ-0029 OP-0046 clima=payload  201 (descartada) -> 200
+  [ 13/20] EQ-0074 OP-0019 clima=open-meteo  201
+  [ 14/20] EQ-0119 OP-0038 clima=open-meteo  201
+  [ 15/20] EQ-0194 OP-0035 clima=payload  201
+  [ 16/20] EQ-0026 OP-0043 clima=open-meteo  201 (descartada) -> 200
+  [ 17/20] EQ-0101 OP-0039 clima=open-meteo  201
+  [ 18/20] EQ-0088 OP-0050 clima=payload  201
+  [ 19/20] EQ-0074 OP-0042 clima=open-meteo  201
+  [ 20/20] EQ-0062 OP-0071 clima=open-meteo  201 (descartada) -> 200
+
+Resumo
+  leituras_enviadas           : 20
+  respostas_descartadas       : 5
+  respostas_por_status        : {'200': 5, '201': 20}
+  status_final                : {'200': 5, '201': 15}
+  avaliacoes_por_leitura      : {1: 20}
+  predicoes_por_avaliacao     : {1: 20}
+  orfas                       : []
+  duplicatas                  : []
+
+Checagens
+  [OK] conjunto_nao_vazio: 20 leituras enviadas, 20 avaliacoes lidas
+  [OK] chaves_distintas: 20 leitura_id distintos em 20 envios
+  [OK] uma_avaliacao_por_leitura: faltando=[] duplicadas=[]
+  [OK] uma_predicao_por_avaliacao: orfas (avaliacao sem predicao)=[] com mais de uma=[]
+  [OK] toda_leitura_terminou_com_resultado: sem 200/201 na ultima tentativa: []
+  [OK] resposta_aponta_para_a_avaliacao_gravada: avaliacao_id da resposta diferente do gravado: []
+  [OK] retry_apos_resposta_perdida_e_reenvio: 5 respostas descartadas; sem 200 no reenvio: []
+  [OK] auditoria_sucesso_ou_reenvio_por_avaliacao: sem exatamente um 'sucesso' e sem 'reenvio': []
+  [OK] auditoria_bate_com_as_respostas: 'sucesso' {5046: 1, 5047: 1, 5048: 1, 5049: 1, 5050: 1, 5051: 1, 5052: 1, 5053: 1, 5054: 1, 5055: 1, 5056: 1, 5057: 1, 5058: 1, 5059: 1, 5060: 1, 5061: 1, 5062: 1, 5063: 1, 5064: 1, 5065: 1} x respostas 201 {5046: 1, 5047: 1, 5048: 1, 5049: 1, 5050: 1, 5051: 1, 5052: 1, 5053: 1, 5054: 1, 5055: 1, 5056: 1, 5057: 1, 5058: 1, 5059: 1, 5060: 1, 5061: 1, 5062: 1, 5063: 1, 5064: 1, 5065: 1}; 'reenvio' {5049: 1, 5053: 1, 5057: 1, 5061: 1, 5065: 1} x respostas 200 {5049: 1, 5053: 1, 5057: 1, 5061: 1, 5065: 1}
+  [OK] auditoria_do_usuario_autenticado: 25 linhas de sucesso/reenvio; de outro usuario que nao 'analista', ou sem perfil: []
+  [OK] modelo_versao_da_predicao_na_auditoria: modelo_versao da auditoria diferente do da predicao: []
+  [OK] entrada_gravada_confere: 20 avaliacoes comparadas com a leitura enviada; divergentes: []
+  [OK] procedencia_gravada: fonte != telemetria ou clima_origem inesperado: []
+  [OK] log_correlacionado_por_request_id: 25 respostas 200/201, 25 com a linha do seu avaliacao_id; sem linha ou com linha divergente: []
+
+Trilhas (request_id -> linha de log -> avaliacao_id -> clima_origem, modelo_versao, usuario, horario)
+  leitura bb9edbaa-bcc8-4198-a1b8-0b521a61dad3
+    tentativa 1: 201 (descartada) rid=6ea4e3570c81
+      linha de log: 2026-09-28T21:39:50 INFO    [6ea4e3570c81] safefield.scoring: avaliacao 5049: EQ-0104 score=29.86 faixa=baixo usuario=analista
+    tentativa 2: 200 rid=824f05f9ef8a
+      linha de log: 2026-09-28T21:39:51 INFO    [824f05f9ef8a] safefield.scoring: reenvio avaliacao 5049: EQ-0104 leitura_id=bb9edbaa-bcc8-4198-a1b8-0b521a61dad3 usuario=analista
+    banco    : avaliacao 5049 EQ-0104 clima_origem=open-meteo em 2026-09-29T00:39:50.66038+00:00
+    predicao : modelo_versao=xgboost-v1.1
+    auditoria: sucesso por analista (analista) modelo_versao=xgboost-v1.1 em 2026-09-29T00:39:50.828592+00:00
+    auditoria: reenvio por analista (analista) modelo_versao=xgboost-v1.1 em 2026-09-29T00:39:51.327215+00:00
+  leitura d4aacaa1-f3e3-40b0-be5a-fe10c51ea9c8
+    tentativa 1: 201 rid=94bfec9b9ce2
+      linha de log: 2026-09-28T21:39:49 INFO    [94bfec9b9ce2] safefield.scoring: avaliacao 5048: EQ-0029 score=33.57 faixa=medio usuario=analista
+    banco    : avaliacao 5048 EQ-0029 clima_origem=payload em 2026-09-29T00:39:49.02061+00:00
+    predicao : modelo_versao=xgboost-v1.1
+    auditoria: sucesso por analista (analista) modelo_versao=xgboost-v1.1 em 2026-09-29T00:39:49.210609+00:00
+  leitura c98aa926-22f5-40c2-9bf4-779d7e10370f
+    tentativa 1: 201 rid=36978f083ec6
+      linha de log: 2026-09-28T21:39:47 INFO    [36978f083ec6] safefield.scoring: avaliacao 5046: EQ-0094 score=27.19 faixa=baixo usuario=analista
+    banco    : avaliacao 5046 EQ-0094 clima_origem=open-meteo em 2026-09-29T00:39:46.884398+00:00
+    predicao : modelo_versao=xgboost-v1.1
+    auditoria: sucesso por analista (analista) modelo_versao=xgboost-v1.1 em 2026-09-29T00:39:47.116212+00:00
+
+RESULTADO: todas as checagens passaram
+Relatorio JSON: docs/evidencias/backend/coleta_real.json

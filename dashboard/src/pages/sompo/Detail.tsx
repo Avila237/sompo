@@ -51,9 +51,13 @@ const cap = (s: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 
 /* ── Main ─────────────────────────────────────────────────── */
 
-export default function SompoDetail({ equipId, onBack, publico = null }: {
+export default function SompoDetail({ equipId, onBack, publico = null, voltarPara = 'Equipamentos', acoes = true }: {
   equipId: string | null
   onBack: () => void
+  /** Nome da tela para onde "voltar" leva (a lista do perfil). */
+  voltarPara?: string
+  /** Mostra as ações de frota "Em breve" (Relatório, Ligar operador, Disparar alerta). */
+  acoes?: boolean
   /** Público do perfil logado: o card de recomendações abre filtrado nele. */
   publico?: Publico | null
 }) {
@@ -132,7 +136,7 @@ export default function SompoDetail({ equipId, onBack, publico = null }: {
           onClick={onBack}
           style={{ background: 'none', border: 'none', color: 'var(--fg-dim)', cursor: 'pointer', fontWeight: 600, fontSize: 13, padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
         >
-          ← Equipamentos
+          ← {voltarPara}
         </button>
         <span style={{ color: 'var(--fg-mute)', fontSize: 13 }}>/</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg)' }}>{equipamento.equipamento_id}</span>
@@ -157,8 +161,9 @@ export default function SompoDetail({ equipId, onBack, publico = null }: {
             {ultima && <span>última aval. {fmtData(ultima.timestamp)}</span>}
           </div>
         </div>
-        {/* Ações sem endpoint na API: ficam bloqueadas, sem handler e sem mensagem de sucesso */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        {/* Ações sem endpoint na API: ficam bloqueadas, sem handler e sem mensagem de sucesso.
+            O operador não as vê: são ações de frota, não dele. */}
+        {acoes && <div style={{ display: 'flex', gap: 8 }}>
           <ComingSoon inline><Button kind="ghost">
             {WIco.doc()}  Relatório
           </Button></ComingSoon>
@@ -168,7 +173,7 @@ export default function SompoDetail({ equipId, onBack, publico = null }: {
           <ComingSoon inline><Button kind="primary" tone="crit">
             {WIco.alert()}  Disparar alerta
           </Button></ComingSoon>
-        </div>
+        </div>}
       </div>
 
       {/* O que fazer vem antes da decomposição: sem avaliação, não há o que recomendar */}

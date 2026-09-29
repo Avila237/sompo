@@ -1,0 +1,65 @@
+==============================================================
+SafeField - casos de uso por persona (API real)
+==============================================================
+  API: http://127.0.0.1:8001   autenticacao: token local
+
+== Operador (OP-0015, usuario operador) (perfil operador) ==
+   Operador de equipamento: alertas diretos e objetivos para ajustar a conducao em tempo real (README 3.3).
+   [OK] GET /equipamentos -> 200 (esperado 200)  rid=a10a6ad43df7
+        7 equipamentos no recorte (a frota tem 200): ['EQ-0014', 'EQ-0042', 'EQ-0106', 'EQ-0121', 'EQ-0150', 'EQ-0178', 'EQ-0180']
+   [OK] GET /equipamentos/EQ-0106 -> 200 (esperado 200)  rid=23fc402696d3
+        ultima avaliacao 1309: operador_id=None, latitude e longitude null
+   [OK] GET /equipamentos/EQ-0150 -> 200 (esperado 200)  rid=e27a013c25ec
+        ultima avaliacao 4254: operador_id=None, latitude e longitude null
+   [OK] GET /equipamentos/EQ-0121 -> 200 (esperado 200)  rid=eab4dca5bd39
+        ultima avaliacao 5050: operador_id=None, latitude e longitude null
+   [OK] LGPD: ultima avaliacao de outro operador, na lista e no detalhe
+        3 equipamentos com a ultima avaliacao de outro operador; detalhe conferido em 3; fatores de posicao no top SHAP: 0; vazamentos: nenhum
+   [OK] POST /avaliacoes -> 201 (esperado 201)  rid=a6603ef90fab
+        avaliacao 5066 em EQ-0014: score 97.25 (alto), clima_origem=open-meteo; para o operador: nenhuma recomendacao
+   [OK] GET /alertas -> 200 (esperado 200)  rid=542d92c16e5e
+        7 alertas; fora do recorte: []
+   [OK] GET /kpis -> 403 (esperado 403)  rid=a4f8068ab82b
+        negado: Perfil 'operador' nao acessa este recurso.
+   [OK] GET /tendencias?eixo=regiao -> 403 (esperado 403)  rid=9d4958b9dbd1
+        negado: Perfil 'operador' nao acessa este recurso.
+   [OK] GET /equipamentos/EQ-0017 -> 403 (esperado 403)  rid=ea6da345ca61
+        negado: Equipamento 'EQ-0017' fora do seu recorte.
+
+== Gestor de frota (usuario gestor) (perfil gestor) ==
+   Gestor de frota: ranking de risco por equipamento e area, e comparacao entre modos de uso, campo x transporte (README 3.3).
+   [OK] GET /kpis -> 200 (esperado 200)  rid=5568d33afc7e
+        200 equipamentos, 5066 avaliacoes, 27.5% em risco alto; score medio por operacao: transporte 53.06, colheita 51.05, pulverizacao 42.27, plantio 41.54, parado 37.94
+   [OK] GET /equipamentos -> 200 (esperado 200)  rid=847b07a6f951
+        ranking: EQ-0017 100.0 (alto), EQ-0030 100.0 (alto), EQ-0031 100.0 (alto), EQ-0035 100.0 (alto), EQ-0041 100.0 (alto)
+   [OK] GET /tendencias?eixo=regiao&limite=3 -> 200 (esperado 200)  rid=5dcc78c5ae37
+        regiao, janela 2025-12-05 a 2026-09-29: 12°S 60°O 100.0, 21°S 45°O 100.0, 9°S 51°O 100.0
+   [OK] GET /tendencias?eixo=operacao&limite=3 -> 200 (esperado 200)  rid=ee194ec8374a
+        operacao, janela 2025-12-05 a 2026-09-29: transporte 57.25, colheita 50.49, pulverizacao 47.42
+   [OK] POST /avaliacoes -> 403 (esperado 403)  rid=d59987601c02
+        negado em EQ-0017 (auditado com status 'erro'): Perfil 'gestor' nao envia leituras.
+
+== Tecnico de manutencao (usuario tecnico) (perfil tecnico) ==
+   Tecnico de manutencao: identificar padroes que antecedem danos, para atuar preventivamente (README 3.3).
+   [OK] GET /equipamentos -> 200 (esperado 200)  rid=38627a0b7456
+        89 com manutencao atrasada; os mais atrasados: EQ-0060 atraso 3.0 (198 dias), EQ-0092 atraso 3.0 (315 dias), EQ-0104 atraso 3.0 (168 dias), EQ-0181 atraso 3.0 (124 dias), EQ-0075 atraso 2.916 (288 dias)
+   [OK] GET /equipamentos/EQ-0060 -> 200 (esperado 200)  rid=aa4e9b1e9db8
+        EQ-0060: historico de 22 avaliacoes; para o tecnico: ['Inspecionar o equipamento antes da próxima operação: vibração alta em máquina antiga antecede falha mecânica. (idade_equipamento=16 anos > 10 e vibracao_g=2.29 > 2.0)', 'Fazer a manutenção antes de nova jornada longa: intervalo vencido com uso intenso. (atraso_manutencao_pct=3 > 1.2 e horas_operacao=10.2 > 8)', 'Agendar a manutenção: o intervalo recomendado pelo fabricante foi ultrapassado. (manutencao_atrasada=true (atraso_manutencao_pct=3 > 1.0))']
+   [OK] POST /avaliacoes -> 403 (esperado 403)  rid=078241ca9155
+        negado em EQ-0017 (auditado com status 'erro'): Perfil 'tecnico' nao envia leituras.
+
+== Analista Sompo (usuario analista) (perfil analista) ==
+   Sompo, subscricao e corretor: score explicavel, fatores de risco, acoes preventivas e trilha de auditoria (README 3.1 e 3.3).
+   [OK] GET /equipamentos/EQ-0014 -> 200 (esperado 200)  rid=f35b71c6822a
+        avaliacao 5066 de OP-0015, modelo xgboost-v1.1; SHAP: historico_sinistros +37.45 (equipamento), horas_operacao +11.19 (operacional), distancia_agua_m -3.50 (geografico); grupos: {'operador': -0.3168, 'ambiental': 0.7017, 'geografico': -3.4717, 'manutencao': 1.3028, 'equipamento': 40.9739, 'operacional': 10.4371}; recomendacoes: gestor: Limitar a jornada deste equipamento: histórico de sinistros somado a operação prolongada., tecnico: Fazer a manutenção antes de nova jornada longa: intervalo vencido com uso intenso., tecnico: Agendar a manutenção: o intervalo recomendado pelo fabricante foi ultrapassado.
+   [OK] auditoria no banco (somente leitura; a API nao tem rota de auditoria)
+        desde 2026-09-29T00:40:27Z (Date da primeira resposta), equipamento EQ-0017: avaliacao 5066: 1 'sucesso' de operador com modelo_versao; 'erro' por perfil recusado (exige 1 cada): {'gestor': 1, 'tecnico': 1}
+   [OK] GET /equipamentos/EQ-0106 -> 200 (esperado 200)  rid=60711e435435
+        o mesmo equipamento que o operador viu mascarado: operador_id=OP-0067 (visivel para o analista)
+   [OK] GET /kpis -> 200 (esperado 200)  rid=3383ca6e59b8
+        frota inteira: 5066 avaliacoes
+
+Autenticacao: token-local {'operador': 'operador', 'gestor': 'gestor', 'tecnico': 'tecnico', 'analista': 'analista'}
+Avaliacao gravada nesta execucao: 5066
+RESULTADO: todos os casos de uso conferem
+Relatorio JSON: docs/evidencias/backend/casos_de_uso.json

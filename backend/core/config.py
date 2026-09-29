@@ -77,4 +77,4 @@ API_CORS_ORIGINS = _lista(
 
 # --- Modelo ---------------------------------------------------------------
 MODELS_DIR = os.getenv("MODELS_DIR", "models")
-MODELO_VERSAO = os.getenv("MODELO_VERSAO", "xgboost-v1-baseline")
+MODELO_VERSAO = os.getenv("MODELO_VERSAO", "xgboost-v1.1")
