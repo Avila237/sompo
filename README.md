@@ -1,7 +1,7 @@
 # Plataforma de Análise Preditiva de Riscos para Equipamentos Agrícolas
 
 > **Challenge FIAP + Sompo Seguros**
-> Entrega 3 — Integração: backend, ingestão validada, segurança e dashboard num fluxo de ponta a ponta
+> Entrega 4 — Consolidação: MVP integrado, validado, com controle de acesso por perfil, relatórios e recomendações
 
 ---
 
@@ -14,8 +14,8 @@
 4. [Estruturação dos Dados](#4-estruturação-dos-dados)
 5. [Arquitetura da Solução](#5-arquitetura-da-solução)
 6. [Modelo Preditivo](#6-modelo-preditivo)
-7. [Evolução em Relação à Entrega Anterior](#7-evolução-em-relação-à-entrega-anterior)
-8. [Planejamento das Próximas Etapas](#8-planejamento-das-próximas-etapas)
+7. [Evolução ao Longo das Quatro Sprints](#7-evolução-ao-longo-das-quatro-sprints)
+8. [Estado Final, Decisões de Escopo e Dívidas](#8-estado-final-decisões-de-escopo-e-dívidas)
 9. [Vídeo de Apresentação](#9-vídeo-de-apresentação)
 10. [Equipe](#10-equipe)
 
@@ -103,8 +103,13 @@ variável é a base da API.
 
 #### Configuração do backend (`.env` na raiz)
 
-Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. As credenciais de
-demonstração (`DEMO_USERS`) e a `SUPABASE_SERVICE_ROLE_KEY` são combinadas fora do repositório.
+Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. A
+`SUPABASE_SERVICE_ROLE_KEY` é combinada fora do repositório.
+
+**Usuários** ficam na tabela `usuarios` do banco (senha em hash scrypt), não no `.env`. Cadastre com
+`python scripts/criar_usuario.py <usuario> --perfil <perfil>`, com perfil entre `analista`,
+`gestor`, `tecnico` e `operador`; o operador exige `--operador OP-xxxx`. A senha é pedida no
+terminal, sem eco, com no mínimo 12 caracteres.
 
 Troque **todos** os placeholders. A API recusa subir se faltar variável obrigatória ou se o
 `JWT_SECRET_KEY` tiver menos de 32 bytes, o que inclui o placeholder do exemplo. Gere o segredo
@@ -131,6 +136,27 @@ que assumem as 5.000 avaliações exatas do seed e falham assim que houver inges
 
 Se a tela de login acusar que não consegue falar com a API, confira se o Terminal 1 está de pé e
 se a porta em `VITE_API_BASE_URL` bate com a do `uvicorn`.
+
+#### Roteiro de demonstração (`scripts/demo.sh`)
+
+Com o setup feito (venv, `.env`, modelo treinado e usuário `analista` cadastrado),
+`bash scripts/demo.sh` sobe a API e o dashboard e percorre o fluxo integrado. `--auto 4` avança
+sozinho, e `--sem-web` roda só a API.
+
+- **Windows:** rode no **Git Bash**, não no PowerShell nem no cmd. O script acha o Python em
+  `.venv\Scripts\python.exe`.
+- As portas 8000 e 5173 precisam estar livres: o script não encerra processos que não iniciou.
+  Use `--porta N` para trocar a da API.
+- Os logs ficam num diretório temporário, cujo caminho aparece no início.
+- A checagem de RLS (etapa 2d) precisa da `SUPABASE_ANON_KEY`. Sem ela, a etapa aparece como
+  "não verificado".
+
+#### Onde as instruções foram testadas
+
+- **macOS:** clone limpo seguindo só esta seção (BRA-467).
+- **CI:** o job de backend roda em **Ubuntu, Windows e macOS** a cada PR.
+- **Windows, manualmente:** o setup completo não tinha validação manual registrada até a entrega
+  (BRA-442); no Windows, o backend é coberto pela CI.
 
 ### Atualizando (repositório já clonado)
 
@@ -171,6 +197,12 @@ A partir desse score, a plataforma entrega três tipos de saída:
 A arquitetura é **mobile-first** — o app funciona como ponto central de coleta (GPS, inputs do operador) e entrega (alertas, dashboard). O dispositivo IoT com ESP32 é um complemento opcional para equipamentos modernos, adicionando sensores de vibração (acelerômetro + giroscópio MPU-6050 GY-521) e temperatura (DS18B20) via Bluetooth Low Energy. Essa decisão garante **cobertura universal**: qualquer equipamento, inclusive máquinas mais antigas sem porta OBD, pode ser monitorado apenas com o celular do operador.
 
 O valor entregue é a transformação de decisões reativas em ações preventivas, reduzindo frequência e severidade de sinistros para a Sompo e custos operacionais para o produtor rural.
+
+> **Visão × MVP entregue.** Os parágrafos acima descrevem o horizonte do produto. O MVP da Sprint 4
+> entrega o núcleo: ingestão por simulação, score com explicação SHAP, recomendações por regra
+> determinística, alertas, relatórios de tendência e um dashboard web com leitura por perfil. App
+> móvel, ESP32, RAG e shapefiles do IBGE saíram de escopo, cada um com motivo, na
+> [seção 8](#8-estado-final-decisões-de-escopo-e-dívidas).
 
 A plataforma foi projetada para evoluir de uma solução de scoring ambiental e operacional para um ecossistema completo de gestão de risco: com perfil comportamental do operador incorporado ao modelo, manutenção preventiva comparada com os intervalos recomendados pelo fabricante, explicações contextuais geradas a partir de uma base de conhecimento técnico simulada (RAG), e Usage-Based Insurance para precificação dinâmica baseada em risco histórico real.
 
@@ -345,29 +377,65 @@ O percurso completo, salto a salto e com o estado real de cada um, está em
 
 ### 5.5 Segurança
 
-Autenticação por **JWT próprio** (`python-jose`), emitido em `POST /auth/token` com validade de
-8 horas e perfil (`operador`, `gestor`, `analista`). Todas as rotas de dado exigem
-`Authorization: Bearer`; só `/auth/token` e `/health` são públicas.
+**Autenticação.** JWT próprio (PyJWT), emitido em `POST /auth/token` com validade de 8 horas.
+Usuários vivem na tabela `usuarios`, com senha em hash **scrypt** (parâmetros da OWASP gravados no
+próprio hash); o cadastro é feito por `scripts/criar_usuario.py`, que pede a senha sem eco. O login
+limita tentativas antes de calcular o hash e responde igual, no mesmo tempo, para usuário
+inexistente, inativo ou senha errada. Só `/auth/token` e `/health` são públicas.
 
-Dívidas assumidas nesta entrega, registradas em vez de escondidas: as credenciais de demonstração
-vivem em variável de ambiente, sem tabela de usuários com hash; os três perfis ainda enxergam o
-mesmo conjunto de dados. Ambas devem ser resolvidas juntas na leva seguinte.
+**Controle de acesso por perfil.** Há uma frota só; os perfis diferem no **recorte**, aplicado na
+API (o front só evita abrir tela que a API recusaria):
+
+| Rota | analista (Sompo) | gestor de frota | técnico | operador |
+|---|---|---|---|---|
+| `POST /avaliacoes` | qualquer operador | `403` | `403` | só em nome próprio, em equipamento que já operou |
+| `GET /equipamentos`, `/{id}`, `/alertas` | frota | frota | frota | só os equipamentos que operou |
+| `GET /kpis`, `GET /tendencias` | sim | sim | sim | `403` (agregação da frota) |
+
+O token do operador carrega o `operador_id`, que liga o login ao recorte. Negado → `403` com o
+motivo em `detail`. Matriz completa em [`docs/contrato-api.md`](docs/contrato-api.md).
+
+**Minimização (LGPD).** Nos equipamentos que operou, o operador vê as avaliações de **outros**
+operadores sem `operador_id`, `latitude` e `longitude` (também mascarados nos fatores SHAP). Os
+perfis de frota veem tudo. Os campos internos de idempotência (`leitura_id`, `payload_hash`) não
+saem em nenhuma resposta de leitura.
+
+**Proteção do dado.** Nenhum cliente fala com o banco (5.1): `service_role` só server-side, RLS
+ligada sem policy para `anon`. O token fica em `sessionStorage`, e o build de produção do dashboard
+aplica **CSP** estrita (`script-src 'self'`, `connect-src` só para a API). O segredo JWT abaixo de
+32 bytes impede a API de subir. Localização precisa não vai para o log.
+
+**Rastreabilidade.** Toda requisição tem um `request_id` (header `X-Request-ID`, também no corpo do
+`500`), presente em cada linha de log; o dashboard mostra esse código em erros 5xx. Toda decisão e
+recusa de `POST /avaliacoes` grava uma linha em `auditoria`, com usuário, ação, status, score e
+versão do modelo. Falhas previsíveis respondem `503` (banco ou modelo indisponível), não `500`.
+
+**Limitações declaradas.** O token vale até expirar: desativar ou rebaixar um usuário só vale no
+próximo login.
 
 ### 5.6 Interfaces
 
-**Dashboard web (React)** — interface analítica da Sompo, consumindo exclusivamente a API. Três
-telas integradas:
+**Dashboard web (React)**, consumindo exclusivamente a API. O perfil vem do login e define o menu e
+a tela inicial:
 
-| Tela | Consome | Exibe |
-|---|---|---|
-| Visão Geral | `GET /kpis`, `GET /alertas` | KPIs, distribuição geográfica, agregação por tipo de operação e alertas recentes |
-| Ranking | `GET /equipamentos` | 200 equipamentos com filtro, busca e ordenação |
-| Detalhe | `GET /equipamentos/{id}` | Decomposição SHAP por grupo (somada a partir dos 5 fatores gravados), top fatores, manutenção e histórico |
+| Tela | Consome | Exibe | Perfis |
+|---|---|---|---|
+| Visão geral | `GET /kpis`, `GET /alertas`, `GET /equipamentos` | KPIs, mapa por região, risco por tipo de operação, tendência e alertas | analista, gestor, técnico |
+| Equipamentos | `GET /equipamentos` | ranking com filtro, busca e ordenação | analista, gestor, técnico |
+| Detalhe | `GET /equipamentos/{id}` | recomendações com o critério que as disparou, decomposição SHAP, manutenção e histórico | todos (operador: só os dele) |
+| Relatórios | `GET /tendencias` | tendência do score por equipamento, região e operação, com datas reais e exportação CSV | analista, gestor, técnico |
+| Manutenção da frota | `GET /equipamentos` | frota ordenada pelo atraso de manutenção | técnico (tela inicial) |
+| Meus equipamentos | `GET /equipamentos`, `GET /alertas` | só os equipamentos que o operador operou e seus alertas | operador (tela inicial) |
 
-As outras cinco telas (Simulador, UBI, Relatórios, Corretor, Técnico) têm o design pronto e exibem
-overlay **"Em breve"**. Stack: React 19 + TypeScript + Vite + Tailwind CSS v4.
+O card de recomendações abre filtrado no público do perfil. A tela não afirma nada que não veio da
+API: sem confirmação de ação simulada, sem notificação fictícia, e ausência de dado aparece como
+ausência ("sem avaliação"). Falhas da API (fora do ar, lenta, resposta malformada, 5xx, sessão
+expirada) produzem mensagem legível com "Tentar de novo". Prints das telas reais por perfil e dos
+cenários de falha em [`docs/evidencias/front/`](docs/evidencias/front/). Simulador e UBI · Prêmios seguem atrás de
+**"Em breve"**. Stack: React 19 + TypeScript + Vite + Tailwind CSS v4. Detalhes em
+[`dashboard/README.md`](dashboard/README.md).
 
-**App móvel** — previsto para operadores e gestores; fora do escopo desta entrega.
+**App móvel** — fora de escopo (seção 8).
 
 ### 5.6.1 Diagrama de arquitetura
 
@@ -377,37 +445,45 @@ Open-Meteo marca a dependência externa, que tem fallback; a aresta cortada marc
 ```mermaid
 flowchart TB
     SIM["Simulador de telemetria<br/>scripts/simulate_telemetry.py"]
-    DASH["Dashboard React<br/>Visao Geral / Ranking / Detalhe"]
+    DASH["Dashboard React<br/>menu e recorte por perfil"]
     METEO["Open-Meteo<br/>clima pela coordenada"]
 
     subgraph API["API FastAPI — unica porta"]
         direction TB
-        VAL["Validacao Pydantic<br/>faixas e campos desconhecidos"]
-        ENR["Enriquecimento climatico<br/>fallback: payload"]
+        AUTH["Login + JWT<br/>perfil e operador_id"]
+        ESC["Escopo por perfil<br/>403 fora do recorte"]
+        VAL["Validacao Pydantic<br/>faixas e consistencia cruzada"]
+        ENR["Clima<br/>medido em campo prevalece"]
         PRE["preprocess_features<br/>vetor de 30 features"]
         MOD["XGBoost + SHAP<br/>carregado no startup"]
-        PERSA["Persiste avaliacao<br/>fonte, clima_origem"]
-        PERSP["Persiste predicao<br/>+ auditoria"]
-        VAL --> ENR --> PRE --> MOD --> PERSA --> PERSP
+        REC["Recomendacoes<br/>regras deterministicas"]
+        PERS["Grava avaliacao + predicao<br/>+ auditoria"]
+        CON["Consultas<br/>kpis, alertas, tendencias"]
+        AUTH --> ESC
+        ESC --> VAL --> ENR --> PRE --> MOD --> REC --> PERS
+        ESC --> CON
     end
 
     subgraph DB["Supabase — PostgreSQL + RLS"]
-        TAB[("equipamentos 200<br/>operadores 80<br/>avaliacoes e predicoes<br/>5.000 do seed + telemetria")]
+        TAB[("equipamentos, operadores<br/>avaliacoes, predicoes")]
+        USR[("usuarios<br/>hash scrypt")]
         AUD[("auditoria")]
     end
 
-    SIM -->|"POST /avaliacoes · Bearer"| VAL
-    DASH -->|"GET /equipamentos /kpis /alertas · Bearer"| API
-    API -->|JSON| DASH
-    ENR -.->|"clima pela coordenada · timeout curto"| METEO
-    PERSA -->|service_role| TAB
-    PERSP -->|service_role| TAB
-    PERSP -->|service_role| AUD
+    SIM -->|"POST /avaliacoes · Bearer"| AUTH
+    DASH -->|"GET · Bearer"| AUTH
+    CON -->|JSON| DASH
+    ENR -.->|"sem clima no payload · timeout curto"| METEO
+    AUTH -->|service_role| USR
+    PERS -->|service_role| TAB
+    PERS -->|service_role| AUD
+    CON -->|service_role| TAB
     DASH --x|"anon: RLS nega"| DB
 ```
 
-> **A seta cortada é o ponto da entrega.** Na Entrega 2 ela existia e era o caminho principal:
-> o dashboard lia o banco direto. Agora está fechada, e toda leitura passa pela API.
+> **A seta cortada continua o invariante.** Na Entrega 2 ela era o caminho principal: o dashboard
+> lia o banco direto. Desde a Entrega 3 está fechada; na Sprint 4 a porta única ganhou escopo por
+> perfil, usuários com hash e auditoria de cada decisão.
 
 ### 5.7 O caminho de um dado, salto a salto
 
@@ -514,6 +590,13 @@ proximidade de água"* — que é a informação acionável, não o número sozi
 
 Só com score e explicação calculados a leitura vira uma linha em `avaliacoes`, já com o
 `risco_score` e a `faixa_risco` que o modelo produziu. Se o modelo falhar, nada foi gravado.
+Avaliação e predição são gravadas numa **transação só**: se qualquer uma falhar, nenhuma fica, e
+nada fica órfão.
+
+**Reenvio não duplica.** O cliente pode mandar um `leitura_id` (UUID gerado antes do primeiro
+envio e reusado no retry). Reenvio com o mesmo payload devolve `200` com o resultado original, sem
+gravar; o mesmo `leitura_id` com payload diferente é `409`. O reenvio é decidido antes de consultar
+o clima ou rodar o modelo.
 
 **Procedência** — duas colunas criadas em
 `supabase/migrations/20260824120000_entrega03.sql` tornam a origem auditável sem cruzar log com
@@ -527,10 +610,10 @@ banco:
 Sem elas, as 5.000 linhas do seed e as geradas pela API ficam indistinguíveis — e um score
 calculado com clima de fallback pareceria idêntico a um calculado com clima medido.
 
-> ⚠️ `backend/db/schema.sql` começa com `DROP TABLE` e não contém esta migration. Reexecutá-lo
-> apaga todos os registros, inclusive os de telemetria e a auditoria. Toda mudança de estrutura
-> vai na migration em `supabase/migrations/`, que é idempotente (`ADD COLUMN IF NOT EXISTS`,
-> `CREATE TABLE IF NOT EXISTS`) e não destrói nada.
+> A estrutura do banco vive só em `supabase/migrations/`, aplicadas em ordem de nome a partir de
+> `20260527000000_base.sql`, que substituiu o antigo `backend/db/schema.sql` (removido porque
+> começava com `DROP TABLE`). Todas são aditivas e idempotentes e não destroem nada. Com a CLI
+> logada: `supabase db push --linked`.
 
 #### 9. Persistência da predição ✅
 
@@ -591,7 +674,7 @@ passar por autenticação.
 |---|---|---|
 | Backend / API | FastAPI + Uvicorn (Python 3.13) | ✅ em uso |
 | Validação de entrada | Pydantic | ✅ faixas e consistência entre campos |
-| Autenticação | JWT via `python-jose` | ✅ em uso |
+| Autenticação | JWT via PyJWT; senhas em hash scrypt (stdlib) | ✅ em uso |
 | Modelo de ML | XGBoost | ✅ em uso |
 | Explicabilidade | SHAP | ✅ em uso |
 | Rastreabilidade ML | MLflow (`safefield-xgboost`) | ✅ em uso |
@@ -622,7 +705,7 @@ O XGBoost foi escolhido por três razões principais. Primeiro, lida bem com var
 
 **Entradas:** features ambientais, geográficas, operacionais, do equipamento, do **operador** (perfil comportamental histórico) e de **manutenção** (atraso em relação ao intervalo recomendado) — detalhadas na [seção 4](#4-estruturação-dos-dados). Total: **30 features de entrada** (das 37 colunas do dataset, excluídas IDs, timestamp e targets).
 
-**Saídas:** score de risco (0–100), faixa de risco (baixo/médio/alto), top 3 fatores contribuintes (via SHAP) e recomendação de ação.
+**Saídas:** score de risco (0–100), faixa de risco (baixo/médio/alto, derivada do score cru e gravada), decomposição SHAP por grupo, top 5 fatores e **recomendações preventivas** — cada uma com o público que age (operador, gestor, técnico) e o critério explícito que a disparou, com os valores da leitura. As recomendações vêm de regras determinísticas (`backend/services/recomendacoes.py`), nunca de texto gerado.
 
 **Desempenho atual** (test set de 1.000 registros, 20% do dataset — valores em [`models/metrics.json`](models/metrics.json)):
 
@@ -640,6 +723,10 @@ plataforma e as versões. Retreinar em outra plataforma, com o mesmo código, a 
 mesmas versões, dá números ligeiramente diferentes (no Windows x86: MAE 4.72, acurácia 88.7%),
 sempre dentro dos critérios de aceite. Por isso `train.py` grava por padrão em
 `models/metrics.local.json`, ignorado pelo Git, e só atualiza a referência com `--referencia`.
+
+**Dívida conhecida (D4).** `historico_sinistros` domina a explicação e as features de operador e
+manutenção têm peso quase nulo na decomposição. A recalibração (S4-17) ficou fora desta entrega por
+decisão de prioridade; está registrada, não escondida.
 
 ### 6.4 Explicabilidade com SHAP
 
@@ -685,6 +772,11 @@ Resposta real de `POST /avaliacoes`, capturada da API em execução. O contrato 
 }
 ```
 
+O exemplo é uma predição do seed, gravada como `xgboost-v1-baseline`. As predições da API a partir
+de 28/09/2026 saem como `xgboost-v1.1`: o mesmo XGBoost, com as mesmas métricas, treinado pelo
+pré-processamento da inferência. As versões estão em
+[`docs/contrato-api.md`](docs/contrato-api.md#get-health).
+
 **O score nunca vem sozinho** (RF-10): sempre acompanhado da faixa, da decomposição por grupo e dos
 fatores que o produziram, rotulados em português na interface.
 
@@ -715,102 +807,95 @@ Na fase de protótipo, o modelo será treinado com dados simulados (~5.000 regis
 
 ---
 
-## 7. Evolução em Relação à Entrega Anterior
+## 7. Evolução ao Longo das Quatro Sprints
 
-O enunciado pede descrição explícita da evolução. O eixo desta entrega é **integração**: os
-componentes já existiam isolados; o que mudou é que passaram a conversar.
+| Dimensão | Sprint 1 · Fundação | Sprint 2 · Modelo | Sprint 3 · Integração | Sprint 4 · Consolidação |
+|---|---|---|---|---|
+| Dados | dataset v1, EDA inicial | dataset de 37 colunas; Supabase com 4 tabelas | ingestão por API, com procedência (`fonte`, `clima_origem`) | consistência cruzada na entrada; clima medido em campo prevalece; reenvio idempotente por `leitura_id` e gravação atômica |
+| Modelo | — | XGBoost + SHAP por grupo; MLflow | inferência por requisição, modelo carregado no startup | pré-processamento único entre treino e inferência; métricas de referência versionadas |
+| Backend | — | FastAPI declarado, sem rotas | API integradora: 7 rotas, validação, scoring e persistência | recomendações, tendências por eixo, 503 previsível, `request_id` |
+| Segurança | — | chave do banco no bundle do browser | JWT; nenhum cliente fala com o banco | usuários com hash scrypt, escopo por perfil, CSP, auditoria de cada decisão |
+| Interface | — | dashboard com 3 telas lendo o banco | as mesmas 3 telas lendo a API | relatórios de tendência, recomendações no Detalhe, leitura por perfil, robustez a falhas |
+| Qualidade | primeira suíte de testes | testes do modelo e do SHAP | testes de integração da API | CI com lint, testes e auditoria de dependências, backend em Ubuntu, Windows e macOS; setup validado em clone limpo |
 
-| Dimensão | Entrega 2 | Entrega 3 |
-|---|---|---|
-| Backend | `backend/api/` continha só `__init__.py`; FastAPI declarado e não usado | API integradora no ar: 7 rotas, validação, scoring e persistência |
-| Caminho do dado | dashboard lia o Supabase direto pelo SDK | toda leitura passa pela API; nenhum cliente fala com o banco |
-| Segurança | chave do Supabase embutida no bundle do browser; RLS sem policy | JWT por perfil, chave de banco fora do frontend, `service_role` só server-side |
-| Predição | batch offline, gravada por script | em processo, por requisição, com o modelo carregado no startup |
-| Pré-processamento | `preprocess_features()` dentro de `train.py` | extraída para `ml/preprocess.py`; toda inferência passa por ela |
-| Interface | 3 telas lendo o banco | as mesmas 3 telas lendo a API, mais agregação por tipo de operação |
-| Eixos de agregação | equipamento e região | equipamento, região **e operação** — os três que o enunciado pede |
-| Alertas | derivados em memória no cliente | `GET /alertas`, com regra no servidor e parametrizável |
+### O que a Sprint 4 consolidou
 
-### O que a entrega anterior deixava quebrado
+A Sprint 3 fez os componentes conversarem; a Sprint 4 tornou a conversa **confiável e útil para
+cada perfil**:
 
-Dois pontos que não eram melhorias pendentes, e sim defeitos:
-
-**O dashboard não exibia dado nenhum.** A RLS foi habilitada sem policy para `anon`. A anon key
-que o browser usava passou a enxergar zero linhas nas quatro tabelas. Religar à API foi o conserto.
-
-**A chave de banco viajava no bundle.** Qualquer visitante da página conseguia ler e escrever as
-tabelas diretamente. Com dado sintético o dano ficava contido; a correção veio antes de existir
-dado real.
-
-### O que continua pendente
-
-As **regras de consistência cruzada** da validação de entrada, pendentes na Entrega 3, foram
-implementadas na Sprint 4 (seção 5.7, salto 2).
-
-Do lado do dashboard, a série temporal do gráfico de evolução do score e o KPI
-`total_operadores`, que ficaram pendentes na revisão da tela, já são expostos por `GET /kpis`.
+- **Confiabilidade.** Leitura incoerente é recusada (`422`) antes de gravar; falha previsível responde
+  `503` com `request_id`; o dashboard trata API fora do ar, lenta, resposta malformada e sessão
+  expirada com mensagem e recuperação.
+- **Segurança e rastreabilidade.** Credenciais fora do `.env`, perfis com recorte real nas rotas e
+  uma linha de auditoria por decisão.
+- **Valor ao usuário.** Recomendações com critério explícito, tendência de risco nos três eixos que o
+  enunciado pede e uma tela de entrada para cada perfil (analista, gestor, técnico, operador).
+- **Reprodutibilidade.** Versões fixadas, CI em todo PR com o backend testado em Ubuntu, Windows
+  e macOS, o "Como rodar" corrigido a partir de um clone limpo e um roteiro de demonstração
+  (`scripts/demo.sh`) que roda também no Git Bash do Windows.
 
 ---
 
-## 8. Planejamento das Próximas Etapas
+## 8. Estado Final, Decisões de Escopo e Dívidas
 
-### Entregas concluídas
+### Decisões de escopo
 
-**Entrega 1 — Fundação e Dados** ✅
-Documentação, estrutura do repositório, dataset v1, EDA inicial e primeira suíte de testes.
+| Item | Decisão | Motivo |
+|---|---|---|
+| RAG / LLM | fora | Restrito às disciplinas do primeiro ano; a recomendação por regra determinística atende o requisito com critério explícito (ver 6.7) |
+| App móvel | fora | O enunciado aceita relatórios e dashboards; a interface é o dashboard web |
+| Firmware ESP32 físico | fora | O enunciado aceita entradas reais **ou simuladas**; o simulador cobre a ingestão (hardware especificado em [`docs/references/`](docs/references/)) |
+| Shapefiles do IBGE | fora | Solo, distância de água e declividade já vêm no dataset; não há exigência de enriquecimento geográfico em tempo real |
+| Deploy em nuvem | fora | O enunciado exige execução reproduzível, não hospedagem: execução local + CI |
+| Simulador e UBI | "Em breve" | Não citados no enunciado; ficam visíveis como próximos passos, sem dado fictício passando por real |
 
-**Entrega 2 — Modelo, Explicabilidade e Dados** ✅
-Dataset expandido para 37 colunas; XGBoost treinado e validado (na época, MAE 4.72, R² 0.9466,
-acurácia de faixas 88.3%; o retreino da Entrega 3 com versões atualizadas das bibliotecas, mesmo
-dataset e mesma semente, gerou os valores da seção 6.3); SHAP por grupo de features; MLflow;
-Supabase com 4 tabelas e 10.280 registros; notebooks de EDA e treinamento; dashboard React com 3
-telas.
+### Dívidas conhecidas
 
-**Entrega 3 — Integração** (esta entrega)
-API integradora FastAPI, autenticação JWT, dashboard religado à API, agregação pelos três eixos e
-documentação do caminho do dado. Estado detalhado na [seção 7](#7-evolução-em-relação-à-entrega-anterior).
+- **D4 — calibração do modelo** (seção 6.3): operador e manutenção com peso quase nulo.
+- **Revogação de sessão:** desativar um usuário só vale no próximo login.
 
-### Pendente dentro desta entrega
+### Evidências
 
-| Requisito | O que falta |
-|---|---|
-| RF-14 | Compartilhar o repositório com `fiap-tutoria` |
+O índice completo, com o teste que sustenta cada evidência e o comando que a reproduz, está em
+[`docs/evidencias/README.md`](docs/evidencias/README.md). A execução registrada é de 28/09/2026,
+contra a API local ligada ao Supabase real, com o modelo `xgboost-v1.1` e dados sintéticos.
 
-### Próximas etapas
+- **Confiabilidade da coleta e rastreabilidade** (backend): leituras com falhas injetadas terminam
+  sem perda nem duplicata, e cada predição é reconstruída do `X-Request-ID` até a auditoria. Ver
+  [`docs/evidencias/backend/`](docs/evidencias/backend/).
+- **Controle de acesso e LGPD**: casos de uso por persona, com as recusas 403 auditadas, em
+  [`casos_de_uso.txt`](docs/evidencias/backend/casos_de_uso.txt).
+- **Dashboard**: telas reais por perfil e cenários de falha da API, em
+  [`docs/evidencias/front/`](docs/evidencias/front/).
 
-**Segurança e acesso** — substituir credenciais em variável de ambiente por tabela de usuários com
-hash, migrar para Supabase Auth e dar escopo de dados distinto a cada perfil. As três coisas são a
-mesma dívida vista de três ângulos e devem ser resolvidas juntas.
+| Detalhe com recomendações e SHAP (analista) | Relatórios por região | Meus equipamentos (operador) |
+|---|---|---|
+| ![Detalhe do EQ-0042](docs/evidencias/front/12-analista-detalhe-eq-0042.png) | ![Relatórios por região](docs/evidencias/front/14-analista-relatorios-regiao.png) | ![Meus equipamentos](docs/evidencias/front/20-operador-meus-equipamentos.png) |
 
-**Modelo** — recalibrar os pesos: hoje `historico_sinistros` domina a predição e as features de
-operador e manutenção têm peso quase nulo. Depois disso, sincronizar a fórmula de score
-documentada em `docs/data schema.md` com a do código.
-
-**Produto** — simulador de cenários e Usage-Based Insurance no dashboard; app móvel para operador e
-gestor; integração com o ESP32 via BLE.
-
-**Infraestrutura** — deploy (hoje roda local) e CI com lint, testes e auditoria de dependências.
+- Contrato da API, conferido contra o código: [`docs/contrato-api.md`](docs/contrato-api.md)
+- Requisitos da Sprint 4 e estado de cada um: [`docs/spec-sprint-04.md`](docs/spec-sprint-04.md)
 
 ### Divisão de Responsabilidades
 
 | Responsável | Frente Principal |
 |---|---|
-| Guilherme | Backend (FastAPI), modelo de ML (XGBoost/SHAP), arquitetura geral |
-| Kainan | Dashboard React, integração com a API, app móvel e BLE/IoT |
-| Ambos | Documentação, dataset simulado, testes integrados, apresentação |
+| Guilherme | Backend (FastAPI), modelo de ML (XGBoost/SHAP), segurança, arquitetura geral |
+| Kainan | Dashboard React, integração com a API, leitura por perfil, evidências do front |
+| Ambos | Documentação, testes integrados, revisão cruzada, apresentação |
 
 ### Ferramentas de Gestão
 
-O acompanhamento é feito no **Linear**, com uma issue por requisito funcional (RF-00 a RF-14),
-responsável definido e relações de bloqueio entre elas. Cada issue vira uma branch e um Pull
-Request revisado pelo outro integrante antes do merge.
+O acompanhamento é feito no **Linear**, com uma issue por requisito da sprint, responsável definido
+e relações de bloqueio. Cada issue vira uma branch e um Pull Request revisado pelo outro integrante
+antes do merge; a CI roda lint, testes e auditoria de dependências em todo PR.
 
 ---
 ## 9. Vídeo de Apresentação
 
-🔗 https://youtu.be/Wy_LPCzjrlQ
+🔗 **Sprint 4:** _link a incluir após a gravação (não listado no YouTube)._
 
-> O vídeo da entrega anterior continua disponível em https://youtu.be/lLwrnie-Qmk.
+> Vídeos das entregas anteriores: Sprint 3 em https://youtu.be/Wy_LPCzjrlQ · Sprint 2 em
+> https://youtu.be/lLwrnie-Qmk.
 
 ---
 
