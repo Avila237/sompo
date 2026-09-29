@@ -6,6 +6,7 @@ PR); aqui o repositorio e mockado e o que se testa e o contrato da API em volta
 dela: chave do cliente, hash do payload, reenvio e conflito.
 """
 
+import logging
 import os
 import sys
 import uuid
@@ -169,6 +170,44 @@ class TestReenvioAntesDoTrabalho:
         assert r.status_code == 409
         repo_mock.registrar_avaliacao.assert_not_called()
         assert [c.args[3] for c in auditoria.call_args_list] == ["erro"]
+
+
+class TestReenvioNoLog:
+    """
+    Regressao (S4-28): o 200 de reenvio nao deixava no log nenhuma linha com o
+    avaliacao_id, e o X-Request-ID dele nao levava a avaliacao pelo log.
+    """
+
+    def _linhas_info(self, caplog) -> list[str]:
+        return [x.getMessage() for x in caplog.records
+                if x.name == "safefield.scoring" and x.levelno == logging.INFO]
+
+    def test_reenvio_detectado_na_gravacao_loga_o_avaliacao_id(self, auth, caplog):
+        with caplog.at_level(logging.INFO, logger="safefield.scoring"):
+            r, _, _ = _post(auth, {**LEITURA_VALIDA, "leitura_id": LEITURA_ID}, (77, True))
+        assert r.status_code == 200, r.text
+        linhas = self._linhas_info(caplog)
+        assert [m for m in linhas if m.startswith("reenvio avaliacao 77: ")], linhas
+
+    def test_reenvio_detectado_antes_do_trabalho_loga_o_avaliacao_id(self, auth, caplog):
+        leitura = LeituraTelemetria(**LEITURA_VALIDA, leitura_id=LEITURA_ID)
+        anterior = {"avaliacao_id": 77, "payload_hash": hash_do_payload(leitura.model_dump(mode="json"))}
+        with caplog.at_level(logging.INFO, logger="safefield.scoring"):
+            r, repo_mock, _ = _post(auth, {**LEITURA_VALIDA, "leitura_id": LEITURA_ID}, (1, False), anterior)
+        assert r.status_code == 200, r.text
+        repo_mock.registrar_avaliacao.assert_not_called()
+        linhas = self._linhas_info(caplog)
+        assert [m for m in linhas if m.startswith("reenvio avaliacao 77: ")], linhas
+
+    def test_linha_de_sucesso_nao_mudou(self, auth, caplog):
+        """coleta_real.checar_log e a trilha da evidencia leem este formato."""
+        with caplog.at_level(logging.INFO, logger="safefield.scoring"):
+            r, _, _ = _post(auth, {**LEITURA_VALIDA, "leitura_id": LEITURA_ID}, (5, False))
+        assert r.status_code == 201, r.text
+        linhas = self._linhas_info(caplog)
+        assert [m for m in linhas
+                if m.startswith("avaliacao 5: EQ-0001 score=") and m.endswith(" usuario=analista")], linhas
+        assert not [m for m in linhas if m.startswith("reenvio")], linhas
 
 
 class TestRepositorio:

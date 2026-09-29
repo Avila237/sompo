@@ -336,6 +336,12 @@ def _resposta_do_reenvio(avaliacao_id: int, quem: dict) -> dict:
     predicao = repo.predicao_de(avaliacao_id) or {}
     top = predicao.get("top_fatores_shap") or []
     faixa = avaliacao["faixa_risco"]
+    # O X-Request-ID do 200 leva a avaliacao por esta linha, como o do 201
+    # leva pela linha de sucesso.
+    logger.info(
+        "reenvio avaliacao %s: %s leitura_id=%s usuario=%s",
+        avaliacao_id, avaliacao["equipamento_id"], avaliacao.get("leitura_id"), quem["usuario"],
+    )
     auditoria.registrar(
         quem["usuario"], quem["perfil"], "avaliacao", "reenvio",
         equipamento_id=avaliacao["equipamento_id"],
