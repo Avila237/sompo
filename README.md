@@ -155,7 +155,8 @@ sozinho, e `--sem-web` roda só a API.
 
 - **macOS:** clone limpo seguindo só esta seção (BRA-467).
 - **CI:** o job de backend roda em **Ubuntu, Windows e macOS** a cada PR.
-- **Windows, manualmente:** validação do setup completo em andamento (BRA-442).
+- **Windows, manualmente:** o setup completo não tinha validação manual registrada até a entrega
+  (BRA-442); no Windows, o backend é coberto pela CI.
 
 ### Atualizando (repositório já clonado)
 
@@ -429,8 +430,8 @@ a tela inicial:
 O card de recomendações abre filtrado no público do perfil. A tela não afirma nada que não veio da
 API: sem confirmação de ação simulada, sem notificação fictícia, e ausência de dado aparece como
 ausência ("sem avaliação"). Falhas da API (fora do ar, lenta, resposta malformada, 5xx, sessão
-expirada) produzem mensagem legível com "Tentar de novo" — evidências em
-[`docs/evidencias/front/`](docs/evidencias/front/). Simulador e UBI · Prêmios seguem atrás de
+expirada) produzem mensagem legível com "Tentar de novo". Prints das telas reais por perfil e dos
+cenários de falha em [`docs/evidencias/front/`](docs/evidencias/front/). Simulador e UBI · Prêmios seguem atrás de
 **"Em breve"**. Stack: React 19 + TypeScript + Vite + Tailwind CSS v4. Detalhes em
 [`dashboard/README.md`](dashboard/README.md).
 
@@ -771,6 +772,11 @@ Resposta real de `POST /avaliacoes`, capturada da API em execução. O contrato 
 }
 ```
 
+O exemplo é uma predição do seed, gravada como `xgboost-v1-baseline`. As predições da API a partir
+de 28/09/2026 saem como `xgboost-v1.1`: o mesmo XGBoost, com as mesmas métricas, treinado pelo
+pré-processamento da inferência. As versões estão em
+[`docs/contrato-api.md`](docs/contrato-api.md#get-health).
+
 **O score nunca vem sozinho** (RF-10): sempre acompanhado da faixa, da decomposição por grupo e dos
 fatores que o produziram, rotulados em português na interface.
 
@@ -847,12 +853,25 @@ cada perfil**:
 
 - **D4 — calibração do modelo** (seção 6.3): operador e manutenção com peso quase nulo.
 - **Revogação de sessão:** desativar um usuário só vale no próximo login.
-- **Telas com dados reais nas evidências** dependem do banco configurado; os cenários de falha já estão registrados.
 
 ### Evidências
 
-- Front, falhas da API: [`docs/evidencias/front/`](docs/evidencias/front/)
-- Backend: `docs/evidencias/` (BRA-461, em andamento)
+O índice completo, com o teste que sustenta cada evidência e o comando que a reproduz, está em
+[`docs/evidencias/README.md`](docs/evidencias/README.md). A execução registrada é de 28/09/2026,
+contra a API local ligada ao Supabase real, com o modelo `xgboost-v1.1` e dados sintéticos.
+
+- **Confiabilidade da coleta e rastreabilidade** (backend): leituras com falhas injetadas terminam
+  sem perda nem duplicata, e cada predição é reconstruída do `X-Request-ID` até a auditoria. Ver
+  [`docs/evidencias/backend/`](docs/evidencias/backend/).
+- **Controle de acesso e LGPD**: casos de uso por persona, com as recusas 403 auditadas, em
+  [`casos_de_uso.txt`](docs/evidencias/backend/casos_de_uso.txt).
+- **Dashboard**: telas reais por perfil e cenários de falha da API, em
+  [`docs/evidencias/front/`](docs/evidencias/front/).
+
+| Detalhe com recomendações e SHAP (analista) | Relatórios por região | Meus equipamentos (operador) |
+|---|---|---|
+| ![Detalhe do EQ-0042](docs/evidencias/front/12-analista-detalhe-eq-0042.png) | ![Relatórios por região](docs/evidencias/front/14-analista-relatorios-regiao.png) | ![Meus equipamentos](docs/evidencias/front/20-operador-meus-equipamentos.png) |
+
 - Contrato da API, conferido contra o código: [`docs/contrato-api.md`](docs/contrato-api.md)
 - Requisitos da Sprint 4 e estado de cada um: [`docs/spec-sprint-04.md`](docs/spec-sprint-04.md)
 
