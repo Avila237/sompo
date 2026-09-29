@@ -73,10 +73,12 @@ teclado, e nenhuma delas confirma ação que não aconteceu. Os botões de açã
 ## Sessão
 
 - O JWT fica em **`sessionStorage`** (`safefield.sessao`): sobrevive a um refresh e morre quando a
-  aba fecha. Isso é a dívida **D9**: token acessível a JavaScript e sem CSP. Está registrada em
-  `docs/spec-sprint-04.md` e é tratada na S4-18.
+  aba fecha. Um script injetado conseguiria lê-lo (dívida **D9**); por isso o `npm run build`
+  aplica uma **CSP** estrita, definida em `vite.config.ts`: `script-src 'self'`, e `connect-src`
+  só para a própria origem e a da API. O `npm run dev` roda sem ela, porque o HMR do Vite injeta
+  script inline.
 - 401 da API ou prazo vencido derrubam a sessão, e o login mostra "Sua sessão expirou".
-- Sair zera o estado da interface; o próximo login começa na Visão geral.
+- Sair zera o estado da interface; o próximo login começa na tela inicial do perfil (tabela acima).
 
 ## Falhas da API
 
