@@ -99,6 +99,8 @@ pip install -r backend/requirements.txt
 # 4b. Criar o .env ANTES dos testes: a API e os testes leem a configuração ao importar
 cp .env.example .env              # Windows: copy .env.example .env
 #     e troque os placeholders — ver "Configuração do backend (.env na raiz)" abaixo
+#     Equipe com acesso ao 1Password: não crie o .env; prefixe os passos 7 e 8 (e os
+#     scripts que falam com o banco) com `op run --env-file=.env.op --` — ver a mesma seção
 
 # 5. Gerar o dataset
 python scripts/generate_dataset.py
@@ -135,6 +137,19 @@ variável é a base da API.
 
 Use o [`.env.example`](.env.example) como base. O arquivo **não vai para o Git**. A
 `SUPABASE_SERVICE_ROLE_KEY` é combinada fora do repositório.
+
+**Equipe (credenciais no 1Password).** Quem tem acesso ao cofre da equipe não cria o `.env`: o
+[`.env.op`](.env.op), versionado, traz só referências ao cofre e a configuração não secreta, e o
+`op` (CLI do 1Password) injeta os valores no processo:
+
+```bash
+op run --env-file=.env.op -- pytest -m "not seed and not rede"
+op run --env-file=.env.op -- uvicorn backend.api.main:app --reload --port 8000
+op run --env-file=.env.op -- python scripts/criar_usuario.py <usuario> --perfil <perfil>
+```
+
+A configuração vem do ambiente; o `.env`, se existir, só completa o que faltar (o `load_dotenv`
+não sobrescreve variável já definida).
 
 **Usuários** ficam na tabela `usuarios` do banco (senha em hash scrypt), não no `.env`. Cadastre com
 `python scripts/criar_usuario.py <usuario> --perfil <perfil>`, com perfil entre `analista`,
@@ -203,7 +218,8 @@ se a porta em `VITE_API_BASE_URL` bate com a do `uvicorn`.
 
 Com o setup feito (venv, `.env`, modelo treinado e usuário `analista` cadastrado),
 `bash scripts/demo.sh` sobe a API e o dashboard e percorre o fluxo integrado. `--auto 4` avança
-sozinho, e `--sem-web` roda só a API.
+sozinho, e `--sem-web` roda só a API. Sem `.env`, com o 1Password:
+`op run --env-file=.env.op -- bash scripts/demo.sh`.
 
 - **Windows:** rode no **Git Bash**, não no PowerShell nem no cmd. O script acha o Python em
   `.venv\Scripts\python.exe`.

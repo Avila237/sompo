@@ -87,6 +87,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 ├── README.md                ← documento de entrega (lido pelo tutor)
 ├── context.md               ← este arquivo
 ├── .env.example             ← variáveis do backend (.env nunca vai para o Git)
+├── .env.op                  ← referências ao 1Password para `op run` (sem valor secreto)
 ├── pytest.ini               ← marker 'seed' excluído por padrão
 ├── backend/
 │   ├── api/                 main.py · deps.py · schemas.py · routers/{auth,avaliacoes,consultas,health}.py
@@ -150,7 +151,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
   | `test_generate_dataset` | nada externo |
   | `test_dataset` | parquet local |
   | `test_model`, `test_shap`, `test_mlflow` | parquet + `.joblib` |
-  | `test_api` | `.env` válido e `.joblib`; Supabase e Open-Meteo são mockados |
+  | `test_api` | configuração válida (`op run` ou `.env`) e `.joblib`; Supabase e Open-Meteo são mockados |
   | `test_supabase`, `test_predicoes` | Supabase real; são pulados sem `SUPABASE_URL` e a chave `service_role` |
 
 - A suíte não pode alterar arquivo versionado: a CI falha se `git diff` não sair vazio depois dos testes. Artefato gerado em teste vai para `tmp_path`.
@@ -158,7 +159,7 @@ A direção nunca se inverte: `api` não importa `ml` nem `db`, e `services` ace
 
 ## Configuração
 
-- Backend: `.env` na raiz, a partir do `.env.example`. `backend/core/config.py` é a referência do que é lido. Obrigatórias:
+- Backend: a configuração vem do ambiente. Na equipe, os valores ficam no 1Password e entram por `op run --env-file=.env.op -- <comando>` (ex.: `pytest`, `uvicorn backend.api.main:app --reload --port 8000`, `bash scripts/demo.sh`); o `.env.op` é versionado e só tem referências ao cofre e configuração não secreta. Sem acesso ao cofre (tutor, clone novo): `.env` na raiz, a partir do `.env.example`. O `load_dotenv` não sobrescreve variável já definida no ambiente. `backend/core/config.py` é a referência do que é lido. Obrigatórias:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY` (aceita `SUPABASE_KEY` como fallback)
   - `JWT_SECRET_KEY`

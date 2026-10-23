@@ -152,8 +152,17 @@ else
 fi
 ok "venv ($("$PY" -V 2>&1))"
 
-[ -f .env ] || { falha ".env ausente na raiz do projeto"; exit 1; }
-ok ".env presente (conteudo nao exibido)"
+# Configuracao do ambiente (op run --env-file=.env.op -- bash scripts/demo.sh)
+# ou, na falta dela, de um .env na raiz. O Python segue a mesma ordem: o
+# load_dotenv nao sobrescreve variavel que ja esta no ambiente.
+if [ -n "${SUPABASE_URL:-}" ]; then
+  ok "configuracao no ambiente (conteudo nao exibido)"
+elif [ -f .env ]; then
+  ok ".env presente (conteudo nao exibido)"
+else
+  falha "sem configuracao: rode com 'op run --env-file=.env.op -- bash scripts/demo.sh' ou crie o .env"
+  exit 1
+fi
 
 for artefato in models/xgboost_model.joblib models/encoder.joblib models/features.json; do
   [ -f "$artefato" ] || { falha "$artefato ausente. Rode: python backend/ml/train.py"; exit 1; }
@@ -264,12 +273,15 @@ echo "      HTTP ${CODIGO}  $(cat "${DIR_DEMO}/_d2")"
 [ "$CODIGO" = "401" ] && ok "recusado" || falha "esperado 401"
 
 nota "2d. a chave ANONIMA do Supabase nao le o banco (RLS):"
-REF=$(grep '^SUPABASE_URL' .env | sed 's|.*//||; s|\..*||')
+# Le do ambiente primeiro e, na falta, do .env.
 # tr: um .env salvo com CRLF (Bloco de Notas) deixaria \r no fim da chave.
-ANON=$(grep '^SUPABASE_ANON_KEY=' .env | cut -d= -f2- | tr -d '\r')
+ler_env() { [ -f .env ] && grep "^$1=" .env | cut -d= -f2- | tr -d '\r'; }
+URL_SUPABASE=${SUPABASE_URL:-$(ler_env SUPABASE_URL)}
+REF=$(echo "$URL_SUPABASE" | sed 's|.*//||; s|\..*||')
+ANON=${SUPABASE_ANON_KEY:-$(ler_env SUPABASE_ANON_KEY)}
 if [ -z "$ANON" ]; then
   # Sem a chave nao ha o que testar; concluir "RLS inativa" seria falso diagnostico.
-  aviso "nao verificado (sem SUPABASE_ANON_KEY no .env)"
+  aviso "nao verificado (sem SUPABASE_ANON_KEY no ambiente nem no .env)"
 else
   FAIXA=$(curl -sI "https://${REF}.supabase.co/rest/v1/avaliacoes?select=*" \
     -H "apikey: ${ANON}" -H "Authorization: Bearer ${ANON}" \
